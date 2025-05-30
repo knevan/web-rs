@@ -1,10 +1,10 @@
-use image::GenericImageView;
-use ravif::{Encoder, Img, RGB8, RGBA8};
-use std::path::{Path, PathBuf};
+/*use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
+use image::GenericImageView;
+use ravif::{Encoder, Img, RGB8, RGBA8};
 use sysinfo::System;
 use tokio::{fs, task};
 
@@ -36,7 +36,7 @@ impl MemoryStats {
     }
 }
 
-fn get_current_memory_usage() -> Result<u64, Box<dyn std::error::Error>> {
+pub fn get_current_memory_usage() -> Result<u64, Box<dyn std::error::Error>> {
     let mut system = System::new_all();
     system.refresh_all();
 
@@ -61,23 +61,19 @@ async fn covert_to_avif(
         let input_path_owned = input_path.to_owned();
         move || image::open(input_path_owned)
     })
-    .await??;
+        .await??;
 
     let (width, height) = img.dimensions();
 
     let encode = Encoder::new()
-        .with_quality(40.0)
-        .with_alpha_quality(40.0)
-        .with_speed(5);
+        .with_quality(45.0)
+        .with_alpha_quality(45.0)
+        .with_speed(6);
 
     let avif_data = task::spawn_blocking(move || {
         if img.color().has_alpha() {
             let rgba_image = img.to_rgba8();
 
-            // Kumpulkan piksel menjadi Vec<RGBA8>
-            // Perhatikan bahwa `image::RgbaImage::pixels()` mengembalikan iterator
-            // dari `Rgba<u8>` (tipe piksel dari 'image' crate).
-            // Kita perlu mengubahnya menjadi `ravif::RGBA8`.
             let rgba_pixels: Vec<RGBA8> = rgba_image
                 .pixels()
                 .map(|p| RGBA8 {
@@ -118,7 +114,7 @@ async fn covert_to_avif(
             ))
         }
     })
-    .await??;
+        .await??;
 
     if let Some(parent) = Path::new(output_path).parent() {
         fs::create_dir_all(parent).await?;
@@ -145,7 +141,7 @@ async fn covert_to_avif(
     Ok(())
 }
 
-async fn process_folder(
+pub async fn process_folder(
     input_folder: &str,
     output_folder: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -314,35 +310,4 @@ async fn process_folder(
     println!("===========================================\n");
 
     Ok(())
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let jpg_input_folder: &str = "imgjpg";
-    let jpg_output_folder: &str = "outputjpg";
-    let png_input_folder: &str = "imgpng";
-    let png_output_folder: &str = "outputpng";
-
-    println!("=== Program Konversi Gambar ke AVIF ===\n");
-
-    if !Path::new(jpg_input_folder).exists() {
-        eprintln!(
-            "Error: File input '{}' tidak ditemukan. Harap sediakan file gambar.",
-            jpg_input_folder
-        );
-    } else {
-        process_folder(jpg_input_folder, jpg_output_folder).await?;
-    }
-
-    if !Path::new(png_input_folder).exists() {
-        eprintln!(
-            "Error: File input '{}' tidak ditemukan. Harap sediakan file gambar.",
-            png_input_folder
-        );
-    } else {
-        process_folder(png_input_folder, png_output_folder).await?;
-    }
-
-    println!("Semua proses konversi selesai!");
-    Ok(())
-}
+}*/
