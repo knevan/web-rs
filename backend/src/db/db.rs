@@ -1,18 +1,16 @@
 use rusqlite::{Connection, Error as RusqliteError, OptionalExtension, Result, Row, params};
-//use std::fmt::format;
 use std::fs;
-//use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
-//use image::error::UnsupportedErrorKind::Format;
 
-//#[derive(Debug)]
+/// Represents a Manhwa series stored in the database.
+#[derive(Debug)]
 pub struct ManhwaSeries {
     pub id: i32,
     pub title: String,
     pub current_source_url: Option<String>,
     pub source_website_host: Option<String>,
-    pub last_chapter_found_locally: Option<f32>,
-    pub processing_status: String,
+    pub last_chapter_found_locally: Option<f32>, // e.g., 10.0, 10.5
+    pub processing_status: String, // e.g., "pending", "monitoring", "error", "completed"
     pub check_interval_minutes: i32,
     pub last_checked_at: Option<i64>,
     pub next_checked_at: Option<i64>,
@@ -20,25 +18,29 @@ pub struct ManhwaSeries {
     pub updated_at: i64,
 }
 
+/// Returns the current Unix timestamp in seconds.
 pub fn current_timestamp() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards")
+        .expect("SystemTime before UNIX EPOCH! This should not happen.")
         .as_secs() as i64
 }
 
+/// Establishes a connection to the SQLite database at the given path.
 pub fn connect_db(db_path: &str) -> Result<Connection> {
     Connection::open(db_path)
 }
 
+/// Initializes the database schema by executing SQL commands from a specified file.
 pub fn initialize_schema(conn: &Connection, db_sql_file_path: &str) -> Result<()> {
     let schema_sql = fs::read_to_string(db_sql_file_path).map_err(|e| {
+        // Map IO error to a RusqliteError for consistency, though a custom error type might be better.
         RusqliteError::SqliteFailure(
             rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_IOERR_READ),
             Some(format!("Failed to read schema {}: {}", db_sql_file_path, e)),
         )
     })?;
-    conn.execute_batch(&schema_sql)?;
+    conn.execute_batch(&schema_sql)?; // Executes one or more SQL statements
     println!(
         "[DB] Schema database from {} initialized successfully",
         db_sql_file_path
@@ -46,7 +48,8 @@ pub fn initialize_schema(conn: &Connection, db_sql_file_path: &str) -> Result<()
     Ok(())
 }
 
-/// Add new manhwa series to the database
+/// Adds a new manhwa series to the database.
+/// The `next_checked_at` is initially set to the current time to allow immediate processing.
 pub fn add_manhwa_series(
     conn: &Connection,
     title: &str,
@@ -60,6 +63,9 @@ pub fn add_manhwa_series(
             .and_then(|url| url.host_str().map(String::from))
     });
 
+    // Initial next_checked_at is set to 'now' to make it eligible for immediate check.
+    // Or, could be now + interval if we don't want immediate check.
+    // For now, assuming immediate check is desired for new series.
     let initial_next_checked = now;
 
     conn.execute(
@@ -71,15 +77,15 @@ pub fn add_manhwa_series(
             host,
             interval_minutes,
             initial_next_checked,
-            now,
-            now
+            now, // created_at
+            now // updated_at
         ],
     )?;
 
     Ok(conn.last_insert_rowid())
 }
 
-/// Helper function to map a database row into a ManhwaSeries struct
+/// Helper function to map a database row to a `ManhwaSeries` struct.
 fn row_manhwa_series(row: &Row) -> Result<ManhwaSeries> {
     Ok(ManhwaSeries {
         id: row.get(0)?,
@@ -96,16 +102,16 @@ fn row_manhwa_series(row: &Row) -> Result<ManhwaSeries> {
     })
 }
 
-/// Get single manhwa series by ID
+/// Retrieves a single manhwa series by its ID.
 pub fn get_manhwa_series_by_id(conn: &Connection, id: i32) -> Result<Option<ManhwaSeries>> {
     conn.query_row(
         "SELECT id, title, current_source_url, source_website_host, last_chapter_found_locally, processing_status, check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at FROM manhwa_series WHERE id = ?1",
         params![id],
-        row_manhwa_series
-    ).optional()
+        row_manhwa_series // Use helper function
+    ).optional() // Handles cases where no row is found
 }
 
-/// Get single manhwa series by title (UNIQUE)
+/// Retrieves a single manhwa series by its title. Assumes title is unique.
 pub fn get_manhwa_series_by_title(conn: &Connection, title: &str) -> Result<Option<ManhwaSeries>> {
     conn.query_row(
         "SELECT id, title, current_source_url, source_website_host, last_chapter_found_locally, processing_status, check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at FROM manhwa_series WHERE title = ?1",
@@ -114,24 +120,32 @@ pub fn get_manhwa_series_by_title(conn: &Connection, title: &str) -> Result<Opti
     ).optional()
 }
 
-// Get all manhwa series from database
+// Retrieves all manhwa series from the database, ordered by title.
+// (This function was commented out in the original, uncommented and kept for completeness)
 /*pub fn get_all_manhwa_series(conn: &Connection) -> Result<Vec<ManhwaSeries>> {
     let mut stmt = conn.prepare("SELECT id, title, current_source_url, source_website_host, last_chapter_found_locally, processing_status, check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at FROM manhwa_series ORDER BY title ASC")?;
     let series_iter = stmt.query_map([], row_manhwa_series)?;
 
     let mut series_list = Vec::new();
     for series in series_iter {
-        series_list.push(series?);
+        series_list.push(series?); // Propagate errors from row mapping
     }
     Ok(series_list)
 }*/
 
-// Get manhwa series that are due for checking (next_checked_at <= now and status not paused/completed)
-// Sorted by next_checked_at so the longest waiting series comes first
+// Retrieves manhwa series that are due for checking.
+// (This function was commented out in the original, uncommented and improved)
+// A series is due if `next_checked_at` is past or NULL, and status is not 'paused' or 'completed'.
+
 /*pub fn get_series_to_check(conn: &Connection, limit: Option<u32>) -> Result<Vec<ManhwaSeries>> {
     let now = current_timestamp();
+    // Define statuses to ignore directly in the query for simplicity with params.
+    // If statuses were dynamic, building the query string would be more complex.
     let ignore_status = ["paused", "completed"];
 
+    // Simpler query construction using IN operator and binding multiple values
+    // This requires enabling `sqlite_parameters_in_query` feature or similar if not default.
+    // For rusqlite, we can construct the `?` placeholders dynamically.
     let mut sql = String::from("SELECT id, title, current_source_url, source_website_host, last_chapter_found_locally, processing_status, check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at FROM manhwa_series WHERE (next_check_at <= ?1 OR next_check_at IS NULL) AND processing_status NOT IN (");
     for (i, _) in ignore_status.iter().enumerate() {
         if i > 0 {
@@ -160,13 +174,16 @@ pub fn get_manhwa_series_by_title(conn: &Connection, title: &str) -> Result<Opti
     for series_result in series_iter {
         match series_result {
             Ok(series) => series_list.push(series),
-            Err(e) => eprintln!("[DB] Error mapping series to check: {}", e)
+            Err(e) => {
+            // Log error and skip this series, or propagate. For now, log and skip.
+            eprintln!("[DB] Error mapping series to check: {}", e)
+            }
         }
     }
     Ok(series_list)
 }*/
 
-/// Update source URLs series
+/// Updates the source URL and source website host for a given series.
 pub fn update_series_source_urls(
     conn: &Connection,
     series_id: i32,
@@ -182,11 +199,11 @@ pub fn update_series_source_urls(
     )
 }
 
-/// Update last chapter found locally
+/// Updates the `last_chapter_found_locally` for a given series.
 pub fn update_series_last_local_chapter(
     conn: &Connection,
     series_id: i32,
-    chapter_number: Option<f32>,
+    chapter_number: Option<f32>, // Use Option<f32> to allow setting it to NULL
 ) -> Result<usize> {
     let now = current_timestamp();
     conn.execute(
@@ -195,25 +212,31 @@ pub fn update_series_last_local_chapter(
     )
 }
 
-/// Update processing status and schedule check for series
-/// Usualy called after series are downloaded and parsed
+/// Updates the processing status and check schedule for a series.
+/// Typically called after a series has been processed (downloaded/parsed).
+/// If `new_next_checked_at` is `None`, it's calculated based on `check_interval_minutes`.
 pub fn update_series_check_schedule(
     conn: &Connection,
     series_id: i32,
-    new_status: Option<&str>,
-    new_last_checked_at: Option<i64>,
-    new_next_checked_at: Option<i64>,
+    new_status: Option<&str>,         // e.g., "monitoring", "error"
+    new_last_checked_at: Option<i64>, // Timestamp of this check
+    new_next_checked_at: Option<i64>, // Explicitly set next check time
 ) -> Result<usize> {
     let now = current_timestamp();
+
+    // Fetch current series data to get existing status and interval if not provided
+    // This adds an extra DB query. If performance is critical and new_status/interval is always known,
+    // this could be optimized by passing them directly or having separate update functions.
     let series = get_manhwa_series_by_id(conn, series_id)?
-        .ok_or_else(|| RusqliteError::QueryReturnedNoRows)?;
+        .ok_or_else(|| RusqliteError::QueryReturnedNoRows)?; // Return error if series not found
 
     let final_status = new_status.unwrap_or(&series.processing_status);
-    let final_last_checked_at = new_last_checked_at.unwrap_or(now);
+    let final_last_checked_at = new_last_checked_at.unwrap_or(now); // Default to now if not specified
 
+    // Calculate next check time if not explicitly provided
     let final_next_checked_at = match new_next_checked_at {
         Some(ts) => ts,
-        None => final_last_checked_at + (series.check_interval_minutes as i64 * 60),
+        None => final_last_checked_at + (series.check_interval_minutes as i64 * 60), // interval is in minutes
     };
 
     conn.execute(
@@ -222,7 +245,7 @@ pub fn update_series_check_schedule(
     )
 }
 
-// Update series processing status
+// Updates only the processing status of a series.
 /*pub fn update_series_processing_status(conn: &Connection, series_id: i32, new_status: &str) -> Result<usize> {
     let now = current_timestamp();
     conn.execute(
@@ -231,7 +254,7 @@ pub fn update_series_check_schedule(
     )
 }*/
 
-// Delete series ID from database
+// Deletes a series from the database by its ID.
 /*pub fn delete_series(conn: &Connection, id:i32) -> Result<usize> {
     conn.execute("DELETE FROM manhwa_series WHERE id = ?1", params![id])
 }*/
@@ -239,7 +262,7 @@ pub fn update_series_check_schedule(
 // Anda mungkin ingin menambahkan fungsi lain sesuai kebutuhan, misalnya:
 // - update_check_interval_minutes
 // - find_series_by_source_host
-// Contoh penggunaan (biasanya akan ada di main.rs atau modul logika scraper):
+// Example usage (typically would be in main.rs or a scraper logic module):
 /*
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db_path = "manhwa_scraper.db";
