@@ -1,6 +1,9 @@
+#![warn(clippy::perf)]
 mod core;
 mod db;
+mod processing;
 mod scraping;
+mod user;
 
 use crate::core::utils::{random_sleep_time, sanitize_series_title};
 use crate::db::db::{
@@ -53,6 +56,19 @@ async fn main() -> Result<()> {
     initialize_schema(&conn, db_sql_file)
         .with_context(|| format!("Failed to initialize database schema from {}", db_sql_file))?;
     println!("[MAIN] Database and schema initialized successfully.");
+
+    // Create AppState with database connection
+    /*let async_conn = AsyncConnection::open(db_path).await?;
+
+    let state = Arc::new(AppState {
+        db: Arc::new(async_conn),
+    });
+
+    let app = create_router(state);
+
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;*/
 
     // Initialize HTTP Client
     // This client will be used for all HTTP requests.

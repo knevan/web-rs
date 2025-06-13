@@ -1,6 +1,7 @@
+use crate::processing::image_processing;
 use anyhow::{Context, Result};
 use rand::Rng;
-use std::fs;
+use reqwest::Client;
 use std::path::Path;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -41,8 +42,8 @@ pub async fn random_sleep_time(min_secs: u64, max_secs: u64) {
 /// Skips download if the file at `save_path` already exists.
 /// Creates parent directories for `save_path` if they don't exist.
 /// Includes a fixed delay after successful download.
-pub async fn download_and_save_image(
-    client: &reqwest::Client,
+pub async fn download_and_encode_image(
+    client: &Client,
     image_url: &str,
     save_path: &Path,
 ) -> Result<()> {
@@ -79,21 +80,34 @@ pub async fn download_and_save_image(
     let image_bytes = response
         .bytes()
         .await
-        .with_context(|| format!("Failed to read image bytes from {}", image_url))?;
+        .with_context(|| format!("Failed to read image bytes from {}", image_url))?
+        .to_vec(); // Convert bytes to Vec
 
-    // Ensure parent directory exists before writing the file
+    println!("[ENCODER] Encoding image to AVIF for: {}", image_url);
+
+    let avif_bytes = match image_processing::covert_to_avif_in_memory(image_bytes).await {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            eprintln!("[ENCODER] Failed to encode image from {}: {}", image_url, e);
+            return Ok(());
+        }
+    };
+
+    println!("[SAVER] Saving image AVIF to: {:?}", save_path);
+
     if let Some(parent_dir) = save_path.parent() {
-        fs::create_dir_all(parent_dir)
-            .with_context(|| format!("Failed to create parent directory: {:?}", parent_dir))?;
+        if !parent_dir.exists() {
+            tokio::fs::create_dir_all(parent_dir)
+                .await
+                .with_context(|| format!("Failed to create parent directory: {:?}", parent_dir))?;
+        }
     }
 
-    // Write the image bytes to the file
-    // Note: fs::write is synchronous. For a fully async app, consider tokio::fs::write.
-    // However, for single-core, the impact might be less critical than network I/O.
-    tokio::fs::write(save_path, &image_bytes)
+    tokio::fs::write(save_path, &avif_bytes)
         .await
-        .with_context(|| format!("Failed to save image to: {:?}", save_path))?;
-    println!("[DOWNLOADER] Image saved to: {:?}", save_path);
+        .with_context(|| format!("Failed to save image AVIF to: {:?}", save_path))?;
+
+    println!("[SAVER] Successfully saved image AVIF to: {:?}", save_path);
 
     // Consider making this delay configurable or part of random_sleep_time
     // Random delay after each image download.

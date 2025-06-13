@@ -2,8 +2,7 @@ use crate::core::utils;
 use crate::scraping::model::SiteScrapingConfig;
 use anyhow::Result;
 use regex::Regex;
-use scraper::{Element, Html, Selector};
-use url::Url;
+use scraper::{Html, Selector};
 
 /// Holds information about a single chapter.
 #[derive(Debug, Clone)]
@@ -34,95 +33,72 @@ pub fn extract_image_urls(
             )
         })?;
 
-    let mut image_urls = Vec::new();
+    let mut image_urls = Vec::new(); // Vector to hold data
 
     for img_element in document.select(&image_element_selector) {
         let mut image_source_found: Option<String> = None;
 
-        // Try the primary attribute specified in config
+        // 1. Try the primary attribute specified in config (e.g., src)
         if let Some(src_val) = img_element.value().attr(&config.image_url_attribute) {
             let trimmed_src = src_val.trim();
             if !trimmed_src.is_empty() {
-                match utils::to_absolute_url(base_url_relative_path, trimmed_src) {
-                    Ok(abs_url) => {
-                        image_source_found = Some(abs_url);
-                        println!(
-                            "[PARSER] Found img url from attr {}: {}",
-                            config.image_url_attribute, trimmed_src
-                        )
-                    }
-                    Err(e) => {
-                        eprintln!(
-                            "[PARSER] Failed to absolute URL from primary attribute '{}' (value: '{}'): {}. Trying as is.",
-                            config.image_url_attribute, trimmed_src, e
-                        );
-                        if Url::parse(trimmed_src).is_ok() {
-                            image_source_found = Some(trimmed_src.to_string());
-                        }
-                    }
+                if let Ok(abs_url) = utils::to_absolute_url(base_url_relative_path, trimmed_src) {
+                    println!(
+                        "[PARSER] Found image URL from primary attribute '{}': {}",
+                        config.image_url_attribute, abs_url
+                    );
+                    image_source_found = Some(abs_url);
                 }
             }
         }
 
-        // If not found, try fallback attributes
+        // 2. If not found, try fallback attributes from config (e.g., data-src, data-lazy-src, etc.)
         if image_source_found.is_none() {
             for fallback_attr in &config.image_url_fallback_attributes {
                 if let Some(src_val) = img_element.value().attr(fallback_attr) {
                     let trimmed_src = src_val.trim();
                     if !trimmed_src.is_empty() {
-                        match utils::to_absolute_url(base_url_relative_path, trimmed_src) {
-                            Ok(abs_url) => {
-                                image_source_found = Some(abs_url);
-                                println!(
-                                    "[PARSER] Found img URL from fallback attr '{}': {}",
-                                    fallback_attr, trimmed_src
-                                );
-                                break; // Found one, no need to check other fallback for this element
-                            }
-                            Err(e) => {
-                                eprintln!(
-                                    "[PARSER] Failed to create absolute URLs from fallback attribute '{}' (value: '{}'): {}. Trying as is.",
-                                    fallback_attr, trimmed_src, e
-                                );
-                                if Url::parse(trimmed_src).is_ok() {
-                                    image_source_found = Some(trimmed_src.to_string());
-                                    break; // Found one, no need to check other fallback for this element
-                                }
-                            }
+                        if let Ok(abs_url) =
+                            utils::to_absolute_url(base_url_relative_path, trimmed_src)
+                        {
+                            println!(
+                                "[PARSER] Found image URL from fallback attribute '{}': {}",
+                                fallback_attr, abs_url
+                            );
+                            image_source_found = Some(abs_url);
+                            break; // Stop fallback loop if found a valid URL
                         }
                     }
-                    if image_source_found.is_some() {
-                        break;
-                    }
                 }
-            }
-
-            // If still not found, as a last resort, check common attributes like 'src' or 'data-src' if not already primary/fallback
-            // This part is a bit redundant if config is comprehensive, but can be a safety net.
-            // For now, relying on the config being correctly set up.
-
-            if let Some(url_to_add) = image_source_found {
-                if !url_to_add.is_empty() && !image_urls.contains(&url_to_add) {
-                    // Avoid duplicates URLs
-                    image_urls.push(url_to_add)
-                }
-            } else {
-                // Log if an image element was selected but no URL could be extracted
-                // It might be useful to log element_img.html() here for debugging selectors
-                eprintln!(
-                    "[PARSER] Could not extract a valid image URL from element: {:?}",
-                    img_element.value().name()
-                );
             }
         }
+
+        if let Some(url_to_add) = image_source_found {
+            if !url_to_add.is_empty() && !image_urls.contains(&url_to_add) {
+                // Avoid duplicates URLs
+                image_urls.push(url_to_add)
+            }
+        } else {
+            // Log if an image element was selected but no URL could be extracted
+            // It might be useful to log element_img.html() here for debugging selectors
+            eprintln!(
+                "[PARSER] Could not extract a valid image URL from element: {:?}",
+                img_element.value().name()
+            );
+        }
     }
-    println!("[PARSER] Found {} image URLs", image_urls.len());
+
+    if image_urls.is_empty() {
+        println!("[PARSER] Finished parsing, but no valid url were collected");
+    } else {
+        println!("[PARSER] Found {} unique image URLs", image_urls.len());
+    }
     Ok(image_urls)
 }
 
 /// Extracts information (title, URL, number) from all chapters on the series main page.
 /// Uses site configuration to determine selectors and how to parse chapter numbers.
-/// Note: Regex compilation can be a performance bottleneck if called very frequently for many series.
+/// [NOTE]: Regex compilation can be a performance bottleneck if called very frequently for many series.
 /// Consider pre-compiling regexes or using once_cell::sync::Lazy if this becomes an issue.
 pub async fn extract_chapter_links(
     series_page_html: &str,      // HTML content of the series main page
@@ -169,38 +145,18 @@ pub async fn extract_chapter_links(
                         let mut chapter_number_candidate: Option<f32> = None;
 
                         // Strategy for Extracting Chapter Number (with priority):
-                        // 1. From data attribute on a parent element (e.g., <li data-chapterno="X">)
-                        if chapter_number_candidate.is_none() {
-                            if let Some(attr_name) = &config.chapter_number_data_attribute_on_parent
-                            {
-                                // Try to find the attribute on the link_element itself or its parents
-                                let mut current_element_for_attr = Some(link_element);
-                                while let Some(el) = current_element_for_attr {
-                                    if let Some(data_no_str) = el.value().attr(attr_name) {
-                                        if let Ok(num) = data_no_str.trim().parse::<f32>() {
-                                            if num > 0.0 {
-                                                // Basic validation
-                                                chapter_number_candidate = Some(num);
-                                                println!(
-                                                    "[PARSER] Chapter number for '{}' from parent attribute '{}': {}",
-                                                    title, attr_name, num
-                                                );
-                                                break;
-                                            }
-                                        }
-                                    }
-                                    current_element_for_attr = el.parent_element();
-                                }
-                            }
-                        }
-
-                        // 2. From chapter URL using regex (if not found yet)
+                        // 1. From chapter URL using regex
                         if chapter_number_candidate.is_none() {
                             if let Some(re) = &url_re {
                                 if let Some(caps) = re.captures(&abs_url) {
                                     if let Some(num_match) = caps.get(1) {
                                         // First capture group from regex
-                                        if let Ok(num) = num_match.as_str().trim().parse::<f32>() {
+                                        if let Ok(num) = num_match
+                                            .as_str()
+                                            .trim()
+                                            .replace('_', ".")
+                                            .parse::<f32>()
+                                        {
                                             if num > 0.0 {
                                                 // Basic validation
                                                 chapter_number_candidate = Some(num);
@@ -215,13 +171,18 @@ pub async fn extract_chapter_links(
                             }
                         }
 
-                        // 3. From link text using regex (if not found yet)
+                        // 2. From link text using regex (if not found from url)
                         if chapter_number_candidate.is_none() {
                             if let Some(re) = &text_re {
                                 if let Some(caps) = re.captures(&title) {
                                     if let Some(num_match) = caps.get(1) {
                                         // Grup capture pertama dari regex
-                                        if let Ok(num) = num_match.as_str().trim().parse::<f32>() {
+                                        if let Ok(num) = num_match
+                                            .as_str()
+                                            .trim()
+                                            .replace('_', ".")
+                                            .parse::<f32>()
+                                        {
                                             if num > 0.0 {
                                                 chapter_number_candidate = Some(num);
                                                 println!(
@@ -235,24 +196,61 @@ pub async fn extract_chapter_links(
                             }
                         }
 
+                        // 3. Try from data attribute on a parent element (as a fallback)
+                        if chapter_number_candidate.is_none() {
+                            if let Some(attr_name) = &config.chapter_number_data_attribute_on_parent
+                            {
+                                if !attr_name.trim().is_empty() {
+                                    // Only proceed if attribute name is specified
+                                    let current_element_for_attr = Some(link_element);
+                                    while let Some(el) = current_element_for_attr {
+                                        if let Some(data_no_attr) = el.value().attr(attr_name) {
+                                            if let Ok(num) =
+                                                data_no_attr.trim().replace('_', ".").parse::<f32>()
+                                            {
+                                                if num > 0.0 {
+                                                    chapter_number_candidate = Some(num);
+                                                    println!(
+                                                        "[PARSER] Chapter number for '{}' from parent attribute '{}': {}",
+                                                        title, attr_name, num
+                                                    );
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         // If chapter number was successfully extracted and is valid
                         if let Some(number) = chapter_number_candidate {
+                            // Check for duplicates based on chapter number AND URL to be safer
                             if !chapter_infos
                                 .iter()
                                 .any(|ci: &ChapterInfo| ci.number == number && ci.url == abs_url)
                             {
                                 // Avoid duplicates
                                 chapter_infos.push(ChapterInfo {
-                                    title,
-                                    url: abs_url,
+                                    title: title.clone(),
+                                    url: abs_url.clone(), // Clone abs_url as it's used in logging too
                                     number,
                                 });
+                                println!(
+                                    "[PARSER] Extracted Chapter: '{}', Number: {:.1}, URL: {}",
+                                    title, number, abs_url
+                                );
                             } else {
                                 println!(
-                                    "[PARSER] Gagal parse nomor chapter yang valid untuk: '{}' (URL: {}). Dilewati.",
-                                    title, abs_url
+                                    "[PARSER] Duplicate chapter found (number: {:.1}, URL: {}). Skipping.",
+                                    number, abs_url
                                 );
                             }
+                        } else {
+                            println!(
+                                "[PARSER] Failed to parse a valid chapter number for: '{}' (URL: {}). Skipping.",
+                                title, abs_url
+                            );
                         }
                     }
                     Err(e) => {
@@ -272,9 +270,16 @@ pub async fn extract_chapter_links(
             .partial_cmp(&b.number)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
-    println!(
-        "[PARSER] Ditemukan {} link chapter valid setelah parsing.",
-        chapter_infos.len()
-    );
+
+    if !chapter_infos.is_empty() {
+        println!(
+            "[PARSER] Ditemukan {} link chapter valid setelah parsing.",
+            chapter_infos.len() // Optional: Log first and last chapter found to verify sorting
+                                // if let Some(first) = chapter_infos.first() { println!("[PARSER] First chapter after sort: No. {:.1}", first.number); }
+                                // if let Some(last) = chapter_infos.last() { println!("[PARSER] Last chapter after sort: No. {:.1}", last.number); }
+        );
+    } else {
+        println!("[PARSER] No chapter links found after parsing.");
+    }
     Ok(chapter_infos)
 }

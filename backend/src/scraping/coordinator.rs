@@ -1,4 +1,4 @@
-use crate::core::utils::{download_and_save_image, random_sleep_time};
+use crate::core::utils::{download_and_encode_image, random_sleep_time};
 use crate::db::db::ManhwaSeries;
 use crate::scraping::model::SiteScrapingConfig;
 use crate::scraping::{fetcher, parser};
@@ -89,43 +89,31 @@ pub async fn process_single_chapter(
     }
 
     // Download and save each image
-    //  TODO)): Consider parallelizing image downloads for a single chapter (e.g., using tokio::spawn with a semaphore)
+    // TODO)): Consider parallelizing image downloads for a single chapter (e.g., using tokio::spawn with a semaphore)
     println!(
         "[COORDINATOR] Downloading {} images for Chapter {}...",
         image_urls.len(),
         chapter_number_for_log
     );
+
+    // Short pause before starting to download images
+    random_sleep_time(2, 4).await;
+
     let mut images_downloaded_in_chapter_count = 0;
     for (index, img_url) in image_urls.iter().enumerate() {
-        // Determine image file extension from URL, default to "jpg" if none or invalid
-        let extension = Path::new(img_url)
-            .extension()
-            .and_then(|os_str| os_str.to_str())
-            .map_or("jpg", |ext| {
-                if ext.is_empty() || ext.len() > 5 {
-                    "jpg"
-                } else {
-                    ext.split('?').next().unwrap_or(ext)
-                }
-            }); // Hapus query params dari ekstensi
-
-        let image_filename = format!("{:03}.{}", index + 1, extension); // Image filename: 001.jpg, 002.png, etc.
+        let image_filename = format!("{:03}.avif", index + 1); // Image filename: 001.jpg, 002.png, etc.
         let image_save_path = chapter_path.join(&image_filename);
 
         // Try to download and save the image
-        if let Err(e) = download_and_save_image(http_client, img_url, &image_save_path).await {
+        if let Err(e) = download_and_encode_image(http_client, img_url, &image_save_path).await {
             eprintln!(
                 "[COORDINATOR] Failed to download/save image {} (URL: {}) for Chapter {}: {}",
                 image_filename, img_url, chapter_number_for_log, e
             );
             // Consider whether to stop this chapter if one image fails, or retry. For now, we continue.
-        } else {
+        } else if image_save_path.exists() {
             images_downloaded_in_chapter_count += 1;
         }
-
-        // Short pause (sleep) after download images
-        //tokio::time::sleep(Duration::from_millis(500)).await;
-        random_sleep_time(2, 7).await;
     }
 
     println!(
@@ -204,7 +192,7 @@ pub async fn process_series_chapters_from_list(
         }
 
         // Short pause (sleep) before processing next chapter
-        println!("[COORDINATOR] Jeda sebelum chapter berikutnya (jika ada)...");
+        println!("[COORDINATOR] Pausing before the next chapter (if any)...");
         //tokio::time::sleep(Duration::from_secs(config.host_name.contains("mgeko") as u64 * 8)).await;
         let base_chapter_delay_seconds = if config.host_name.contains("mgeko") {
             6
