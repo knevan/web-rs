@@ -1,7 +1,7 @@
 #![warn(clippy::perf)]
 mod core;
 mod db;
-mod processing;
+mod encoding;
 mod scraping;
 mod user;
 

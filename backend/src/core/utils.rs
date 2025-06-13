@@ -1,11 +1,13 @@
-use crate::processing::image_processing;
 use anyhow::{Context, Result};
 use rand::Rng;
 use reqwest::Client;
 use std::path::Path;
 use std::time::Duration;
 use tokio::time::sleep;
+use tokio::{fs, task};
 use url::Url;
+
+use crate::encoding::image_encoding::covert_image_bytes_to_avif;
 
 // Converts a relative URL string to an absolute URL string, given a base URL.
 pub fn to_absolute_url(base_url_str: &str, relative_url_str: &str) -> Result<String> {
@@ -42,37 +44,22 @@ pub async fn random_sleep_time(min_secs: u64, max_secs: u64) {
 /// Skips download if the file at `save_path` already exists.
 /// Creates parent directories for `save_path` if they don't exist.
 /// Includes a fixed delay after successful download.
-pub async fn download_and_encode_image(
+pub async fn download_and_convert_to_avif(
     client: &Client,
-    image_url: &str,
+    url: &str,
     save_path: &Path,
 ) -> Result<()> {
-    if save_path.exists() {
-        println!(
-            "[DOWNLOADER] Image already exists, skipping: {:?}",
-            save_path
-        );
-        return Ok(());
-    }
-    println!("[DOWNLOADER] Downloading image from: {}", image_url);
-
-    let random_request_timeout = Duration::from_secs(if 55 >= 70 {
-        55
-    } else {
-        rand::rng().random_range(55..=75)
-    });
-
+    // Download image data into bytes
     let response = client
-        .get(image_url)
-        .timeout(random_request_timeout) // Random timeout for the image download request
+        .get(url)
         .send()
         .await
-        .with_context(|| format!("Failed to send GET request to image URL: {}", image_url))?;
+        .with_context(|| format!("Failed to send request for image URL: {}", url))?;
 
     if !response.status().is_success() {
         return Err(anyhow::anyhow!(
-            "Failed to download image: '{}'. Server status: {}",
-            image_url,
+            "Request for image {} failed with status: {}",
+            url,
             response.status()
         ));
     }
@@ -80,34 +67,38 @@ pub async fn download_and_encode_image(
     let image_bytes = response
         .bytes()
         .await
-        .with_context(|| format!("Failed to read image bytes from {}", image_url))?
+        .with_context(|| format!("Failed to read image bytes from {}", url))?
         .to_vec(); // Convert bytes to Vec
 
-    println!("[ENCODER] Encoding image to AVIF for: {}", image_url);
+    println!(
+        "[DOWNLOADER] Downloaded {} bytes from {}",
+        image_bytes.len(),
+        url
+    );
 
-    let avif_bytes = match image_processing::covert_to_avif_in_memory(image_bytes).await {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            eprintln!("[ENCODER] Failed to encode image from {}: {}", image_url, e);
-            return Ok(());
-        }
-    };
+    // Convert the downloaded bytes to AVIF bytes in a non-block
+    // spawn_blocking is crucial here because image encoding is CPU-intensive and need time to complete
+    let avif_bytes = task::spawn_blocking(move || covert_image_bytes_to_avif(&image_bytes))
+        .await?
+        .with_context(|| "The image conversion failed.")?;
 
-    println!("[SAVER] Saving image AVIF to: {:?}", save_path);
-
+    // Save the resulting AVIF bytes to the file system
     if let Some(parent_dir) = save_path.parent() {
         if !parent_dir.exists() {
-            tokio::fs::create_dir_all(parent_dir)
+            fs::create_dir_all(parent_dir)
                 .await
                 .with_context(|| format!("Failed to create parent directory: {:?}", parent_dir))?;
         }
     }
 
-    tokio::fs::write(save_path, &avif_bytes)
+    fs::write(save_path, &avif_bytes)
         .await
-        .with_context(|| format!("Failed to save image AVIF to: {:?}", save_path))?;
+        .with_context(|| format!("Failed to write AVIF data to: {:?}", save_path))?;
 
-    println!("[SAVER] Successfully saved image AVIF to: {:?}", save_path);
+    println!(
+        "[SAVER] Successfully saved converted AVIF image to: {:?}",
+        save_path
+    );
 
     // Consider making this delay configurable or part of random_sleep_time
     // Random delay after each image download.
@@ -117,12 +108,6 @@ pub async fn download_and_encode_image(
 
 /// Sanitizes a series title to be suitable for use as a folder name.
 /// Replaces common problematic characters with hyphens or removes them.
-///
-/// # Arguments
-/// * `title`: The original series title string.
-///
-/// # Returns
-/// `String`: A sanitized string suitable for a folder name.
 pub fn sanitize_series_title(title: &str) -> String {
     title
         .replace([':', '/', '\\', '?', '*', '<', '>', '|'], "-") // Replace multiple characters with a single replacement

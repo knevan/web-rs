@@ -1,4 +1,4 @@
-use crate::core::utils::{download_and_encode_image, random_sleep_time};
+use crate::core::utils::{download_and_convert_to_avif, random_sleep_time};
 use crate::db::db::ManhwaSeries;
 use crate::scraping::model::SiteScrapingConfig;
 use crate::scraping::{fetcher, parser};
@@ -91,7 +91,7 @@ pub async fn process_single_chapter(
     // Download and save each image
     // TODO)): Consider parallelizing image downloads for a single chapter (e.g., using tokio::spawn with a semaphore)
     println!(
-        "[COORDINATOR] Downloading {} images for Chapter {}...",
+        "[COORDINATOR] Downloading and converting {} images for Chapter {}",
         image_urls.len(),
         chapter_number_for_log
     );
@@ -105,7 +105,7 @@ pub async fn process_single_chapter(
         let image_save_path = chapter_path.join(&image_filename);
 
         // Try to download and save the image
-        if let Err(e) = download_and_encode_image(http_client, img_url, &image_save_path).await {
+        if let Err(e) = download_and_convert_to_avif(http_client, img_url, &image_save_path).await {
             eprintln!(
                 "[COORDINATOR] Failed to download/save image {} (URL: {}) for Chapter {}: {}",
                 image_filename, img_url, chapter_number_for_log, e
@@ -114,6 +114,9 @@ pub async fn process_single_chapter(
         } else if image_save_path.exists() {
             images_downloaded_in_chapter_count += 1;
         }
+
+        // Short pause between downloading images
+        random_sleep_time(2, 4).await;
     }
 
     println!(
