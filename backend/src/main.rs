@@ -1,5 +1,6 @@
 mod core;
 mod db;
+mod encoding;
 mod scraping;
 
 use crate::core::utils::{random_sleep_time, sanitize_series_title};
