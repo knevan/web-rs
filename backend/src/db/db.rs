@@ -1,3 +1,4 @@
+use rand::Rng;
 use rusqlite::{Connection, Error as RusqliteError, OptionalExtension, Result, Row, params};
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -236,7 +237,19 @@ pub fn update_series_check_schedule(
     // Calculate next check time if not explicitly provided
     let final_next_checked_at = match new_next_checked_at {
         Some(ts) => ts,
-        None => final_last_checked_at + (series.check_interval_minutes as i64 * 60), // interval is in minutes
+        None => {
+            let mut rng = rand::rng();
+            // Create random time for next checking (Base interval +/- 30 minutes)
+            let base_interval = series.check_interval_minutes as i64;
+            let random_interval = rng.random_range(-30..=30);
+            let actual_interval_minutes = base_interval + random_interval;
+
+            // Make sure interval is not negative
+            let actual_interval_minutes = actual_interval_minutes.max(30);
+
+            // Randomly adjust the next check time by the interval in minutes
+            final_last_checked_at + (actual_interval_minutes * 60)
+        }
     };
 
     conn.execute(
