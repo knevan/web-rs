@@ -1,10 +1,10 @@
 <script>
-    import image_image1 from '$lib/images/image_image.webp'
+    import image_image1 from '../images/image_image.webp'
 </script>
 
 <header>
     <div class="corner">
-        <a href="/">
+        <a href="/frontend/static">
             <img src={image_image1} alt="SvelteKit"/>
         </a>
     </div>
@@ -15,10 +15,13 @@
         </svg>
         <ul>
             <li>
-                <a href="/">Home</a>
+                <a href="/frontend/static" class="Home">Home</a>
             </li>
             <li>
-                <a href="/mangaupdates">Manga Updates</a>
+                <a href="/mangaupdates" class="manga-updates">Manga Updates</a>
+            </li>
+            <li>
+                <a href="/login" class="login">Sign In</a>
             </li>
         </ul>
         <svg viewBox="0 0 2 3" aria-hidden="true">
