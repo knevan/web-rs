@@ -1,7 +1,6 @@
 use crate::common::error::AuthError;
-use axum::{RequestPartsExt, extract::FromRequestParts, http::request::Parts};
-use axum_extra::TypedHeader;
-use axum_extra::headers::{Authorization, authorization::Bearer};
+use axum::{extract::FromRequestParts, http::request::Parts};
+use axum_extra::extract::CookieJar;
 use chrono::{Duration, Utc};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
@@ -41,36 +40,83 @@ pub struct Claims {
     pub iat: usize,  // Issued at time
 }
 
-/// Custom extractor to get claims from requests.
-/// This will be used in the protected handler to get
-/// authenticated user information.
+/// Struct for Refresh Token Claims
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RefreshClaims {
+    pub sub: String,
+    pub exp: usize,
+    pub iat: usize,
+}
+
+/// Custom extractor to get `Claims` from cookie access token.
 impl<S> FromRequestParts<S> for Claims
 where
     S: Send + Sync,
 {
     type Rejection = AuthError;
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        // Extract token from Authorization header
-        let TypedHeader(Authorization(bearer)) = parts
-            .extract::<TypedHeader<Authorization<Bearer>>>()
-            .await
-            .map_err(|_| AuthError::InvalidToken)?;
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        // Extract cookie jar from request
+        let jar = CookieJar::from_request_parts(parts, state).await.unwrap();
 
-        let token_data = decode::<Claims>(bearer.token(), &KEYS.decoding, &Validation::default())
+        // Get a Cookie named "token"
+        let token_cookie = jar.get("token").ok_or(AuthError::InvalidToken)?;
+        let token = token_cookie.value();
+
+        // Decode token
+        let token_data = decode::<Claims>(token, &KEYS.decoding, &Validation::default())
             .map_err(|_| AuthError::InvalidToken)?;
 
         Ok(token_data.claims)
     }
 }
 
-/// Create jwt token for a given user ID.
-pub fn create_jwt(user_id: String) -> Result<String, AuthError> {
+/// Custom extractor to get `RefreshClaims` from cookie refresh token.
+impl<S> FromRequestParts<S> for RefreshClaims
+where
+    S: Send + Sync,
+{
+    type Rejection = AuthError;
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let jar = CookieJar::from_request_parts(parts, state).await.unwrap();
+
+        let refresh_token_cookie = jar.get("refresh-token").ok_or(AuthError::InvalidToken)?;
+        let refresh_token = refresh_token_cookie.value();
+
+        // Decode token
+        let token_data =
+            decode::<RefreshClaims>(refresh_token, &KEYS.decoding, &Validation::default())
+                .map_err(|_| AuthError::InvalidToken)?;
+
+        Ok(token_data.claims)
+    }
+}
+
+/// Create jwt token for a given user ID (access token)
+pub fn create_access_jwt(user_id: String) -> Result<String, AuthError> {
     let now = Utc::now();
     let iat = now.timestamp() as usize;
 
-    let exp = (now + Duration::days(5)).timestamp() as usize;
+    // Access token valid for 15 minutes
+    let exp = (now + Duration::minutes(15)).timestamp() as usize;
 
     let claims = Claims {
+        sub: user_id,
+        exp,
+        iat,
+    };
+
+    encode(&Header::default(), &claims, &KEYS.encoding).map_err(|_| AuthError::TokenCreation)
+}
+
+/// Create refresh jwt token for a given user ID (refresh token)
+pub fn create_refresh_jwt(user_id: String) -> Result<String, AuthError> {
+    let now = Utc::now();
+    let iat = now.timestamp() as usize;
+
+    // Refresh token valid for 7 days
+    let exp = (now + Duration::days(7)).timestamp() as usize;
+
+    let claims = RefreshClaims {
         sub: user_id,
         exp,
         iat,

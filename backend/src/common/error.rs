@@ -7,6 +7,7 @@ pub enum AuthError {
     WrongCredentials,
     MissingCredentials,
     TokenCreation,
+    InvalidRefreshToken,
 }
 
 // Implement IntoResponse so that error can be converted into an HTTP response
@@ -19,6 +20,7 @@ impl IntoResponse for AuthError {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create token")
             }
             AuthError::InvalidToken => (StatusCode::UNAUTHORIZED, "Invalid token"),
+            AuthError::InvalidRefreshToken => (StatusCode::UNAUTHORIZED, "Invalid refresh token"),
         };
 
         let body = Json(serde_json::json!({"error": error_message}));
