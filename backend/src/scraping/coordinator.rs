@@ -1,4 +1,4 @@
-use crate::core::utils::{download_and_convert_to_avif, random_sleep_time};
+use crate::common::utils::{download_and_convert_to_avif, random_sleep_time};
 use crate::db::db::ManhwaSeries;
 use crate::scraping::model::SiteScrapingConfig;
 use crate::scraping::{fetcher, parser};

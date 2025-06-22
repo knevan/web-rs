@@ -1,4 +1,4 @@
-use crate::core::utils;
+use crate::common::utils;
 use crate::scraping::model::SiteScrapingConfig;
 use anyhow::Result;
 use regex::Regex;
