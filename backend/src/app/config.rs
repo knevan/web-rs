@@ -1,6 +1,7 @@
-use crate::scraping::model::{AppConfig, SiteScrapingConfig};
 use anyhow::{Context, Result, anyhow};
 use url::Url;
+
+use crate::scraping::model::{AppConfig, SiteScrapingConfig};
 
 /// Loads the application configuration from the specified file
 pub fn load_app_config(config_path: &str) -> Result<AppConfig> {

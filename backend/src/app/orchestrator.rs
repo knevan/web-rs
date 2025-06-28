@@ -41,7 +41,8 @@ pub async fn run_bulk_series_scraping(
         series_main_page_url
     );
     let series_page_html = fetcher::fetch_html(&http_client, series_main_page_url).await?;
-    random_sleep_time(2, 5).await;
+    // Add a delay after fetching the main series page to avoid rapid requests
+    random_sleep_time(3, 7).await;
 
     // 4. Extract all chapter links from the series main page
     let all_available_chapters = parser::extract_chapter_links(

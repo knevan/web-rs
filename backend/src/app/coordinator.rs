@@ -52,7 +52,7 @@ pub async fn process_series_chapters_from_list(
                 break;
             }
         }
-        random_sleep_time(4, 10).await; // Pause between chapters
+        random_sleep_time(6, 12).await; // Pause between chapters
     }
     Ok(last_successfully_downloaded_chapter)
 }
@@ -87,6 +87,10 @@ pub async fn process_single_chapter(
 
     // 2. Fetch HTML to get image URLs
     let html_content = fetcher::fetch_html(http_client, &chapter_info.url).await?;
+
+    // Add a small delay after fetching the chapter page HTML before processing images.
+    random_sleep_time(3, 5).await;
+
     let image_urls = parser::extract_image_urls(&html_content, &chapter_info.url, config)?;
     if image_urls.is_empty() {
         println!(
@@ -95,7 +99,6 @@ pub async fn process_single_chapter(
         );
         return Ok(None);
     }
-    // random_sleep_time(2, 4).await;
 
     // 3. Process each image
     let mut image_saved_count = 0;
@@ -105,6 +108,7 @@ pub async fn process_single_chapter(
         random_sleep_time(2, 4).await;
 
         // The full pipeline for a single image
+        // store image to R2 object storage
         let final_cdn_url = match fetcher::fetch_image_bytes(http_client, img_url).await {
             Ok(image_bytes) => {
                 // Run CPU-intensive encoding in a blocking task
@@ -125,7 +129,7 @@ pub async fn process_single_chapter(
 
                         // Upload to R2
                         match storage_client
-                            .upload_object(&object_key, avif_bytes, "image/avif")
+                            .upload_objects(&object_key, avif_bytes, "image/avif")
                             .await
                         {
                             Ok(cdn_url) => Some(cdn_url),
