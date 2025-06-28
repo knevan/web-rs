@@ -1,45 +1,31 @@
-use crate::common::dynamic_proxy;
-use crate::db::db::{connect_db, initialize_schema};
 use anyhow::{Context, Result};
-use rusqlite::Connection;
 use std::env::current_dir;
 use std::fs;
 use std::path::PathBuf;
 
-/// Sets up the working directory and root data directory
-pub fn setup_directories() -> Result<PathBuf> {
-    println!("[SETUP] Setting up directories...");
-
-    // Setup Working Directory and Root Data Directory
-    let current_dir =
-        current_dir().with_context(|| "Failed to get the current working directory.")?;
-    println!("[MAIN] Current working directory: {:?}", current_dir);
-
-    let root_data_dir = PathBuf::from("downloaded_manhwa"); // Main folder to store downloaded manhwa
-    if !root_data_dir.exists() {
-        fs::create_dir_all(&root_data_dir).with_context(|| {
-            format!(
-                "Failed to create root data directory: {}",
-                root_data_dir.display()
-            )
-        })?;
-        println!("[MAIN] Root data directory created: {:?}", root_data_dir);
-    }
-
-    Ok(root_data_dir)
-}
+use crate::common::dynamic_proxy;
+use crate::db::db::{DatabaseService, create_db_pool, initialize_schema};
 
 /// Sets up the database connection and initializes the schema
-pub fn setup_database(db_path: &str, schema_path: &str) -> Result<Connection> {
+pub fn setup_database(db_path: &str, schema_path: &str) -> Result<DatabaseService> {
     println!("[MAIN]  Connecting to database: {}", db_path);
-    let conn = connect_db(db_path)
-        .with_context(|| format!("Failed to connect to database: {}", db_path))?;
 
-    initialize_schema(&conn, schema_path)
+    // Create connection pool
+    let pool = create_db_pool(db_path)
+        .with_context(|| format!("Failed to create database pool for: {}", db_path))?;
+
+    // Get a single connection to initialize the schema
+    let mut conn = pool
+        .get()
+        .context("Failed to get a connection from the pool for schema initialization")?;
+
+    initialize_schema(&mut conn, schema_path)
         .with_context(|| format!("Failed to initialize database schema from {}", schema_path))?;
     println!("[MAIN] Database and schema initialized successfully.");
 
-    Ok(conn)
+    // Create and return the Database Service
+    let db_service = DatabaseService::new(pool);
+    Ok(db_service)
 }
 
 /// Sets up the HTTP client

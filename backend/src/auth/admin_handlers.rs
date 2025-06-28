@@ -1,13 +1,11 @@
-use crate::common::jwt::Claims;
-use crate::db::db;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum_core::response::{IntoResponse, Response};
-use rusqlite::Connection;
 use serde::Deserialize;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+
+use crate::common::jwt::Claims;
+use crate::db::db::DatabaseService;
 
 #[derive(Deserialize)]
 pub struct SeriesRequest {
@@ -22,7 +20,7 @@ pub struct SeriesRequest {
 /// This route is protected and can only be accessed by a logged-in admin.
 pub async fn create_series_handler(
     claims: Claims,
-    State(db_conn): State<Arc<Mutex<Connection>>>,
+    State(db_service): State<DatabaseService>,
     Json(payload): Json<SeriesRequest>,
 ) -> Response {
     println!(
@@ -30,16 +28,16 @@ pub async fn create_series_handler(
         "Handler", claims.sub
     );
 
-    let conn = db_conn.lock().await;
-
-    match db::add_manga_series(
-        &conn,
-        &payload.title,
-        payload.description.as_deref(),
-        payload.cover_image_url.as_deref(),
-        payload.source_url.as_deref(),
-        payload.check_interval_minutes,
-    ) {
+    match db_service
+        .add_manga_series(
+            &payload.title,
+            payload.description.as_deref(),
+            payload.cover_image_url.as_deref(),
+            payload.source_url.as_deref(),
+            payload.check_interval_minutes,
+        )
+        .await
+    {
         Ok(new_id) => (
             StatusCode::CREATED,
             Json(serde_json::json!({"status": "success", "id": new_id})),
@@ -54,10 +52,10 @@ pub async fn create_series_handler(
 }
 
 /// Handler to update an existing manhwa series.
-/// This route is also protected.
+/// This route is also protected and can only be accessed by a logged-in admin.
 pub async fn update_series_handler(
     claims: Claims,
-    State(db_conn): State<Arc<Mutex<Connection>>>,
+    State(db_service): State<DatabaseService>,
     Path(series_id): Path<i32>,
     Json(payload): Json<SeriesRequest>,
 ) -> Response {
@@ -66,17 +64,17 @@ pub async fn update_series_handler(
         "HANDLER", claims.sub, series_id
     );
 
-    let conn = db_conn.lock().await;
-
-    match db::update_manga_series(
-        &conn,
-        series_id,
-        &payload.title,
-        payload.description.as_deref(),
-        payload.cover_image_url.as_deref(),
-        payload.source_url.as_deref(),
-        payload.check_interval_minutes,
-    ) {
+    // Call the async method on the DatabaseService instance
+    match db_service
+        .add_manga_series(
+            &payload.title,
+            payload.description.as_deref(),
+            payload.cover_image_url.as_deref(),
+            payload.source_url.as_deref(),
+            payload.check_interval_minutes,
+        )
+        .await
+    {
         Ok(rows_affected) if rows_affected > 0 => {
             (
                 StatusCode::OK,

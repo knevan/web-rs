@@ -1,9 +1,10 @@
-use crate::common::utils;
-use crate::scraping::model::SiteScrapingConfig;
 use anyhow::Result;
 use regex::Regex;
 use scraper::{Element, Html, Selector};
 use url::Url;
+
+use crate::common::utils;
+use crate::scraping::model::SiteScrapingConfig;
 
 /// Holds information about a single chapter.
 #[derive(Debug, Clone)]
