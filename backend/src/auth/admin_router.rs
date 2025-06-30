@@ -1,12 +1,11 @@
-use crate::auth::admin_handlers::{create_series_handler, update_series_handler};
 use axum::Router;
-use axum::routing::post;
-use rusqlite::Connection;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use axum::routing::{post, put};
 
-pub fn admin_routes() -> Router<Arc<Mutex<Connection>>> {
+use crate::auth::admin_handlers::{create_series_handler, update_series_handler};
+use crate::db::db::DatabaseService;
+
+pub fn admin_routes() -> Router<DatabaseService> {
     Router::new()
         .route("/series", post(create_series_handler))
-        .route("/series/:id", post(update_series_handler))
+        .route("/series/:id", put(update_series_handler))
 }
