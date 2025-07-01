@@ -1,11 +1,15 @@
 version: '3'
 
 tasks:
-  run-backend:
+  backend:
     cmds:
       - cargo run {{.CLI_ARGS}}
+
+  release:
+    cmds:
+      - task: backend --release
   
-  run-frontend:
+  frontend:
     cmds:
       - bun run dev
     dir: ./frontend
@@ -15,11 +19,7 @@ tasks:
       - task: run-backend
       - task: run-frontend
 
-  dev-release: 
+  dev-release:
     cmds:
       - task: run-backend -- --release
       - task: run-frontend
-
-  release:
-    cmds:
-      - task: run-backend --release    
