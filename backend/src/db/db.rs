@@ -1,44 +1,53 @@
-use anyhow::{Result as AnyhowResult, anyhow};
-use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
+use anyhow::{Context, Result as AnyhowResult, anyhow};
+use chrono::{DateTime, Utc};
 use rand::Rng;
-use rusqlite::{
-    Connection, Error as RusqliteError, OptionalExtension, Result as RusqliteResult, Row, params,
-};
-use std::fs;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use sqlx::{FromRow, PgPool};
+use std::time::{SystemTime, UNIX_EPOCH};
 use url::Url;
 
 // Type alias for db connection pool
-pub type DbPool = Pool<SqliteConnectionManager>;
+pub type DbPool = PgPool;
 
-/// Struct pepresents a Manhwa series stored in the database.
-#[derive(Debug)]
+/// Struct represents a Manhwa series stored in the database.
+/// The derive macro is now `sqlx::FromRow`.
+#[derive(Debug, Clone, FromRow)]
 pub struct MangaSeries {
     pub id: i32,
     pub title: String,
-    pub description: Option<String>,
-    pub cover_image_url: Option<String>,
-    pub current_source_url: Option<String>,
-    pub source_website_host: Option<String>,
+    pub description: String,
+    pub cover_image_url: String,
+    pub current_source_url: String,
+    pub source_website_host: String,
+    pub views_count: i32,
+    pub bookmarks_count: i32,
     pub last_chapter_found_in_storage: Option<f32>, // e.g., 10.0, 10.5
     pub processing_status: String, // e.g., "pending", "monitoring", "error", "completed"
     pub check_interval_minutes: i32,
-    pub last_checked_at: Option<i64>,
-    pub next_checked_at: Option<i64>,
-    pub created_at: i64,
-    pub updated_at: i64,
+    pub last_checked_at: Option<DateTime<Utc>>,
+    pub next_checked_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 /// Struct represent chapter
-#[derive(Debug)]
+#[derive(Debug, FromRow)]
 pub struct Chapter {
     pub id: i32,
     pub series_id: i32,
     pub chapter_number: f32,
     pub title: Option<String>,
     pub source_url: String,
-    pub created_at: i64,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Strcuct represents a user record fetched from the database
+#[derive(Debug, FromRow)]
+pub struct Users {
+    pub id: i32,
+    pub username: String,
+    pub email: String,
+    pub password_hash: String,
+    pub role: String,
 }
 
 /// Returns the current Unix timestamp in seconds.
@@ -59,79 +68,41 @@ fn get_host_from_url(url_option: Option<&str>) -> Option<String> {
     })
 }
 
-// Function to initialize the database connection pool
-pub fn create_db_pool(database_path: &str) -> anyhow::Result<DbPool> {
-    let manager = SqliteConnectionManager::file(database_path).with_init(|conn| {
-        // WAL mode for better concurrent access
-        //conn.execute("PRAGMA journal_mode = WAL", [])?;
-
-        // Optimize for concurrent reads/writes
-        //conn.execute("PRAGMA synchronous = NORMAL", [])?;
-        //conn.execute("PRAGMA cache_size = 2000", [])?;
-        //conn.execute("PRAGMA temp_store = memory", [])?;
-        //conn.execute("PRAGMA mmap_size = 268435456", [])?; // 256MB
-
-        // Foreign key constraints
-        conn.execute("PRAGMA foreign_keys = ON", [])?;
-
-        // Busy timeout for concurrent access
-        conn.execute("PRAGMA busy_timeout = 5000", [])?; // 5 seconds
-
-        Ok(())
-    });
-
-    let pool = Pool::builder()
-        .max_size(5)
-        .min_idle(Some(2))
-        .connection_timeout(Duration::from_secs(30))
-        .idle_timeout(Some(Duration::from_secs(300)))
-        .max_lifetime(Some(Duration::from_secs(1800)))
-        .build(manager)?;
-
-    Ok(pool)
-}
-
-/// Initializes the database schema by executing SQL commands from a specified file.
-pub fn initialize_schema(conn: &Connection, db_sql_file_path: &str) -> AnyhowResult<()> {
-    let schema_sql = fs::read_to_string(db_sql_file_path)?;
-    conn.execute_batch(&schema_sql)?; // Executes one or more SQL statements
-    println!(
-        "[DB] Schema database from {} initialized successfully",
-        db_sql_file_path
-    );
-    Ok(())
-}
-
 /// Database operations with connection pool
+#[derive(Clone)]
 pub struct DatabaseService {
     pool: DbPool,
 }
 
+/// Macros `sqlx::query!`
+/// For DML operations (INSERT, UPDATE, DELETE) or SELECTs,
+/// where you're manually processing generic `sqlx::Row`s (anonymous struct).
+///
+/// Macros `sqlx::query_as!`
+/// For mapping SELECT results directly to a defined rust struct (`#[derive(FromRow)]`),
+/// recommended for structured data retrieval.
+///
+/// Macros `sqlx::query_scalar!`
+/// For queries returning a single value (one row, one column).
+/// Highly efficient for this purpose.
+///
+/// []Use .execute() when you want to run a command and don't need any row data back.
+/// UPDATE, DELETE, INSERT (without a RETURNING clause), or CREATE TABLE. It's fire-and-forget.
+///
+/// Use .fetch_one() when you are certain the query will return EXACTLY one row
+/// It will error if it gets zero or more than one row. Useful for fetching by a primary key.
+/// SELECT ... WHERE id = ? or INSERT ... RETURNING id. (Your logic requires a single, unique record to exist.)
+///
+/// Use .fetch_optional() when a record may or may not exist, the query could return one row or nothing.
+/// It will be Some(data) if a row is found, and None if no rows are found.
+/// It will ERROR if query returns more than one row.
+/// Perfect for: Checking if a user exists with SELECT ... WHERE email = ?.
 impl DatabaseService {
-    pub fn new(pool: DbPool) -> DatabaseService {
+    pub fn new(pool: DbPool) -> Self {
         DatabaseService { pool }
     }
 
-    /// Helper function to map a database row to a `ManhwaSeries` struct.
-    fn row_manga_series(row: &Row) -> RusqliteResult<MangaSeries> {
-        Ok(MangaSeries {
-            id: row.get(0)?,
-            title: row.get(1)?,
-            description: row.get(2)?,
-            cover_image_url: row.get(3)?,
-            current_source_url: row.get(4)?,
-            source_website_host: row.get(5)?,
-            last_chapter_found_in_storage: row.get(6)?,
-            processing_status: row.get(7)?,
-            check_interval_minutes: row.get(8)?,
-            last_checked_at: row.get(9)?,
-            next_checked_at: row.get(10)?,
-            created_at: row.get(11)?,
-            updated_at: row.get(12)?,
-        })
-    }
-
-    /// Adds a new manhwa series to the database from manual admin input.
+    /// Adds a new manhwa series to the database from manual admin-dashboard input.
     /// The `next_checked_at` is initially set to the current time to allow immediate processing.
     pub async fn add_manga_series(
         &self,
@@ -140,36 +111,21 @@ impl DatabaseService {
         cover_image_url: Option<&str>,
         source_url: Option<&str>,
         interval_minutes: i32,
-    ) -> AnyhowResult<i64> {
-        let pool = self.pool.clone();
-        let title = title.to_string();
-        let description = description.map(|s| s.to_string());
-        let cover_image_url = cover_image_url.map(|s| s.to_string());
-        let source_url = source_url.map(|s| s.to_string());
+    ) -> AnyhowResult<i32> {
+        let host = get_host_from_url(source_url);
 
-        tokio::task::spawn_blocking(move || {
-            let conn = pool.get()?;
-            let now = current_timestamp();
-            let host = get_host_from_url(source_url.as_deref());
+        let new_id = sqlx::query_scalar!(
+            "INSERT INTO manga_series (title, description, cover_image_url, current_source_url, source_website_host, check_interval_minutes)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+            title,
+            description,
+            cover_image_url,
+            source_url,
+            host,
+            interval_minutes,
+        ).fetch_one(&self.pool).await.context("Failed to add manga series with sqlx")?;
 
-            conn.execute(
-                "INSERT INTO manhwa_series (title, description, cover_image_url, current_source_url, source_website_host, check_interval_minutes, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                params![
-                    title,
-                    description,
-                    cover_image_url,
-                    source_url,
-                    host,
-                    interval_minutes,
-                    now, // created_at
-                    now  // updated_at
-                ],
-            )?;
-
-            Ok(conn.last_insert_rowid())
-        })
-            .await?
+        Ok(new_id)
     }
 
     /// Updates an existing manhwa series chapter data
@@ -182,37 +138,27 @@ impl DatabaseService {
         cover_image_url: Option<&str>,
         source_url: Option<&str>,
         interval_minutes: i32,
-    ) -> AnyhowResult<usize> {
-        let pool = self.pool.clone();
-        let title = title.to_string();
-        let description = description.map(|s| s.to_string());
-        let cover_image_url = cover_image_url.map(|s| s.to_string());
-        let source_url = source_url.map(|s| s.to_string());
+    ) -> AnyhowResult<u64> {
+        let host = get_host_from_url(source_url);
 
-        tokio::task::spawn_blocking(move || {
-            let conn = pool.get()?;
-            let now = current_timestamp();
-            let host = get_host_from_url(source_url.as_deref());
+        let result = sqlx::query!(
+            "UPDATE manga_series
+            SET title = $1, description = $2, cover_image_url = $3, current_source_url = $4,
+            source_website_host = $5, check_interval_minutes = $6, updated_at = NOW()
+            WHERE id = $7",
+            title,
+            description,
+            cover_image_url,
+            source_url,
+            host,
+            interval_minutes,
+            series_id
+        )
+        .execute(&self.pool)
+        .await
+        .context("Failed to update manga series with sqlx")?;
 
-            let rows_affected = conn.execute(
-                "UPDATE manhwa_series
-                    SET title = ?1, description = ?2, cover_image_url = ?3, current_source_url = ?4,
-                        source_website_host = ?5, check_interval_minutes = ?6, updated_at = ?7
-                 WHERE id = ?8",
-                params![
-                    title,
-                    description,
-                    cover_image_url,
-                    source_url,
-                    host,
-                    interval_minutes,
-                    now,
-                    series_id
-                ],
-            )?;
-            Ok(rows_affected)
-        })
-        .await?
+        Ok(result.rows_affected())
     }
 
     /// Adds a new chapter to the database and returns its new ID.
@@ -223,42 +169,22 @@ impl DatabaseService {
         chapter_number: f32,
         title: Option<&str>,
         source_url: &str,
-    ) -> AnyhowResult<i64> {
-        let pool = self.pool.clone();
-        let title = title.map(|s| s.to_string());
-        let source_url = source_url.to_string();
+    ) -> AnyhowResult<i32> {
+        let new_id = sqlx::query_scalar!(
+            "INSERT INTO manga_chapters (series_id, chapter_number, title, source_url)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (source_url) DO UPDATE SET updated_at = NOW()
+            RETURNING id",
+            series_id,
+            chapter_number,
+            title,
+            source_url,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("Failed to add chapter with sqlx")?;
 
-        tokio::task::spawn_blocking(move || {
-            let conn = pool.get()?;
-            conn.execute(
-                "INSERT OR IGNORE INTO chapters (series_id, chapter_number, title, source_url, created_at)
-     VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![
-        series_id,
-        chapter_number,
-        title,
-        source_url,
-        current_timestamp()
-    ],
-            )?;
-
-            // If INSERT was successful, last_insert_rowid() will be the new ID.
-            // If it was IGNORED, it will be 0. We then need to fetch the existing ID.
-            let new_id = conn.last_insert_rowid();
-            if new_id > 0 {
-                Ok(new_id)
-            } else {
-                // The chapter already existed, so we need to find its ID.
-                let existing_id = conn.query_row(
-                    "SELECT id FROM chapters WHERE source_url = ?1",
-                    params![source_url],
-                    |row| row.get(0),
-                )?;
-
-                Ok(existing_id)
-            }
-        })
-            .await?
+        Ok(new_id)
     }
 
     /// Adds a new image entry associated with a chapter
@@ -267,40 +193,32 @@ impl DatabaseService {
         chapter_id: i32,
         image_order: i32,
         image_url: &str, // This will be the R2/CDN Url
-    ) -> AnyhowResult<i64> {
-        let pool = self.pool.clone();
-        let image_url = image_url.to_string();
-
-        tokio::task::spawn_blocking(move || {
-            let conn = pool.get()?;
-            conn.execute(
-                "INSERT INTO chapter_images (chapter_id, image_order, image_url, created_at) VALUES (?1, ?2, ?3, ?4)",
-                params![
+    ) -> AnyhowResult<i32> {
+        let new_id = sqlx::query_scalar!(
+                "INSERT INTO chapter_images (chapter_id, image_order, image_url) VALUES ($1, $2, $3) RETURNING id",
             chapter_id,
             image_order,
             image_url,
-            current_timestamp()
-        ],
-            )?;
-            Ok(conn.last_insert_rowid())
-        })
-            .await?
+            ).fetch_one(&self.pool).await.context("Failed to add chapter image with sqlx")?;
+
+        Ok(new_id)
     }
 
-    /// Retrieves a single manhwa series by its ID.
+    /// Retrieves a single manhwa series by its ID using `query_as!
     pub async fn get_manhwa_series_by_id(&self, id: i32) -> AnyhowResult<Option<MangaSeries>> {
-        let pool = self.pool.clone();
-
-        tokio::task::spawn_blocking(move || {
-            let conn = pool.get()?;
-            let series = conn.query_row(
-                "SELECT id, title, description, cover_image_url, current_source_url, source_website_host, last_chapter_found_in_storage, processing_status, check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at FROM manhwa_series WHERE id = ?1",
-                params![id],
-                Self::row_manga_series,
-            ).optional()?; // Handles cases where no row is found
-            Ok(series)
-        })
-            .await?
+        let series = sqlx::query_as!(
+            MangaSeries,
+            "SELECT id, title, description, cover_image_url, current_source_url, 
+            source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage,
+            processing_status, check_interval_minutes, last_checked_at, next_checked_at,
+            created_at, updated_at
+            FROM manga_series WHERE id = $1",
+            id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to query series by ID with sqlx")?; // Handles cases where no row is found
+        Ok(series)
     }
 
     /// Retrieves a single manhwa series by its title.
@@ -308,19 +226,18 @@ impl DatabaseService {
         &self,
         title: &str,
     ) -> AnyhowResult<Option<MangaSeries>> {
-        let pool = self.pool.clone();
-        let title = title.to_string();
-
-        tokio::task::spawn_blocking(move || {
-            let conn = pool.get()?;
-            let series = conn.query_row(
-                "SELECT id, title, description, cover_image_url, current_source_url, source_website_host, last_chapter_found_in_storage, processing_status, check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at FROM manhwa_series WHERE title = ?1",
-                params![title],
-                Self::row_manga_series,
-            ).optional()?;
-            Ok(series)
-        })
-            .await?
+        let series = sqlx::query_as!(
+            MangaSeries,
+            "SELECT id, title, description, cover_image_url, current_source_url, 
+            source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage, processing_status,
+            check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at
+            FROM manga_series WHERE title = $1",
+            title
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to query series by title")?;
+        Ok(series)
     }
 
     /// Updates the `last_chapter_found_in_storage` for a series.
@@ -328,18 +245,14 @@ impl DatabaseService {
         &self,
         series_id: i32,
         chapter_number: Option<f32>,
-    ) -> AnyhowResult<()> {
-        let pool = self.pool.clone();
+    ) -> AnyhowResult<u64> {
+        let result = sqlx::query!(
+                "UPDATE manga_series SET last_chapter_found_in_storage = $1, updated_at = NOW() WHERE id = $2",
+                chapter_number,
+            series_id,
+            ).execute(&self.pool).await.context("Failed to update series last chapter found in storage with sqlx")?;
 
-        tokio::task::spawn_blocking(move || {
-            let conn = pool.get()?;
-            conn.execute(
-                "UPDATE manhwa_series SET last_chapter_found_in_storage = ?1, updated_at = ?2 WHERE id = ?3",
-                params![chapter_number, current_timestamp(), series_id],
-            )?;
-            Ok(())
-        })
-            .await?
+        Ok(result.rows_affected())
     }
 
     /// NEWLY MOVED: Updates the source URL and source website host for a given series.
@@ -347,23 +260,17 @@ impl DatabaseService {
         &self,
         series_id: i32,
         new_source_url: &str,
-    ) -> AnyhowResult<usize> {
-        let pool = self.pool.clone();
-        let new_source_url = new_source_url.to_string();
+    ) -> AnyhowResult<u64> {
+        let new_host = get_host_from_url(Some(new_source_url));
 
-        tokio::task::spawn_blocking(move || {
-            let conn = pool.get()?;
-            let now = current_timestamp();
-            let new_host = Url::parse(&new_source_url)
-                .ok()
-                .and_then(|url| url.host_str().map(String::from));
-            let rows_affected = conn.execute(
-                "UPDATE manhwa_series SET current_source_url = ?1, source_website_host = ?2, updated_at = ?3 WHERE id = ?4",
-                params![new_source_url, new_host, now, series_id],
-            )?;
-            Ok(rows_affected)
-        })
-            .await?
+        let result = sqlx::query!(
+                "UPDATE manga_series SET current_source_url = $1, source_website_host = $2, updated_at = NOW() WHERE id = $3",
+                new_source_url,
+                new_host,
+                series_id
+            ).execute(&self.pool).await.context("Failed to update series source URLs with sqlx")?;
+
+        Ok(result.rows_affected())
     }
 
     /// Update the description of a manhwa series.
@@ -371,19 +278,17 @@ impl DatabaseService {
         &self,
         series_id: i32,
         description: &str,
-    ) -> AnyhowResult<usize> {
-        let pool = self.pool.clone();
-        let description = description.to_string();
+    ) -> AnyhowResult<u64> {
+        let result = sqlx::query!(
+            "UPDATE manga_series SET description = $1, updated_at = NOW() WHERE id = $2",
+            description,
+            series_id
+        )
+        .execute(&self.pool)
+        .await
+        .context("Failed to update series description with sqlx")?;
 
-        tokio::task::spawn_blocking(move || {
-            let conn = pool.get()?;
-            let rows_affected = conn.execute(
-                "UPDATE manhwa_series SET description = ?1, updated_at = ?2 WHERE id = ?3",
-                params![description, current_timestamp(), series_id],
-            )?;
-            Ok(rows_affected)
-        })
-        .await?
+        Ok(result.rows_affected())
     }
 
     /// Updates only the processing status of a series.
@@ -392,19 +297,17 @@ impl DatabaseService {
         &self,
         series_id: i32,
         new_status: &str,
-    ) -> AnyhowResult<usize> {
-        let pool = self.pool.clone();
-        let new_status = new_status.to_string();
+    ) -> AnyhowResult<u64> {
+        let result = sqlx::query!(
+            "UPDATE manga_series SET processing_status = $1, updated_at = NOW() WHERE id = $2",
+            new_status,
+            series_id,
+        )
+        .execute(&self.pool)
+        .await
+        .context("Failed to update series processing status with sqlx")?;
 
-        tokio::task::spawn_blocking(move || {
-            let conn = pool.get()?;
-            let rows_affected = conn.execute(
-                "UPDATE manhwa_series SET processing_status = ?1, updated_at = ?2 WHERE id = ?3",
-                params![new_status, current_timestamp(), series_id],
-            )?;
-            Ok(rows_affected)
-        })
-        .await?
+        Ok(result.rows_affected())
     }
 
     /// Updates the processing status and check schedule for a series.
@@ -414,46 +317,49 @@ impl DatabaseService {
         &self,
         series_id: i32,
         new_status: Option<&str>,
-        new_last_checked_at: Option<i64>,
-        new_next_checked_at: Option<i64>,
-    ) -> AnyhowResult<usize> {
+        new_next_checked_at: Option<DateTime<Utc>>,
+    ) -> AnyhowResult<u64> {
         // First, get the series data asynchronously.
         let series = self
             .get_manhwa_series_by_id(series_id)
             .await?
-            .ok_or_else(|| {
-                anyhow!(
-                    "Failed to update schedule: Series with id {} not found.",
-                    series_id
-                )
-            })?;
+            .ok_or_else(|| anyhow!("Series with id {} not found for schedule update", series_id))?;
 
-        let pool = self.pool.clone();
-        let new_status = new_status.map(|s| s.to_string());
+        // Calculate the next check time if not provided
+        // based on the current time and the series' check interval.
+        let final_next_checked_at = new_next_checked_at.unwrap_or_else(|| {
+            let mut rng = rand::rng();
+            let base_interval = series.check_interval_minutes as i64;
+            // Add a random +- 5 minutes jitter to avoid all series checking at the exact same time
+            let random_jitter = rng.random_range(-300..=300);
+            let actual_interval_secs = (base_interval * 60) + random_jitter;
+            Utc::now() + chrono::Duration::seconds(actual_interval_secs.max(300))
+        });
 
-        tokio::task::spawn_blocking(move || {
-            let conn = pool.get()?;
-            let now = current_timestamp();
+        let final_status = new_status.unwrap_or(&series.processing_status);
 
-            let final_status = new_status.as_deref().unwrap_or(&series.processing_status);
-            let final_last_checked_at = new_last_checked_at.unwrap_or(now);
+        // Execute the final update. `query!` is used because it's an UPDATE.
+        let result = sqlx::query!(
+            "UPDATE manga_series SET processing_status = $1, last_checked_at = NOW(), next_checked_at = $2, updated_at = NOW() WHERE id = $3",
+            final_status,
+            final_next_checked_at,
+            series_id,
+            )
+            .execute(&self.pool)
+            .await
+            .context("Failed to update series check schedule with sqlx")?;
+        Ok(result.rows_affected())
+    }
 
-            // Calculate next check time if not explicitly provided
-            let final_next_checked_at = new_next_checked_at.unwrap_or_else(|| {
-                let mut rng = rand::rng();
-                let base_interval = series.check_interval_minutes as i64;
-                let random_jitter = rng.random_range(-30..=30);
-                let actual_interval = (base_interval + random_jitter).max(30); // Ensure minimum interval
-                final_last_checked_at + (actual_interval * 60)
-            });
-
-            let rows_affected = conn.execute(
-                "UPDATE manhwa_series SET processing_status = ?1, last_checked_at = ?2, next_checked_at = ?3, updated_at = ?4 WHERE id = ?5",
-                params![final_status, final_last_checked_at, final_next_checked_at, now, series_id],
-            )?;
-            Ok(rows_affected)
-        })
-            .await?
+    /// Fetches a user from the database by their username OR email address.
+    pub async fn get_user_by_identifier(&self, identifier: &str) -> AnyhowResult<Option<Users>> {
+        let user = sqlx::query_as!(
+            Users,
+                // Check both column email and username
+                "SELECT id, username, email, password_hash, role FROM users WHERE email = $1 OR username = $1",
+                identifier,
+            ).fetch_optional(&self.pool).await.context("Failed to get user by identifier")?;
+        Ok(user)
     }
 }
 
