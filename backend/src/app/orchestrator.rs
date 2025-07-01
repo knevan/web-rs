@@ -20,16 +20,10 @@ pub async fn run_bulk_series_scraping(
     println!("[BULK SCRAPE] Starting for series: '{}'", series.title);
 
     // 1. Get the series main page URL from the provided struct
-    let series_main_page_url = series
-        .current_source_url
-        .as_ref()
-        .ok_or_else(|| anyhow!("Series source URL does not exist for '{}'", series.title))?;
+    let series_main_page_url = &series.current_source_url;
 
     // 2. Get the correct site config
-    let host = series
-        .source_website_host
-        .as_ref()
-        .ok_or_else(|| anyhow!("Host not found for series '{}'", series.title))?;
+    let host = &series.source_website_host;
 
     let site_config = app_config
         .get_site_config(host)
