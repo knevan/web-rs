@@ -1,27 +1,33 @@
 use anyhow::{Context, Result};
-use std::env::current_dir;
-use std::fs;
-use std::path::PathBuf;
+use sqlx::postgres::PgPoolOptions;
+use std::env;
+use std::time::Duration;
 
 use crate::common::dynamic_proxy;
-use crate::db::db::{DatabaseService, create_db_pool, initialize_schema};
+use crate::db::db::DatabaseService;
 
-/// Sets up the database connection and initializes the schema
-pub fn setup_database(db_path: &str, schema_path: &str) -> Result<DatabaseService> {
-    println!("[MAIN]  Connecting to database: {}", db_path);
+/// Sets up the database connection pool for PostgreSQL using sqlx.
+/// Schema initialization is now handled by `sqlx-cli migrate`.
+pub async fn setup_database() -> Result<DatabaseService> {
+    // Get database URL from environment variables
+    let db_url = env::var("DATABASE_URL")
+        .context("[SETUP] Database URL not found in environment variables")?;
+
+    println!("[MAIN]  Connecting to postgres database via sqlx");
 
     // Create connection pool
-    let pool = create_db_pool(db_path)
-        .with_context(|| format!("Failed to create database pool for: {}", db_path))?;
+    let pool = PgPoolOptions::new()
+        .max_connections(4)
+        .min_connections(2)
+        .max_lifetime(Duration::from_secs(300))
+        .idle_timeout(Duration::from_secs(60))
+        .test_before_acquire(true)
+        .connect(&db_url)
+        .await
+        .context("[SETUP] Failed to create sqlx Postgres connection pool")?;
 
-    // Get a single connection to initialize the schema
-    let mut conn = pool
-        .get()
-        .context("Failed to get a connection from the pool for schema initialization")?;
-
-    initialize_schema(&mut conn, schema_path)
-        .with_context(|| format!("Failed to initialize database schema from {}", schema_path))?;
-    println!("[MAIN] Database and schema initialized successfully.");
+    println!("[MAIN] Sqlx connection pool created successfully.");
+    println!("[MAIN] Remember to run `sqlx migrate run` to apply schema changes.");
 
     // Create and return the Database Service
     let db_service = DatabaseService::new(pool);
@@ -34,7 +40,7 @@ pub fn setup_http_client() -> Result<reqwest::Client> {
 
     // Initialize HTTP Client
     // This client will be used for all HTTP requests.
-    // Note: fetcher::fetch_html creates its own client. This should be consolidated.
+    // [Note] fetcher::fetch_html creates its own client. This should be consolidated.
     let client = dynamic_proxy::init_client()
         .context("Failed to initialize HTTP client from dynamic_proxy")?;
     println!("[MAIN] HTTP Client created successfully.");
