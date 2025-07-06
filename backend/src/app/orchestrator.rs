@@ -20,16 +20,10 @@ pub async fn run_bulk_series_scraping(
     println!("[BULK SCRAPE] Starting for series: '{}'", series.title);
 
     // 1. Get the series main page URL from the provided struct
-    let series_main_page_url = series
-        .current_source_url
-        .as_ref()
-        .ok_or_else(|| anyhow!("Series source URL does not exist for '{}'", series.title))?;
+    let series_main_page_url = &series.current_source_url;
 
     // 2. Get the correct site config
-    let host = series
-        .source_website_host
-        .as_ref()
-        .ok_or_else(|| anyhow!("Host not found for series '{}'", series.title))?;
+    let host = &series.source_website_host;
 
     let site_config = app_config
         .get_site_config(host)
@@ -37,10 +31,10 @@ pub async fn run_bulk_series_scraping(
 
     // 3. Fetch and Parse Series Main Page to Get Chapter List
     println!(
-        "[BULK SCRAPE] Fetching series main page HTML from: {}",
-        series_main_page_url
+        "[BULK SCRAPE] Fetching series main page HTML from: {series_main_page_url}"
     );
-    let series_page_html = fetcher::fetch_html(&http_client, series_main_page_url).await?;
+    let series_page_html =
+        fetcher::fetch_html(&http_client, series_main_page_url).await?;
     // Add a delay after fetching the main series page to avoid rapid requests
     random_sleep_time(3, 7).await;
 
@@ -48,7 +42,7 @@ pub async fn run_bulk_series_scraping(
     let all_available_chapters = parser::extract_chapter_links(
         &series_page_html,
         series_main_page_url, // Series page URL, to create absolute URLs if needed
-        site_config,          // Pass reference to the relevant site configuration
+        site_config, // Pass reference to the relevant site configuration
     )
     .await?;
 
@@ -88,20 +82,24 @@ pub async fn run_bulk_series_scraping(
     // 6. Start Scraping Process for Selected Chapters
     // Note: We are no longer saving to a local path, the coordinator will handle R2/CDN urls.
     // The coordinator now needs the database connection to save chapter info.
-    let last_downloaded_chapter = coordinator::process_series_chapters_from_list(
-        &series,
-        &chapters_to_scrape,
-        &http_client,
-        &storage_client,
-        site_config,
-        db_service,
-    )
-    .await?;
+    let last_downloaded_chapter =
+        coordinator::process_series_chapters_from_list(
+            &series,
+            &chapters_to_scrape,
+            &http_client,
+            &storage_client,
+            site_config,
+            db_service,
+        )
+        .await?;
 
     // 7. Update series data in the database after scraping is complete
     if let Some(last_chapter_num) = last_downloaded_chapter {
         db_service
-            .update_series_last_chapter_found_in_storage(series.id, Some(last_chapter_num))
+            .update_series_last_chapter_found_in_storage(
+                series.id,
+                Some(last_chapter_num),
+            )
             .await?;
         println!(
             "[BULK SCRAPE] Updated last local chapter for '{}' to {}.",
