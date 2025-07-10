@@ -46,6 +46,9 @@
     // Check if all requirements are met
     let allRequirementMet = $derived(Object.values(passwordRequirement).every(Boolean));
 
+    // Check confirm password match
+    let passwordMatch = $derived(password === confirmPassword);
+
     // List of password for easy rendering and validation
     const requirementList = [
         {key: 'length' as PasswordRequirementKey, text: 'Minimum 8 characters long'},
@@ -107,7 +110,7 @@
         const result = await register(username, email, password);
 
         // Handle the response
-        if (!result.success) {
+        if (result.success) {
             successMessage = 'Registration successfull! Redirecting to login page';
             // Redirect to login page
             setTimeout(() => {
@@ -128,8 +131,8 @@
     </Card.Header>
     <Card.Content>
         <!-- User form element to handle submission -->
-        <form onsubmit={handleSubmit} class="grid gap-4">
-            <div class="grid gap-2">
+        <form onsubmit={handleSubmit} class="flex flex-col">
+            <div class="grid gap-2 mb-1">
                 <Label for="username-{id}">Username</Label>
                 <!-- Bind input value to the state variable -->
                 <Input bind:value={username} oninput={handleUsernameInput}
@@ -150,7 +153,7 @@
                     {/each}
                 </div>
                 <!-- Dynamic availability message -->
-                <div class="h-5 text-sm transition-opacity duration-300">
+                <div class="mt-0 text-sm transition-opacity grid duration-300">
                     {#if usernameCheckMessage}
                         <p
                                 class:text-green-500={usernameAvailable}
@@ -165,15 +168,16 @@
                     {/if}
                 </div>
             </div>
-            <div class="grid gap-2">
+            <div class="grid gap-2 mb-2">
                 <Label for="email-{id}">Email</Label>
                 <Input bind:value={email} id="email-{id}" type="email"
                        placeholder="example@gmail.com" required/>
             </div>
-            <div class="grid gap-2">
+            <div class="grid gap-2 mb-2">
                 <Label for="password-{id}">Password</Label>
                 <div class="relative">
-                    <Input bind:value={password} id="password-{id}" type="password"
+                    <Input bind:value={password} id="password-{id}"
+                           type={showPassword ? 'text' : 'password'}
                            required
                            class="pr-10"/>
                     <!-- Toggle button for password visibility -->
@@ -184,28 +188,6 @@
                             aria-label="Toggle password visibility"
                     >
                         {#if showPassword}
-                            <!-- Eye Off Icon -->
-                            <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                            >
-
-                                <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/>
-                                <path
-                                        d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"
-                                />
-                                <path
-                                        d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"
-                                />
-                                <line x1="2" x2="22" y1="2" y2="22"/>
-                            </svg>
-                        {:else}
                             <!-- Eye Icon -->
                             <svg
                                     xmlns="http://www.w3.org/2000/svg"
@@ -224,6 +206,23 @@
                                         r="3"
                                 />
                             </svg>
+                        {:else}
+                            <!-- Eye Off Icon -->
+                            <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                            >
+                                <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/>
+                                <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/>
+                                <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/>
+                                <line x1="2" x2="22" y1="2" y2="22"/>
+                            </svg>
                         {/if}
                     </button>
                 </div>
@@ -241,11 +240,88 @@
                     {/each}
                 </div>
             </div>
-            <div class="grid gap-2">
+            <div class="grid gap-2 mb-2">
                 <Label for="confirm-password-{id}">Confirm Password</Label>
-                <Input bind:value={confirmPassword} id="confirm-password-{id}"
-                       type="password" required/>
+                <div class="relative">
+                    <Input bind:value={confirmPassword} id="confirm-password-{id}"
+                           type={showPassword ? 'text' : 'password'} required
+                           class="pr-10"/>
+                    <!-- Toggle button for password visibility -->
+                    <button
+                            type="button"
+                            onclick={() => (showPassword = !showPassword)}
+                            class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-300 hover:text-gray-400"
+                            aria-label="Toggle password visibility"
+                    >
+                        {#if showPassword}
+                            <!-- Eye Icon -->
+                            <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                            >
+                                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                                <circle
+                                        cx="12"
+                                        cy="12"
+                                        r="3"
+                                />
+                            </svg>
+                        {:else}
+                            <!-- Eye Off Icon -->
+                            <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                            >
+                                <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/>
+                                <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/>
+                                <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/>
+                                <line x1="2" x2="22" y1="2" y2="22"/>
+                            </svg>
+                        {/if}
+                    </button>
+                </div>
+                <div class="mt-2 text-sm">
+                    {#if confirmPassword.length > 0}
+                        <p
+                                class:text-green-500={passwordMatch}
+                                class:text-red-500={!passwordMatch}
+                                class="transition-colors"
+                        >
+                            {passwordMatch ? '✅' : '❌'}
+                            {passwordMatch ? 'Passwords match' : 'Passwords do not match'}
+                        </p>
+                    {/if}
+                </div>
             </div>
+            <!-- Disable button while loading -->
+            <Button type="submit" class="w-full mt-2" disabled={isLoading}>
+                {#if isLoading}
+                    <svg class="mr-2 h-4 w-4 animate-spin"
+                         xmlns="http://www.w3.org/2000/svg"
+                         viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10"
+                                stroke="currentColor"
+                                stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Registering...
+                {:else}
+                    Register
+                {/if}
+            </Button>
 
             <!-- Display error or success message -->
             {#if error}
@@ -254,15 +330,6 @@
             {#if successMessage}
                 <p class="text-sm text-green-500">{successMessage}</p>
             {/if}
-
-            <!-- Disable buttuon while loading -->
-            <Button type="submit" class="w-full" disabled={isLoading}>
-                {#if isLoading}
-                    Registering...
-                {:else}
-                    Register
-                {/if}
-            </Button>
         </form>
         <div class="mt-4 text-center text-sm">
             Already have an account?
