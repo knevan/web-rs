@@ -5,7 +5,7 @@ use rgb::FromSlice;
 
 /// Converts image data from bytes (e.g., PNG, JPG) into AVIF format bytes.
 /// This function is CPU-intensive and is designed to be run in a blocking thread
-/// using `tokio::task::spawn_blocking` to avoid blocking the async runtime.
+/// [NOTE]: Using `tokio::task::spawn_blocking` to avoid blocking the async runtime in the future?
 pub fn covert_image_bytes_to_avif(image_bytes: &[u8]) -> Result<Vec<u8>> {
     // Decode the image from memory
     let img = load_from_memory(image_bytes).with_context(
@@ -19,9 +19,9 @@ pub fn covert_image_bytes_to_avif(image_bytes: &[u8]) -> Result<Vec<u8>> {
     let height = height_u32 as usize;
 
     // Configure the AVIF encoder.
-    // Quality: 0-100 (higher is better quality, larger file).
-    // Speed: 0-10 (higher is faster encoding, potentially lower quality/compression).
-    // A quality of ~40-50 and speed of ~5-6 is a good balance.
+    // Quality: 0-100 (higher is better iamge quality, larger file size).
+    // Speed: 0-10 (higher is faster encoding, lower quality/compression size).
+    // A quality of ~40-50 and speed of ~5-6 is a good balance (good image quality and good compression size).
     let encoder = Encoder::new()
         .with_quality(45.0)
         .with_alpha_quality(45.0) // Quality for transparency channel

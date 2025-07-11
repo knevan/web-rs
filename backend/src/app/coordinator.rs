@@ -42,7 +42,8 @@ pub async fn process_series_chapters_from_list(
             Ok(Some(chapter_num)) => {
                 last_successfully_downloaded_chapter = Some(chapter_num);
             }
-            Ok(None) => { /* Chapter was processed but had no images, which is fine */ }
+            Ok(None) => { /* Chapter was processed but had no images, which is fine */
+            }
             Err(e) => {
                 eprintln!(
                     "[COORDINATOR] Error processing chapter {}, stopping series: {}",
@@ -86,12 +87,14 @@ pub async fn process_single_chapter(
     );
 
     // 2. Fetch HTML to get image URLs
-    let html_content = fetcher::fetch_html(http_client, &chapter_info.url).await?;
+    let html_content =
+        fetcher::fetch_html(http_client, &chapter_info.url).await?;
 
     // Add a small delay after fetching the chapter page HTML before processing images.
     random_sleep_time(3, 5).await;
 
-    let image_urls = parser::extract_image_urls(&html_content, &chapter_info.url, config)?;
+    let image_urls =
+        parser::extract_image_urls(&html_content, &chapter_info.url, config)?;
     if image_urls.is_empty() {
         println!(
             "[COORDINATOR] No image URLs found for Chapter {}.",
@@ -109,7 +112,12 @@ pub async fn process_single_chapter(
 
         // The full pipeline for a single image
         // store image to R2 object storage
-        let final_cdn_url = match fetcher::fetch_image_bytes(http_client, img_url).await {
+        let final_cdn_url = match fetcher::fetch_image_bytes(
+            http_client,
+            img_url,
+        )
+        .await
+        {
             Ok(image_bytes) => {
                 // Run CPU-intensive encoding in a blocking task
                 let avif_bytes_result = task::spawn_blocking(move || {
@@ -129,26 +137,33 @@ pub async fn process_single_chapter(
 
                         // Upload to R2
                         match storage_client
-                            .upload_objects(&object_key, avif_bytes, "image/avif")
+                            .upload_objects(
+                                &object_key,
+                                avif_bytes,
+                                "image/avif",
+                            )
                             .await
                         {
                             Ok(cdn_url) => Some(cdn_url),
                             Err(e) => {
-                                eprintln!("[COORDINATOR] Failed to upload to R2: {}", e);
+                                eprintln!(
+                                    "[COORDINATOR] Failed to upload to R2: {e}"
+                                );
                                 None
                             }
                         }
                     }
                     Err(e) => {
-                        eprintln!("[COORDINATOR] Failed to encode image to AVIF: {}", e);
+                        eprintln!(
+                            "[COORDINATOR] Failed to encode image to AVIF: {e}"
+                        );
                         None
                     }
                 }
             }
             Err(e) => {
                 eprintln!(
-                    "[COORDINATOR] Failed to fetch image bytes from {}: {}",
-                    img_url, e
+                    "[COORDINATOR] Failed to fetch image bytes from {img_url}: {e}",
                 );
                 None
             }
@@ -157,7 +172,11 @@ pub async fn process_single_chapter(
         // 4. Save the final CDN URL to the database if successful
         if let Some(cdn_url) = final_cdn_url {
             if db_service
-                .add_chapter_image(chapter_id as i32, (index + 1) as i32, &cdn_url)
+                .add_chapter_image(
+                    chapter_id as i32,
+                    (index + 1) as i32,
+                    &cdn_url,
+                )
                 .await
                 .is_ok()
             {
