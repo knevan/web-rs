@@ -1,3 +1,4 @@
+use crate::builder::startup::AppState;
 use crate::common::error::AuthError;
 use crate::common::hashing::{hash_password, verify_password};
 use crate::common::jwt::{
@@ -9,8 +10,10 @@ use axum::extract::State;
 use axum_core::__private::tracing::error;
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
+use chrono::{Duration, Utc};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 // Struct for payloads
 #[derive(Deserialize)]
@@ -29,6 +32,17 @@ pub struct RegisterPayload {
 #[derive(Deserialize)]
 pub struct CheckUsernamePayload {
     username: String,
+}
+
+#[derive(Deserialize)]
+pub struct ForgotPasswordRequest {
+    pub email: String,
+}
+
+#[derive(Deserialize)]
+pub struct ResetPasswordRequest {
+    pub token: String,
+    pub new_password: String,
 }
 
 // Struct for Responses
@@ -67,9 +81,11 @@ pub struct CheckUsernameResponse {
 /// with the token set as a cookie
 pub async fn login_handler(
     jar: CookieJar,
-    State(db_service): State<DatabaseService>,
+    State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
 ) -> Result<(CookieJar, Json<LoginResponse>), AuthError> {
+    let db_service = &state.db_service;
+
     // Simple validation
     if payload.identifier.is_empty() || payload.password.is_empty() {
         return Err(AuthError::MissingCredentials);
@@ -216,9 +232,11 @@ pub async fn protected_handler(claims: Claims) -> Json<ProtectedResponse> {
 /// Handler for registering new users
 /// it checks for uniqueness and create new user in the database
 pub async fn register_user_handler(
-    State(db_service): State<DatabaseService>,
+    State(state): State<AppState>,
     Json(payload): Json<RegisterPayload>,
 ) -> Result<(StatusCode, Json<GenericMessageResponse>), AuthError> {
+    let db_service = &state.db_service;
+
     // Validate input: ensure no fields are empty
     if payload.username.is_empty()
         || payload.email.is_empty()
@@ -273,9 +291,11 @@ pub async fn register_user_handler(
 
 // Handler for real-time checking username availability
 pub async fn check_username_handler(
-    State(db_service): State<DatabaseService>,
+    State(state): State<AppState>,
     Json(payload): Json<CheckUsernamePayload>,
 ) -> (StatusCode, Json<CheckUsernameResponse>) {
+    let db_service = &state.db_service;
+
     // Validate username length on the backend as well
     if payload.username.trim().len() < 4 {
         let response = CheckUsernameResponse {
@@ -317,4 +337,91 @@ pub async fn check_username_handler(
             (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
         }
     }
+}
+
+// Handler for the password reset request
+// Finds a user by email, generates a token, and in a real app, sends an email.
+pub async fn forgot_password_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<ForgotPasswordRequest>,
+) -> Result<Json<GenericMessageResponse>, AuthError> {
+    let db_service = &state.db_service;
+
+    // Find user by email
+    if let Ok(Some(user)) =
+        db_service.get_user_by_identifier(&payload.email).await
+    {
+        // Generate unique password reset token
+        let token = Uuid::new_v4().to_string();
+        // Token valid for 1 hour
+        let expired_at = Utc::now() + Duration::hours(1);
+
+        // Store reset token in the database
+        db_service
+            .create_password_reset_token(user.id, &token, expired_at)
+            .await
+            .map_err(|_| AuthError::InternalServerError)?;
+
+        // In a real application, you would send an email here.
+        // For demonstration, we'll just log the link.
+        println!(
+            "Password reset link for user {}: /reset-password?token={}",
+            user.id, token
+        );
+    }
+
+    let response = GenericMessageResponse {
+        message: "Password reset request sent. Check your email for further instructions".to_string(),
+    };
+
+    Ok(Json(response))
+}
+
+// Handler for finalizing password reset with token
+pub async fn reset_password_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<ResetPasswordRequest>,
+) -> Result<Json<GenericMessageResponse>, AuthError> {
+    let db_service = &state.db_service;
+
+    // Validate input: ensure token and password not empty
+    if payload.token.is_empty() || payload.new_password.is_empty() {
+        return Err(AuthError::MissingCredentials);
+    }
+
+    // Find user and token details from database
+    let (user_id, expires_at) = db_service
+        .get_user_by_reset_token(&payload.token)
+        .await?
+        .ok_or(AuthError::InvalidCredentials)?;
+
+    // Check if token is expired
+    if Utc::now() > expires_at {
+        // Clean up expired tokens
+        db_service
+            .delete_password_reset_token(&payload.token)
+            .await?;
+        return Err(AuthError::MissingCredentials);
+    }
+
+    // Hash the new password before storing it in the database
+    let hashed_password = hash_password(&payload.new_password)
+        .map_err(|_| AuthError::InvalidCredentials)?;
+
+    // Update user's password in the database
+    db_service
+        .update_user_password_hash(user_id, &hashed_password)
+        .await
+        .map_err(|_| AuthError::InternalServerError)?;
+
+    // Invalidate token by deleting it after successful use
+    db_service
+        .delete_password_reset_token(&payload.token)
+        .await?;
+
+    let response = GenericMessageResponse {
+        message: "Password reset successful".to_string(),
+    };
+
+    Ok(Json(response))
 }

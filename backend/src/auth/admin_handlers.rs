@@ -4,8 +4,8 @@ use axum::http::StatusCode;
 use axum_core::response::{IntoResponse, Response};
 use serde::Deserialize;
 
+use crate::builder::startup::AppState;
 use crate::common::jwt::Claims;
-use crate::db::db::DatabaseService;
 
 #[derive(Deserialize)]
 pub struct SeriesRequest {
@@ -17,12 +17,14 @@ pub struct SeriesRequest {
 }
 
 /// Handler to create a new manhwa series.
-/// This route is protected and can only be accessed by a logged-in admin.
+/// This route is protected and can only be accessed by a logged-in admin-dashboard.
 pub async fn create_series_handler(
     claims: Claims,
-    State(db_service): State<DatabaseService>,
+    State(state): State<AppState>,
     Json(payload): Json<SeriesRequest>,
 ) -> Response {
+    let db_service = &state.db_service;
+
     println!(
         "->> {:<12} - create_series_handler - user: {}",
         "Handler", claims.sub
@@ -52,13 +54,15 @@ pub async fn create_series_handler(
 }
 
 /// Handler to update an existing manhwa series.
-/// This route is also protected and can only be accessed by a logged-in admin.
+/// This route is also protected and can only be accessed by a logged-in admin-dashboard.
 pub async fn update_series_handler(
     claims: Claims,
-    State(db_service): State<DatabaseService>,
+    State(state): State<AppState>,
     Path(series_id): Path<i32>,
     Json(payload): Json<SeriesRequest>,
 ) -> Response {
+    let db_service = &state.db_service;
+
     println!(
         "->> {:<12} - update_series_handler - user: {}, series_id: {}",
         "HANDLER", claims.sub, series_id
