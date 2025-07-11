@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 resolver = "3"
 license = "AGPL-3"
-rust-version = "1.87.0"
+rust-version = "1.88.0"
 
 [dependencies]
 anyhow = "1.0.98"
@@ -36,4 +36,6 @@ tower-http = { version = "0.6.6", features = ["cors"] }
 argon2 = "0.5.3"
 sqlx = { version = "0.8.6", features = ["postgres", "chrono", "runtime-tokio-rustls",
     "macros", "runtime-tokio", "migrate"] }
+uuid = { version = "1.17.0", features = ["v4", "serde"] }
+lettre = { version = "0.11.17", features = ["tokio1-rustls"] }
 

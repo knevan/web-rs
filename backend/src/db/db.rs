@@ -205,7 +205,10 @@ impl DatabaseService {
     }
 
     /// Retrieves a single manhwa series by its ID using `query_as!
-    pub async fn get_manhwa_series_by_id(&self, id: i32) -> AnyhowResult<Option<MangaSeries>> {
+    pub async fn get_manhwa_series_by_id(
+        &self,
+        id: i32,
+    ) -> AnyhowResult<Option<MangaSeries>> {
         let series = sqlx::query_as!(
             MangaSeries,
             "SELECT id, title, description, cover_image_url, current_source_url, 
@@ -323,7 +326,12 @@ impl DatabaseService {
         let series = self
             .get_manhwa_series_by_id(series_id)
             .await?
-            .ok_or_else(|| anyhow!("Series with id {} not found for schedule update", series_id))?;
+            .ok_or_else(|| {
+                anyhow!(
+                    "Series with id {} not found for schedule update",
+                    series_id
+                )
+            })?;
 
         // Calculate the next check time if not provided
         // based on the current time and the series' check interval.
@@ -333,7 +341,8 @@ impl DatabaseService {
             // Add a random +- 5 minutes jitter to avoid all series checking at the exact same time
             let random_jitter = rng.random_range(-300..=300);
             let actual_interval_secs = (base_interval * 60) + random_jitter;
-            Utc::now() + chrono::Duration::seconds(actual_interval_secs.max(300))
+            Utc::now()
+                + chrono::Duration::seconds(actual_interval_secs.max(300))
         });
 
         let final_status = new_status.unwrap_or(&series.processing_status);
@@ -352,7 +361,10 @@ impl DatabaseService {
     }
 
     /// Fetches a user from the database by their username OR email address.
-    pub async fn get_user_by_identifier(&self, identifier: &str) -> AnyhowResult<Option<Users>> {
+    pub async fn get_user_by_identifier(
+        &self,
+        identifier: &str,
+    ) -> AnyhowResult<Option<Users>> {
         let user = sqlx::query_as!(
             Users,
                 // Check both column email and username
@@ -360,6 +372,102 @@ impl DatabaseService {
                 identifier,
             ).fetch_optional(&self.pool).await.context("Failed to get user by identifier")?;
         Ok(user)
+    }
+
+    /// Creates a new user in the database.
+    /// Takes username, email, password_hash, and role as parameters.
+    /// Return the newly created user's ID.
+    pub async fn create_user(
+        &self,
+        username: &str,
+        email: &str,
+        password_hash: &str,
+        role: &str,
+    ) -> AnyhowResult<i32> {
+        let new_user_id = sqlx::query_scalar!(
+            "INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id",
+            username,
+            email,
+            password_hash,
+            role,
+        )
+            .fetch_one(&self.pool)
+            .await
+            .context("Failed to create new user")?;
+
+        Ok(new_user_id)
+    }
+
+    // Stores new password reset token in the database
+    pub async fn create_password_reset_token(
+        &self,
+        user_id: i32,
+        token: &str,
+        expires_at: DateTime<Utc>,
+    ) -> AnyhowResult<()> {
+        sqlx::query!(
+            "INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)",
+            user_id,
+            token,
+            expires_at
+        )
+            .execute(&self.pool)
+            .await
+            .context("Failed to create password reset token")?;
+
+        Ok(())
+    }
+
+    // Retrieves a user's ID and token expiration time by the reset token.
+    // Returns a tuple of (user_id, expires_at) if token is found
+    pub async fn get_user_by_reset_token(
+        &self,
+        token: &str,
+    ) -> AnyhowResult<Option<(i32, DateTime<Utc>)>> {
+        let record = sqlx::query!(
+            "SELECT user_id, expires_at FROM password_reset_tokens WHERE token = $1",
+            token
+        )
+            .fetch_optional(&self.pool)
+            .await
+            .context("Failed to get user by reset token")?
+            .map(|row| (row.user_id, row.expires_at));
+
+        Ok(record)
+    }
+
+    // Update password hash for a given user ID.
+    pub async fn update_user_password_hash(
+        &self,
+        user_id: i32,
+        new_password_hash: &str,
+    ) -> AnyhowResult<()> {
+        sqlx::query!(
+            "UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2",
+            new_password_hash,
+            user_id
+        )
+            .execute(&self.pool)
+            .await
+            .context("Failed to update user password hash")?;
+
+        Ok(())
+    }
+
+    // Deletes a password reset token from the database after it has been used or expired.
+    pub async fn delete_password_reset_token(
+        &self,
+        token: &str,
+    ) -> AnyhowResult<()> {
+        sqlx::query!(
+            "DELETE FROM password_reset_tokens WHERE token = $1",
+            token
+        )
+        .execute(&self.pool)
+        .await
+        .context("Failed to delete password reset token")?;
+
+        Ok(())
     }
 }
 

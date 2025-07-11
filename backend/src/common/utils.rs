@@ -3,8 +3,8 @@ use rand::Rng;
 use reqwest::Client;
 use std::path::Path;
 use std::time::Duration;
+use tokio::task;
 use tokio::time::sleep;
-use tokio::{fs, task};
 use url::Url;
 
 use crate::encoding::image_encoding::covert_image_bytes_to_avif;
@@ -85,13 +85,13 @@ pub async fn download_and_convert_to_avif(
     // Save the resulting AVIF bytes to the file system
     if let Some(parent_dir) = save_path.parent() {
         if !parent_dir.exists() {
-            fs::create_dir_all(parent_dir)
+            tokio::fs::create_dir_all(parent_dir)
                 .await
                 .with_context(|| format!("Failed to create parent directory: {:?}", parent_dir))?;
         }
     }
 
-    fs::write(save_path, &avif_bytes)
+    tokio::fs::write(save_path, &avif_bytes)
         .await
         .with_context(|| format!("Failed to write AVIF data to: {:?}", save_path))?;
 

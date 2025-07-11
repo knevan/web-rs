@@ -2,7 +2,7 @@ use crate::common::error::AuthError;
 use axum::{extract::FromRequestParts, http::request::Parts};
 use axum_extra::extract::CookieJar;
 use chrono::{Duration, Utc};
-use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::sync::LazyLock;
@@ -31,13 +31,14 @@ impl Keys {
 }
 
 /// Claims is a struct that represents the claims in the JWT token.
-/// It contains the subject (user ID), expiration time, and issued at time.
+/// It contains the subject (user ID), expiration time, issued at time, and role.
 /// The `Claims` struct is used to encode and decode the JWT tokens.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: String, // User ID
-    pub exp: usize,  // Expiration time
-    pub iat: usize,  // Issued at time
+    pub sub: String,  // User ID
+    pub role: String, // User role (e.g., "admin-dashboard", "user")
+    pub exp: usize,   // Expiration time
+    pub iat: usize,   // Issued at time
 }
 
 /// Struct for Refresh Token Claims
@@ -62,8 +63,11 @@ where
         let token_cookie = jar.get("token").ok_or(AuthError::InvalidToken)?;
         let token = token_cookie.value();
 
-        // Decode token
-        let token_data = decode::<Claims>(token, &KEYS.decoding, &Validation::default())
+        // Decode token with HS512 Algorithm
+        let mut validation = Validation::default();
+        validation.algorithms = vec![Algorithm::HS512];
+
+        let token_data = decode::<Claims>(token, &KEYS.decoding, &validation)
             .map_err(|_| AuthError::InvalidToken)?;
 
         Ok(token_data.claims)
@@ -82,17 +86,19 @@ where
         let refresh_token_cookie = jar.get("refresh-token").ok_or(AuthError::InvalidToken)?;
         let refresh_token = refresh_token_cookie.value();
 
-        // Decode token
-        let token_data =
-            decode::<RefreshClaims>(refresh_token, &KEYS.decoding, &Validation::default())
-                .map_err(|_| AuthError::InvalidToken)?;
+        // Decode token with HS512 Algorithm
+        let mut validation = Validation::default();
+        validation.algorithms = vec![Algorithm::HS512];
+
+        let token_data = decode::<RefreshClaims>(refresh_token, &KEYS.decoding, &validation)
+            .map_err(|_| AuthError::InvalidToken)?;
 
         Ok(token_data.claims)
     }
 }
 
-/// Create jwt token for a given user ID (access token)
-pub fn create_access_jwt(user_id: String) -> Result<String, AuthError> {
+/// Create jwt token for a given user ID and role (access token)
+pub fn create_access_jwt(user_id: String, role: String) -> Result<String, AuthError> {
     let now = Utc::now();
     let iat = now.timestamp() as usize;
 
@@ -101,11 +107,14 @@ pub fn create_access_jwt(user_id: String) -> Result<String, AuthError> {
 
     let claims = Claims {
         sub: user_id,
+        role,
         exp,
         iat,
     };
 
-    encode(&Header::default(), &claims, &KEYS.encoding).map_err(|_| AuthError::TokenCreation)
+    // Specify HS512 algorithm in the header
+    encode(&Header::new(Algorithm::HS512), &claims, &KEYS.encoding)
+        .map_err(|_| AuthError::TokenCreation)
 }
 
 /// Create refresh jwt token for a given user ID (refresh token)
@@ -122,5 +131,6 @@ pub fn create_refresh_jwt(user_id: String) -> Result<String, AuthError> {
         iat,
     };
 
-    encode(&Header::default(), &claims, &KEYS.encoding).map_err(|_| AuthError::TokenCreation)
+    encode(&Header::new(Algorithm::HS512), &claims, &KEYS.encoding)
+        .map_err(|_| AuthError::TokenCreation)
 }
