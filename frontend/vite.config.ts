@@ -5,6 +5,20 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
+	server: {
+		// This proxy configuration is the key to connecting the frontend to the backend.
+		proxy: {
+			'/api': {
+				// The address of your Rust Axum backend.
+				target: 'http://localhost:8000',
+				// Necessary for virtual hosted sites.
+				changeOrigin: true,
+				secure: false,
+				// Do not rewrite the path. For example, '/api/auth/login' remains '/api/auth/login'.
+				rewrite: (path) => path.replace(/^\/api/, '/api')
+			}
+		}
+	},
 	test: {
 		projects: [
 			{
