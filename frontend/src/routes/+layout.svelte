@@ -1,6 +1,17 @@
 <script>
     import Header from '$lib/components/Header.svelte';
+    import Footer from '$lib/components/Footer.svelte';
     import '../app.css'
+    /*import '.style.css';*/
+    import '../app.css'
+    /*import '.style.css';*/
+    import {onMount} from "svelte";
+    import {verifyAuth} from "$lib/store/auth.js";
+
+    // When the app loads, check if the user has a valid session cookie
+    onMount(() => {
+        verifyAuth();
+    });
 
     let {children} = $props();
 </script>
@@ -12,11 +23,8 @@
         {@render children()}
     </main>
 
-    <footer>
-        <p>
-            visit <a href="https://svelte.dev/docs/kit">svelte.dev/docs/kit</a> to learn about SvelteKit
-        </p>
-    </footer>
+    <Footer/>
+
 </div>
 
 <style>
@@ -24,7 +32,7 @@
         display: flex;
         flex-direction: column;
         min-height: 100vh;
-        margin: o auto;
+        margin: auto;
     }
 
     main {
@@ -36,23 +44,5 @@
         max-width: 64rem;
         margin: 0 auto;
         box-sizing: border-box;
-    }
-
-    footer {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        padding: 12px;
-    }
-
-    footer a {
-        font-weight: bold;
-    }
-
-    @media (min-width: 480px) {
-        footer {
-            padding: 12px 0;
-        }
     }
 </style>

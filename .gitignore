@@ -1,6 +1,4 @@
 .qodo
 .idea
-manhwa_list.sqlite3
-/imgjpg
-/imgpng
+.env
 /target

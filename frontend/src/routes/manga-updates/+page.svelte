@@ -3,9 +3,9 @@
     <meta name="description" content="Recently updated manga chapters"/>
 </svelte:head>
 
-<script>
+<script lang="ts">
     // Import komponen yang diperlukan
-    import MangaList from '../MangaList.svelte';
+    import MangaCarousel from '$lib/components/MangaCarousel.svelte';
 
     const placeholderManga = Array(16).fill(null).map((_, index) => ({
         id: index + 1,
@@ -23,12 +23,12 @@
 
     <section>
         <h2>Most Viewed Today</h2>
-        <MangaList manga="{mostViewedToday}" itemsPerPage={1} />
+        <MangaCarousel manga="{mostViewedToday}" itemsPerPage={1}/>
     </section>
 
     <section>
         <h2>New</h2>
-        <MangaList manga="{newManga}" itemsPerPage={1} />
+        <MangaCarousel manga="{newManga}" itemsPerPage={1}/>
     </section>
 </div>
 
