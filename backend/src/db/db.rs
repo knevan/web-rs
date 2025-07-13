@@ -47,7 +47,11 @@ pub struct Users {
     pub username: String,
     pub email: String,
     pub password_hash: String,
-    pub role: String,
+    pub role_id: i32,
+    pub is_active: Option<bool>,
+    pub last_login_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 /// Returns the current Unix timestamp in seconds.
@@ -94,9 +98,8 @@ pub struct DatabaseService {
 /// SELECT ... WHERE id = ? or INSERT ... RETURNING id. (Your logic requires a single, unique record to exist.)
 ///
 /// Use .fetch_optional() when a record may or may not exist, the query could return one row or nothing.
-/// It will be Some(data) if a row is found, and None if no rows are found.
-/// It will ERROR if query returns more than one row.
-/// Perfect for: Checking if a user exists with SELECT ... WHERE email = ?.
+/// It will be Some(data) if a row is found, None if no rows are found, Error if more than one row.
+/// Use for checking if a user exists with SELECT ... WHERE email = ?.
 impl DatabaseService {
     pub fn new(pool: DbPool) -> Self {
         DatabaseService { pool }
@@ -368,10 +371,40 @@ impl DatabaseService {
         let user = sqlx::query_as!(
             Users,
                 // Check both column email and username
-                "SELECT id, username, email, password_hash, role FROM users WHERE email = $1 OR username = $1",
+                "SELECT id, username, email, password_hash, role_id, is_active, last_login_at, created_at, updated_at FROM users WHERE email = $1 OR username = $1",
                 identifier,
             ).fetch_optional(&self.pool).await.context("Failed to get user by identifier")?;
         Ok(user)
+    }
+
+    pub async fn get_role_id_by_name(
+        &self,
+        role_name: &str,
+    ) -> AnyhowResult<Option<i32>> {
+        let role_id = sqlx::query_scalar!(
+            "SELECT id FROM roles WHERE role_name = $1",
+            role_name,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to get role ID by name")?;
+
+        Ok(role_id)
+    }
+
+    pub async fn get_role_name_by_id(
+        &self,
+        role_id: i32,
+    ) -> AnyhowResult<Option<String>> {
+        let role_name = sqlx::query_scalar!(
+            "SELECT role_name FROM roles WHERE id = $1",
+            role_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to get role name by ID")?;
+
+        Ok(role_name)
     }
 
     /// Creates a new user in the database.
@@ -382,14 +415,14 @@ impl DatabaseService {
         username: &str,
         email: &str,
         password_hash: &str,
-        role: &str,
+        role_id: i32,
     ) -> AnyhowResult<i32> {
         let new_user_id = sqlx::query_scalar!(
-            "INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id",
+            "INSERT INTO users (username, email, password_hash, role_id) VALUES ($1, $2, $3, $4) RETURNING id",
             username,
             email,
             password_hash,
-            role,
+            role_id,
         )
             .fetch_one(&self.pool)
             .await
