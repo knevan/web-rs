@@ -6,6 +6,7 @@ use lettre::AsyncSmtpTransport;
 use reqwest::Client;
 use std::env;
 use tokio::net::TcpListener;
+use tokio::signal;
 use tower_http::cors::CorsLayer;
 
 // Type definition for Mailer
@@ -69,7 +70,35 @@ pub async fn run(
     println!("[STARTUP] Server started successfully!");
 
     // Run server
-    serve(listener, app).await?;
+    serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
 
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("Failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    println!("[STARTUP] Signal received, starting graceful shutdown");
 }

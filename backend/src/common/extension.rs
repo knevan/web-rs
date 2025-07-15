@@ -22,5 +22,4 @@ impl OptionStringExt for Option<String> {
     fn is_none_or_empty(&self) -> bool {
         self.is_none_or(|s| s.trim().is_empty())
     }
-
 }

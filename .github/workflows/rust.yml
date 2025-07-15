@@ -7,13 +7,29 @@ on:
     branches:
       - main
 
+permissions:
+  checks: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
       - name: Clippy
-        uses: cargo clippy --verbose -- -D warnings
+        uses: auguwu/clippy-action@1.4.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          check-args: --workspace
+          args: --verbose -- -W warnings
+      - name: Rustfmt Toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: rustfmt
+      - name: Rust fmt check
+        uses: actions-rust-lang/rustfmt@v1
+
 

@@ -40,7 +40,8 @@ pub fn covert_image_bytes_to_avif(image_bytes: &[u8]) -> Result<Vec<u8>> {
         encoder.encode_rgb(Img::new(pixels, width, height))
     };
 
-    let avif_data = avif_result.with_context(|| "Failed to encode image to AVIF")?;
+    let avif_data =
+        avif_result.with_context(|| "Failed to encode image to AVIF")?;
 
     println!(
         "[IMAGE ENCODING] Successfully converted image ({}x{}) to AVIF format. Size: {} bytes",

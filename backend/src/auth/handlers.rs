@@ -1,4 +1,5 @@
 use crate::builder::startup::AppState;
+use crate::common::email_service::send_password_reset_email;
 use crate::common::error::AuthError;
 use crate::common::hashing::{hash_password, verify_password};
 use crate::common::jwt::{
@@ -76,6 +77,24 @@ pub struct CheckUsernameResponse {
     message: String,
 }
 
+// Helper function to get role name string from role id
+async fn get_role_name(
+    db_service: &DatabaseService,
+    role_id: i32,
+) -> Result<String, AuthError> {
+    db_service
+        .get_role_name_by_id(role_id)
+        .await
+        .map_err(|e| {
+            error!("Failed to get role name by id: {}", e);
+            AuthError::InternalServerError
+        })?
+        .ok_or_else(|| {
+            error!("Role with id {} not found.", role_id);
+            AuthError::InternalServerError
+        })
+}
+
 /// Handler for login request
 /// Accepts a `CookieJar` and return modified `CookieJar`
 /// with the token set as a cookie
@@ -114,9 +133,12 @@ pub async fn login_handler(
         return Err(AuthError::WrongCredentials);
     }
 
+    // Get the role name
+    let role_name = get_role_name(db_service, user.role_id).await?;
+
     // Generate access token and refresh token
     let access_token =
-        create_access_jwt(user.username.clone(), user.role.clone())?;
+        create_access_jwt(user.username.clone(), role_name.clone())?;
     let refresh_token = create_refresh_jwt(user.username.clone())?;
 
     // Set cookie for access tokens
@@ -145,7 +167,7 @@ pub async fn login_handler(
         message: "Login Successfull".to_string(),
         user: UserData {
             username: user.username,
-            role: user.role,
+            role: role_name,
         },
     };
 
@@ -155,19 +177,24 @@ pub async fn login_handler(
 /// Handler for refresh access token
 pub async fn refresh_token_handler(
     jar: CookieJar,
+    State(state): State<AppState>,
     claims: RefreshClaims,
 ) -> Result<(CookieJar, Json<GenericMessageResponse>), AuthError> {
     // This part would need a database lookup in a real app to get the user's role
     // For this example, we'll assume the role based on the username
     // In a real app, you would look up the user's role from the database
     // to ensure their permissions haven't changed.
-    let role = if claims.sub == "admin-dashboard" {
-        "admin-dashboard".to_string()
-    } else {
-        "user".to_string()
-    };
+    let user = state
+        .db_service
+        .get_user_by_identifier(&claims.sub)
+        .await
+        .map_err(|_| AuthError::InvalidToken)?
+        .ok_or(AuthError::InvalidToken)?;
 
-    let new_access_token = create_access_jwt(claims.sub.clone(), role.clone())?;
+    let role_name = get_role_name(&state.db_service, user.role_id).await?;
+
+    let new_access_token =
+        create_access_jwt(claims.sub.clone(), role_name.clone())?;
 
     /*let new_access_token = create_access_jwt(claims.sub)?;*/
 
@@ -212,8 +239,6 @@ pub async fn logout_handler(
 }
 
 /// Protected handler. `Claims` acts as a guard.
-/// If the token is invalid, `from_request_parts` will return `AuthError`,
-/// and Axum will automatically convert it to a response error.
 pub async fn protected_handler(claims: Claims) -> Json<ProtectedResponse> {
     println!(
         "[API] Request received at /api/auth/user for user: {}",
@@ -270,13 +295,23 @@ pub async fn register_user_handler(
     let hashed_password = hash_password(&payload.password)
         .map_err(|_| AuthError::InternalServerError)?;
 
+    // Get the ID for the default 'user' role.
+    let user_role_id = db_service
+        .get_role_id_by_name("user")
+        .await
+        .map_err(|_| AuthError::InternalServerError)?
+        .ok_or_else(|| {
+            error!("Default 'user' role not found in the database.");
+            AuthError::InternalServerError
+        })?;
+
     // Create a new user in the database
     let _new_user = db_service
         .create_user(
             &payload.username,
             &payload.email,
             &hashed_password,
-            "user",
+            user_role_id,
         )
         .await
         .map_err(|_| AuthError::InternalServerError)?;
@@ -362,16 +397,26 @@ pub async fn forgot_password_handler(
             .await
             .map_err(|_| AuthError::InternalServerError)?;
 
-        // In a real application, you would send an email here.
-        // For demonstration, we'll just log the link.
-        println!(
-            "Password reset link for user {}: /reset-password?token={}",
-            user.id, token
-        );
+        // Send the password reset email
+        if let Err(e) = send_password_reset_email(
+            &state.mailer,
+            &user.email,
+            &user.username,
+            &token,
+        )
+        .await
+        {
+            // Error log if sending email fails
+            eprintln!(
+                "[AUTH HANDLER] Failed to send password reset email: {:?}",
+                e
+            );
+        }
     }
 
     let response = GenericMessageResponse {
-        message: "Password reset request sent. Check your email for further instructions".to_string(),
+        message: "Password reset request sent. Check your email for further instructions"
+            .to_string(),
     };
 
     Ok(Json(response))

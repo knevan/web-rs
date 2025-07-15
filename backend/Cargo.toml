@@ -19,7 +19,7 @@ reqwest = "0.12.15"
 scraper = "0.23.1"
 serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "~1.45.1", features = ["full"] }
-toml = "0.8.22"
+toml = "0.8.23"
 url = "2.5.4"
 axum-extra = { version = "0.10.1", features = ["typed-header", "erased-json", "cookie"] }
 axum-core = "0.5.2"
@@ -37,5 +37,11 @@ argon2 = "0.5.3"
 sqlx = { version = "0.8.6", features = ["postgres", "chrono", "runtime-tokio-rustls",
     "macros", "runtime-tokio", "migrate"] }
 uuid = { version = "1.17.0", features = ["v4", "serde"] }
-lettre = { version = "0.11.17", features = ["tokio1-rustls"] }
-
+lettre = { version = "0.11.17", default-features = false, features = [
+    "tokio1-rustls",
+    "builder",
+    "smtp-transport",
+    "pool",
+    "rustls-native-certs",
+    "ring"
+] }
