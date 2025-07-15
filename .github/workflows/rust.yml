@@ -11,9 +11,17 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-      - name: Clippy
-        uses: cargo clippy --verbose -- -D warnings
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Rust fmt
+        run: cargo fmt -- --check
+      - uses: auguwu/clippy-action@1.4.0
+        with:
+          check-args: --workspace
+          args: --verbose -- -W warnings
+          token: ${{ secrets.GITHUB_TOKEN }}
+
 

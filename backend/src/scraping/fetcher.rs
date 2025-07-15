@@ -4,14 +4,14 @@ use backon::{BackoffBuilder, ExponentialBuilder};
 use bytes::Bytes;
 use reqwest::Client;
 
-/// Determines whether a network error should trigger a retry attempt.
-/// Retry Strategy:
-/// - Retry: Server errors (5xx), timeouts, connection issues, rate limits (429)
-/// - Don't retry: Client errors (4xx except 429), parsing errors, other failures
-/// Why this approach:
-/// - Server errors are often temporary (server restart, maintenance, etc.)
-/// - Timeouts might succeed on retry with better network conditions
-/// - Rate limits (429) usually resolve after waiting
+// Determines whether a network error should trigger a retry attempt.
+// Retry Strategy:
+// - Retry: Server errors (5xx), timeouts, connection issues, rate limits (429)
+// - Don't retry: Client errors (4xx except 429), parsing errors, other failures
+// Why this approach:
+// - Server errors are often temporary (server restart, maintenance, etc.)
+// - Timeouts might succeed on retry with better network conditions
+// - Rate limits (429) usually resolve after waiting
 fn is_transient_error(e: &anyhow::Error) -> bool {
     // Attempt to downcast the error to a reqwest::Error to inspect it.
     if let Some(req_err) = e.downcast_ref::<reqwest::Error>() {
@@ -30,16 +30,16 @@ fn is_transient_error(e: &anyhow::Error) -> bool {
     false
 }
 
-/// Generic fetch function that handles the core logic of sending a request,
-/// This is the heart of our fetching system. It handles:
-/// 1. Making HTTP requests with retry logic
-/// 2. Status code validation
-/// 3. Exponential backoff between retries
-/// 4. Flexible response processing (HTML, bytes, JSON, etc.)
-/// Generic Parameters Explained:
-/// - `T`: The final return type (String, Bytes, etc.)
-/// - `F`: The processor function type
-/// - `Fut`: The Future returned by the processor function
+// Generic fetch function that handles the core logic of sending a request,
+// This is the heart of our fetching system. It handles:
+// 1. Making HTTP requests with retry logic
+// 2. Status code validation
+// 3. Exponential backoff between retries
+// 4. Flexible response processing (HTML, bytes, JSON, etc.)
+// Generic Parameters Explained:
+// - `T`: The final return type (String, Bytes, etc.)
+// - `F`: The processor function type
+// - `Fut`: The Future returned by the processor function
 async fn fetch_with_retry<T, F, Fut>(
     client: &Client,
     url: &str,
@@ -62,18 +62,17 @@ where
     let operation = || async {
         // Send the HTTP request
         // This can fail due to: DNS resolution, connection refused, timeouts, etc.
-        let response = client
-            .get(url)
-            .send()
-            .await
-            .with_context(|| format!("Failed to send request to {}", url))?;
+        let response =
+            client.get(url).send().await.with_context(|| {
+                format!("Failed to send request to {}", url)
+            })?;
 
         // Check if HTTP status indicates success (2xx) `Ok`
         // `error_for_status()` will convert a 4xx or 5xx status code into an `Errors`.
         // Why: HTTP request "succeeded" but server said "no" (404, 500, etc.)
-        let response = response
-            .error_for_status()
-            .with_context(|| format!("Request to {} returned a non-success status", url))?;
+        let response = response.error_for_status().with_context(|| {
+            format!("Request to {} returned a non-success status", url)
+        })?;
 
         // We got a successful response! Log it for debugging
         println!("[FETCHER] HTML from {} fetched successfully", url);
@@ -117,10 +116,9 @@ pub async fn fetch_html(client: &Client, url: &str) -> Result<String> {
     fetch_with_retry(client, url, |response| async {
         // Convert HTTP response body to UTF-8 string
         // This can fail if: response is not valid UTF-8, connection drops during read
-        response
-            .text()
-            .await
-            .with_context(|| format!("Failed to read response body from {}", url))
+        response.text().await.with_context(|| {
+            format!("Failed to read response body from {}", url)
+        })
     })
     .await
 }
@@ -133,10 +131,9 @@ pub async fn fetch_image_bytes(client: &Client, url: &str) -> Result<Bytes> {
     fetch_with_retry(client, url, |response| async {
         // Convert HTTP response body to raw bytes
         // This preserves the exact binary data without any text conversion
-        response
-            .bytes()
-            .await
-            .with_context(|| format!("Failed to read bytes from response of {}", url))
+        response.bytes().await.with_context(|| {
+            format!("Failed to read bytes from response of {}", url)
+        })
     })
     .await
 }
