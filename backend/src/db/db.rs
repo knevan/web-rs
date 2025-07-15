@@ -48,18 +48,6 @@ pub struct Users {
     pub email: String,
     pub password_hash: String,
     pub role_id: i32,
-    pub is_active: Option<bool>,
-    pub last_login_at: Option<DateTime<Utc>>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
-
-/// Returns the current Unix timestamp in seconds.
-pub fn current_timestamp() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("SystemTime before UNIX EPOCH! This should not happen.")
-        .as_secs() as i64
 }
 
 // A helper function to extract a hostname from an optional URL string.
@@ -371,7 +359,7 @@ impl DatabaseService {
         let user = sqlx::query_as!(
             Users,
                 // Check both column email and username
-                "SELECT id, username, email, password_hash, role_id, is_active, last_login_at, created_at, updated_at FROM users WHERE email = $1 OR username = $1",
+                "SELECT id, username, email, password_hash, role_id FROM users WHERE email = $1 OR username = $1",
                 identifier,
             ).fetch_optional(&self.pool).await.context("Failed to get user by identifier")?;
         Ok(user)
