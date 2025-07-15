@@ -10,7 +10,10 @@ use url::Url;
 use crate::encoding::image_encoding::covert_image_bytes_to_avif;
 
 // Converts a relative URL string to an absolute URL string, given a base URL.
-pub fn to_absolute_url(base_url_str: &str, relative_url_str: &str) -> Result<String> {
+pub fn to_absolute_url(
+    base_url_str: &str,
+    relative_url_str: &str,
+) -> Result<String> {
     let base_url = Url::parse(base_url_str)
         .with_context(|| format!("Base URL not valid: {}", base_url_str))?;
 
@@ -50,11 +53,9 @@ pub async fn download_and_convert_to_avif(
     save_path: &Path,
 ) -> Result<()> {
     // Download image data into bytes
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .with_context(|| format!("Failed to send request for image URL: {}", url))?;
+    let response = client.get(url).send().await.with_context(|| {
+        format!("Failed to send request for image URL: {}", url)
+    })?;
 
     if !response.status().is_success() {
         return Err(anyhow::anyhow!(
@@ -78,22 +79,30 @@ pub async fn download_and_convert_to_avif(
 
     // Convert the downloaded bytes to AVIF bytes in a non-block
     // spawn_blocking is crucial here because image encoding is CPU-intensive and need time to complete
-    let avif_bytes = task::spawn_blocking(move || covert_image_bytes_to_avif(&image_bytes))
-        .await?
-        .with_context(|| "The image conversion failed.")?;
+    let avif_bytes =
+        task::spawn_blocking(move || covert_image_bytes_to_avif(&image_bytes))
+            .await?
+            .with_context(|| "The image conversion failed.")?;
 
     // Save the resulting AVIF bytes to the file system
     if let Some(parent_dir) = save_path.parent() {
         if !parent_dir.exists() {
             tokio::fs::create_dir_all(parent_dir)
                 .await
-                .with_context(|| format!("Failed to create parent directory: {:?}", parent_dir))?;
+                .with_context(|| {
+                    format!(
+                        "Failed to create parent directory: {:?}",
+                        parent_dir
+                    )
+                })?;
         }
     }
 
     tokio::fs::write(save_path, &avif_bytes)
         .await
-        .with_context(|| format!("Failed to write AVIF data to: {:?}", save_path))?;
+        .with_context(|| {
+            format!("Failed to write AVIF data to: {:?}", save_path)
+        })?;
 
     println!(
         "[SAVER] Successfully saved converted AVIF image to: {:?}",

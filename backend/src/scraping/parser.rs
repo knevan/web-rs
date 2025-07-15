@@ -26,14 +26,16 @@ pub fn extract_image_urls(
     );
     let document = Html::parse_document(html_content);
 
-    let image_element_selector =
-        Selector::parse(&config.image_selector_on_chapter_page).map_err(|e| {
-            anyhow::anyhow!(
-                "Invalid CSS selector for image: '{}'. Error: {:?}",
-                config.image_selector_on_chapter_page,
-                e
-            )
-        })?;
+    let image_element_selector = Selector::parse(
+        &config.image_selector_on_chapter_page,
+    )
+    .map_err(|e| {
+        anyhow::anyhow!(
+            "Invalid CSS selector for image: '{}'. Error: {:?}",
+            config.image_selector_on_chapter_page,
+            e
+        )
+    })?;
 
     let mut image_urls = Vec::new();
 
@@ -41,10 +43,15 @@ pub fn extract_image_urls(
         let mut image_source_found: Option<String> = None;
 
         // Try the primary attribute specified in config
-        if let Some(src_val) = img_element.value().attr(&config.image_url_attribute) {
+        if let Some(src_val) =
+            img_element.value().attr(&config.image_url_attribute)
+        {
             let trimmed_src = src_val.trim();
             if !trimmed_src.is_empty() {
-                match utils::to_absolute_url(base_url_relative_path, trimmed_src) {
+                match utils::to_absolute_url(
+                    base_url_relative_path,
+                    trimmed_src,
+                ) {
                     Ok(abs_url) => {
                         image_source_found = Some(abs_url);
                         println!(
@@ -71,7 +78,10 @@ pub fn extract_image_urls(
                 if let Some(src_val) = img_element.value().attr(fallback_attr) {
                     let trimmed_src = src_val.trim();
                     if !trimmed_src.is_empty() {
-                        match utils::to_absolute_url(base_url_relative_path, trimmed_src) {
+                        match utils::to_absolute_url(
+                            base_url_relative_path,
+                            trimmed_src,
+                        ) {
                             Ok(abs_url) => {
                                 image_source_found = Some(abs_url);
                                 println!(
@@ -86,7 +96,8 @@ pub fn extract_image_urls(
                                     fallback_attr, trimmed_src, e
                                 );
                                 if Url::parse(trimmed_src).is_ok() {
-                                    image_source_found = Some(trimmed_src.to_string());
+                                    image_source_found =
+                                        Some(trimmed_src.to_string());
                                     break; // Found one, no need to check other fallback for this element
                                 }
                             }
@@ -126,8 +137,8 @@ pub fn extract_image_urls(
 /// Note: Regex compilation can be a performance bottleneck if called very frequently for many series.
 /// Consider pre-compiling regexes or using once_cell::sync::Lazy if this becomes an issue.
 pub async fn extract_chapter_links(
-    series_page_html: &str,      // HTML content of the series main page
-    series_page_url: &str,       // URL of the series main page (for absolutifying relative links)
+    series_page_html: &str, // HTML content of the series main page
+    series_page_url: &str, // URL of the series main page (for absolutifying relative links)
     config: &SiteScrapingConfig, // Scraping configuration for this site
 ) -> Result<Vec<ChapterInfo>> {
     println!(
@@ -136,13 +147,14 @@ pub async fn extract_chapter_links(
     );
     let document = Html::parse_document(series_page_html);
 
-    let chapter_link_selector = Selector::parse(&config.chapter_link_selector).map_err(|e| {
-        anyhow::anyhow!(
-            "Invalid CSS selector for chapter links: '{}'. Error: {:?}",
-            config.chapter_link_selector,
-            e
-        )
-    })?;
+    let chapter_link_selector = Selector::parse(&config.chapter_link_selector)
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "Invalid CSS selector for chapter links: '{}'. Error: {:?}",
+                config.chapter_link_selector,
+                e
+            )
+        })?;
 
     // Prepare regexes if they are defined in the configuration (optional)
     // These are compiled on each call. For high performance, consider compiling them once.
@@ -166,22 +178,33 @@ pub async fn extract_chapter_links(
                 // Create absolute URL from href if it's relative
                 match utils::to_absolute_url(series_page_url, trimmed_href) {
                     Ok(abs_url) => {
-                        let title = link_element.text().collect::<String>().trim().to_string(); // Get text from link as title
+                        let title = link_element
+                            .text()
+                            .collect::<String>()
+                            .trim()
+                            .to_string(); // Get text from link as title
                         let mut chapter_number_candidate: Option<f32> = None;
 
                         // Strategy for Extracting Chapter Number (with priority):
                         // 1. From data attribute on a parent element (e.g., <li data-chapterno="X">)
                         if chapter_number_candidate.is_none() {
-                            if let Some(attr_name) = &config.chapter_number_data_attribute_on_parent
+                            if let Some(attr_name) =
+                                &config.chapter_number_data_attribute_on_parent
                             {
                                 // Try to find the attribute on the link_element itself or its parents
-                                let mut current_element_for_attr = Some(link_element);
+                                let mut current_element_for_attr =
+                                    Some(link_element);
                                 while let Some(el) = current_element_for_attr {
-                                    if let Some(data_no_str) = el.value().attr(attr_name) {
-                                        if let Ok(num) = data_no_str.trim().parse::<f32>() {
+                                    if let Some(data_no_str) =
+                                        el.value().attr(attr_name)
+                                    {
+                                        if let Ok(num) =
+                                            data_no_str.trim().parse::<f32>()
+                                        {
                                             if num > 0.0 {
                                                 // Basic validation
-                                                chapter_number_candidate = Some(num);
+                                                chapter_number_candidate =
+                                                    Some(num);
                                                 println!(
                                                     "[PARSER] Chapter number for '{}' from parent attribute '{}': {}",
                                                     title, attr_name, num
@@ -190,7 +213,8 @@ pub async fn extract_chapter_links(
                                             }
                                         }
                                     }
-                                    current_element_for_attr = el.parent_element();
+                                    current_element_for_attr =
+                                        el.parent_element();
                                 }
                             }
                         }
@@ -201,10 +225,15 @@ pub async fn extract_chapter_links(
                                 if let Some(caps) = re.captures(&abs_url) {
                                     if let Some(num_match) = caps.get(1) {
                                         // First capture group from regex
-                                        if let Ok(num) = num_match.as_str().trim().parse::<f32>() {
+                                        if let Ok(num) = num_match
+                                            .as_str()
+                                            .trim()
+                                            .parse::<f32>()
+                                        {
                                             if num > 0.0 {
                                                 // Basic validation
-                                                chapter_number_candidate = Some(num);
+                                                chapter_number_candidate =
+                                                    Some(num);
                                                 println!(
                                                     "[PARSER] Chapter number for '{}' from link text: {}",
                                                     title, num
@@ -222,9 +251,14 @@ pub async fn extract_chapter_links(
                                 if let Some(caps) = re.captures(&title) {
                                     if let Some(num_match) = caps.get(1) {
                                         // Grup capture pertama dari regex
-                                        if let Ok(num) = num_match.as_str().trim().parse::<f32>() {
+                                        if let Ok(num) = num_match
+                                            .as_str()
+                                            .trim()
+                                            .parse::<f32>()
+                                        {
                                             if num > 0.0 {
-                                                chapter_number_candidate = Some(num);
+                                                chapter_number_candidate =
+                                                    Some(num);
                                                 println!(
                                                     "[PARSER] Nomor chapter '{}' dari teks link: {}",
                                                     title, num
@@ -238,10 +272,9 @@ pub async fn extract_chapter_links(
 
                         // If chapter number was successfully extracted and is valid
                         if let Some(number) = chapter_number_candidate {
-                            if !chapter_infos
-                                .iter()
-                                .any(|ci: &ChapterInfo| ci.number == number && ci.url == abs_url)
-                            {
+                            if !chapter_infos.iter().any(|ci: &ChapterInfo| {
+                                ci.number == number && ci.url == abs_url
+                            }) {
                                 // Avoid duplicates
                                 chapter_infos.push(ChapterInfo {
                                     title,
