@@ -51,7 +51,7 @@ async fn main() -> Result<()> {
         .context("[MAIN] SMTP_PASSWORD must be set")?;
 
     let creds = Credentials::new(smtp_username, smtp_password);
-    let mailer = Mailer::relay(&smtp_server)
+    let mailer = Mailer::starttls_relay(&smtp_server)
         .context("[MAIN] Failed to build SMTP relay")?
         .credentials(creds)
         .build();
