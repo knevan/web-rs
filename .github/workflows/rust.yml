@@ -11,7 +11,7 @@ permissions:
   checks: write
 
 jobs:
-  build:
+  linter:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,12 +19,22 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - name: Install and Cache Apt packages
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: nasm
+          version: 1.0
       - name: Clippy
         uses: auguwu/clippy-action@1.4.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           check-args: --workspace
           args: --verbose -- -W warnings
+
+  formatting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - name: Rustfmt Toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
