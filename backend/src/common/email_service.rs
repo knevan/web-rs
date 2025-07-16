@@ -11,7 +11,6 @@ pub async fn send_password_reset_email(
     recipient_username: &str,
     token: &str,
 ) -> anyhow::Result<()> {
-    // Read env configuration
     let frontend_url =
         env::var("FRONTEND_URL").expect("FRONTEND_URL must be set");
     let app_email = env::var("SMTP_USERNAME").expect("APP_EMAIL must be set");

@@ -73,7 +73,6 @@ impl StorageClient {
     /// * `key` - The full path and filename for the object in the bucket (e.g., "series-title/chapter-1/01.avif").
     /// * `data` - The raw bytes of the object to upload.
     /// * `content_type` - The MIME type of the object (e.g., "image/avif").
-    /// # Returns
     /// The full public CDN URL to the uploaded object.
     pub async fn upload_objects(
         &self,

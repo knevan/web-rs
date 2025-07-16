@@ -95,9 +95,8 @@ async fn get_role_name(
         })
 }
 
-/// Handler for login request
-/// Accepts a `CookieJar` and return modified `CookieJar`
-/// with the token set as a cookie
+// Accepts a `CookieJar` and return modified `CookieJar`
+// with the token set as a cookie
 pub async fn login_handler(
     jar: CookieJar,
     State(state): State<AppState>,
@@ -110,7 +109,7 @@ pub async fn login_handler(
         return Err(AuthError::MissingCredentials);
     }
 
-    // Find user in the database by either username or email
+    // Find user identifier
     let user = db_service
         .get_user_by_identifier(&payload.identifier)
         .await
@@ -120,7 +119,7 @@ pub async fn login_handler(
         })?
         .ok_or(AuthError::WrongCredentials)?;
 
-    // Verify the password
+    // Verify
     let is_valid_password =
         verify_password(&payload.password, &user.password_hash).map_err(
             |e| {
@@ -133,7 +132,6 @@ pub async fn login_handler(
         return Err(AuthError::WrongCredentials);
     }
 
-    // Get the role name
     let role_name = get_role_name(db_service, user.role_id).await?;
 
     // Generate access token and refresh token
@@ -162,7 +160,6 @@ pub async fn login_handler(
     // Add both cookie to the jar
     let new_jar = jar.add(access_cookie).add(refresh_cookie);
 
-    // Return success response
     let response = LoginResponse {
         message: "Login Successfull".to_string(),
         user: UserData {
@@ -174,16 +171,11 @@ pub async fn login_handler(
     Ok((new_jar, Json(response)))
 }
 
-/// Handler for refresh access token
 pub async fn refresh_token_handler(
     jar: CookieJar,
     State(state): State<AppState>,
     claims: RefreshClaims,
 ) -> Result<(CookieJar, Json<GenericMessageResponse>), AuthError> {
-    // This part would need a database lookup in a real app to get the user's role
-    // For this example, we'll assume the role based on the username
-    // In a real app, you would look up the user's role from the database
-    // to ensure their permissions haven't changed.
     let user = state
         .db_service
         .get_user_by_identifier(&claims.sub)
@@ -214,7 +206,6 @@ pub async fn refresh_token_handler(
     Ok((new_jar, Json(response_body)))
 }
 
-/// Handler for logout
 pub async fn logout_handler(
     jar: CookieJar,
 ) -> Result<(CookieJar, Json<GenericMessageResponse>), AuthError> {
@@ -455,7 +446,10 @@ pub async fn reset_password_handler(
 
     // Update user's password in the database
     db_service
-        .update_user_password_hash(user_id, &hashed_password)
+        .update_user_password_hash_after_reset_password(
+            user_id,
+            &hashed_password,
+        )
         .await
         .map_err(|_| AuthError::InternalServerError)?;
 

@@ -9,21 +9,18 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::sync::LazyLock;
 
-/// Secret key for JWT signing and encryption
-/// Load from environment variables do not hardcode sensitive information
+// Secret key for JWT signing and encryption
 static KEYS: LazyLock<Keys> = LazyLock::new(|| {
     let secret_key =
         env::var("JWT_SECRET_KEY").expect("JWT_SECRET_KEY must be set");
     Keys::new(secret_key.as_bytes())
 });
 
-/// Keys is a struct that holds the encoding and decoding keys for JWT.
 pub struct Keys {
     pub encoding: EncodingKey,
     pub decoding: DecodingKey,
 }
 
-/// The Keys struct is used to create the encoding and decoding keys for JWT.
 impl Keys {
     fn new(secret_key: &[u8]) -> Self {
         Self {
@@ -38,13 +35,12 @@ impl Keys {
 /// The `Claims` struct is used to encode and decode the JWT tokens.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: String,  // User ID
-    pub role: String, // User role (e.g., "admin-dashboard", "user")
-    pub exp: usize,   // Expiration time
-    pub iat: usize,   // Issued at time
+    pub sub: String,
+    pub role: String,
+    pub exp: usize,
+    pub iat: usize,
 }
 
-/// Struct for Refresh Token Claims
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RefreshClaims {
     pub sub: String,

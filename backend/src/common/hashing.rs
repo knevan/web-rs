@@ -63,16 +63,13 @@ pub fn verify_password(
     let parsed_hash = PasswordHash::new(stored_hash)?;
 
     // Verify the password.
-    // The Argon2 instance is created with default settings here, but it's only used
-    // to access the `verify_password` method. The actual algorithm and parameters
-    // are correctly read from the `parsed_hash` string.
     let verification_result =
         Argon2::default().verify_password(password_bytes, &parsed_hash);
 
     match verification_result {
-        Ok(()) => Ok(true), // Verification successful
-        Err(PwHashError::Password) => Ok(false), // Password does not match
-        Err(e) => Err(e), // Another error occurred (e.g., invalid hash format)
+        Ok(()) => Ok(true),
+        Err(PwHashError::Password) => Ok(false),
+        Err(e) => Err(e),
     }
 }
 
