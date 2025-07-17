@@ -1,0 +1,106 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, title, description, cover_image_url, current_source_url, \n            source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage,\n            processing_status, check_interval_minutes, last_checked_at, next_checked_at,\n            created_at, updated_at\n            FROM manga_series WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "cover_image_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "current_source_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "source_website_host",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "views_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "bookmarks_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "last_chapter_found_in_storage",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 9,
+        "name": "processing_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "check_interval_minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "last_checked_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "next_checked_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "8e462719c48cce158817af30bf4a97ac6f5a1d879847f82e4b59cfffd2e67d16"
+}
