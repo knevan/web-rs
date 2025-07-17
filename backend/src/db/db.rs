@@ -2,13 +2,12 @@ use anyhow::{Context, Result as AnyhowResult, anyhow};
 use chrono::{DateTime, Utc};
 use rand::Rng;
 use sqlx::{FromRow, PgPool};
-use std::time::{SystemTime, UNIX_EPOCH};
 use url::Url;
 
 // Type alias for db connection pool
 pub type DbPool = PgPool;
 
-/// Struct represents a Manhwa series stored in the database.
+/// Struct represents a manga series stored in the database.
 /// The derive macro is now `sqlx::FromRow`.
 #[derive(Debug, Clone, FromRow)]
 pub struct MangaSeries {
@@ -78,7 +77,7 @@ pub struct DatabaseService {
 /// For queries returning a single value (one row, one column).
 /// Highly efficient for this purpose.
 ///
-/// []Use .execute() when you want to run a command and don't need any row data back.
+/// Use .execute() when you want to run a command and don't need any row data back.
 /// UPDATE, DELETE, INSERT (without a RETURNING clause), or CREATE TABLE. It's fire-and-forget.
 ///
 /// Use .fetch_one() when you are certain the query will return EXACTLY one row
@@ -93,9 +92,8 @@ impl DatabaseService {
         DatabaseService { pool }
     }
 
-    /// Adds a new manhwa series to the database from manual admin-dashboard input.
     /// The `next_checked_at` is initially set to the current time to allow immediate processing.
-    pub async fn add_manga_series(
+    pub async fn add_new_manga_series(
         &self,
         title: &str,
         description: Option<&str>,
@@ -119,9 +117,7 @@ impl DatabaseService {
         Ok(new_id)
     }
 
-    /// Updates an existing manhwa series chapter data
-    /// if there is any broken chapter
-    pub async fn update_manga_series(
+    pub async fn update_manga_series_metadata(
         &self,
         series_id: i32,
         title: &str,
@@ -134,8 +130,14 @@ impl DatabaseService {
 
         let result = sqlx::query!(
             "UPDATE manga_series
-            SET title = $1, description = $2, cover_image_url = $3, current_source_url = $4,
-            source_website_host = $5, check_interval_minutes = $6, updated_at = NOW()
+            SET
+                title = COALESCE($1, title),
+                description = COALESCE($2, description),
+                cover_image_url = COALESCE($3, cover_image_url),
+                current_source_url = COALESCE($4, current_source_url),
+                source_website_host = COALESCE($5, source_website_host),
+                check_interval_minutes = COALESCE($6, check_interval_minutes),
+            updated_at = NOW()
             WHERE id = $7",
             title,
             description,
@@ -154,7 +156,7 @@ impl DatabaseService {
 
     /// Adds a new chapter to the database and returns its new ID.
     /// This function assumes the chapter does not already exist (checked by source_url uniqueness).
-    pub async fn add_chapter(
+    pub async fn add_new_chapter(
         &self,
         series_id: i32,
         chapter_number: f32,
@@ -178,8 +180,7 @@ impl DatabaseService {
         Ok(new_id)
     }
 
-    /// Adds a new image entry associated with a chapter
-    pub async fn add_chapter_image(
+    pub async fn add_chapter_images(
         &self,
         chapter_id: i32,
         image_order: i32,
@@ -195,8 +196,7 @@ impl DatabaseService {
         Ok(new_id)
     }
 
-    /// Retrieves a single manhwa series by its ID using `query_as!
-    pub async fn get_manhwa_series_by_id(
+    pub async fn get_manga_series_by_id(
         &self,
         id: i32,
     ) -> AnyhowResult<Option<MangaSeries>> {
@@ -215,8 +215,7 @@ impl DatabaseService {
         Ok(series)
     }
 
-    /// Retrieves a single manhwa series by its title.
-    pub async fn get_manhwa_series_by_title(
+    pub async fn get_manga_series_by_title(
         &self,
         title: &str,
     ) -> AnyhowResult<Option<MangaSeries>> {
@@ -234,7 +233,6 @@ impl DatabaseService {
         Ok(series)
     }
 
-    /// Updates the `last_chapter_found_in_storage` for a series.
     pub async fn update_series_last_chapter_found_in_storage(
         &self,
         series_id: i32,
@@ -249,7 +247,6 @@ impl DatabaseService {
         Ok(result.rows_affected())
     }
 
-    /// NEWLY MOVED: Updates the source URL and source website host for a given series.
     pub async fn update_series_source_urls(
         &self,
         series_id: i32,
@@ -267,7 +264,7 @@ impl DatabaseService {
         Ok(result.rows_affected())
     }
 
-    /// Update the description of a manhwa series.
+    /// Update the description of a manga series.
     pub async fn update_series_description(
         &self,
         series_id: i32,
@@ -286,7 +283,7 @@ impl DatabaseService {
     }
 
     /// Updates only the processing status of a series.
-    /// Useful for marking a series as "scraping" or "error" without touching check schedules.
+    /// Marking a series as "scraping" or "error" without touching check schedules.
     pub async fn update_series_processing_status(
         &self,
         series_id: i32,
@@ -304,9 +301,7 @@ impl DatabaseService {
         Ok(result.rows_affected())
     }
 
-    /// Updates the processing status and check schedule for a series.
-    /// Typically called after a series has been processed (downloaded/parsed).
-    /// If `new_next_checked_at` is `None`, it's calculated based on `check_interval_minutes`.
+    /// Called after a series has been processed
     pub async fn update_series_check_schedule(
         &self,
         series_id: i32,
@@ -314,18 +309,17 @@ impl DatabaseService {
         new_next_checked_at: Option<DateTime<Utc>>,
     ) -> AnyhowResult<u64> {
         // First, get the series data asynchronously.
-        let series = self
-            .get_manhwa_series_by_id(series_id)
-            .await?
-            .ok_or_else(|| {
-                anyhow!(
-                    "Series with id {} not found for schedule update",
-                    series_id
-                )
-            })?;
+        let series =
+            self.get_manga_series_by_id(series_id)
+                .await?
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Series with id {} not found for schedule update",
+                        series_id
+                    )
+                })?;
 
         // Calculate the next check time if not provided
-        // based on the current time and the series' check interval.
         let final_next_checked_at = new_next_checked_at.unwrap_or_else(|| {
             let mut rng = rand::rng();
             let base_interval = series.check_interval_minutes as i64;
@@ -338,7 +332,6 @@ impl DatabaseService {
 
         let final_status = new_status.unwrap_or(&series.processing_status);
 
-        // Execute the final update. `query!` is used because it's an UPDATE.
         let result = sqlx::query!(
             "UPDATE manga_series SET processing_status = $1, last_checked_at = NOW(), next_checked_at = $2, updated_at = NOW() WHERE id = $3",
             final_status,
@@ -351,7 +344,6 @@ impl DatabaseService {
         Ok(result.rows_affected())
     }
 
-    /// Fetches a user from the database by their username OR email address.
     pub async fn get_user_by_identifier(
         &self,
         identifier: &str,
@@ -395,9 +387,6 @@ impl DatabaseService {
         Ok(role_name)
     }
 
-    /// Creates a new user in the database.
-    /// Takes username, email, password_hash, and role as parameters.
-    /// Return the newly created user's ID.
     pub async fn create_user(
         &self,
         username: &str,
@@ -419,7 +408,6 @@ impl DatabaseService {
         Ok(new_user_id)
     }
 
-    // Stores new password reset token in the database
     pub async fn create_password_reset_token(
         &self,
         user_id: i32,
@@ -458,7 +446,7 @@ impl DatabaseService {
     }
 
     // Update password hash for a given user ID.
-    pub async fn update_user_password_hash(
+    pub async fn update_user_password_hash_after_reset_password(
         &self,
         user_id: i32,
         new_password_hash: &str,
@@ -475,7 +463,6 @@ impl DatabaseService {
         Ok(())
     }
 
-    // Deletes a password reset token from the database after it has been used or expired.
     pub async fn delete_password_reset_token(
         &self,
         token: &str,
@@ -490,10 +477,78 @@ impl DatabaseService {
 
         Ok(())
     }
+
+    pub async fn delete_chapter_and_images_for_chapter(
+        &self,
+        series_id: i32,
+        chapter_number: f32,
+    ) -> AnyhowResult<u64> {
+        // exclusive connection from the pool
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to start transaction")?;
+
+        let chapter_id_to_delete = sqlx::query_scalar!(
+            "SELECT id FROM manga_chapters WHERE series_id = $1 AND chapter_number = $2",
+            series_id,
+            chapter_number,
+        )
+            .fetch_optional(&mut *tx) // Run query inside transaction
+            .await
+            .context("Failed to get chapter ID to delete")?;
+
+        if let Some(chapter_id) = chapter_id_to_delete {
+            sqlx::query!(
+                "DELETE FROM chapter_images WHERE chapter_id = $1",
+                chapter_id
+            )
+            .execute(&mut *tx)
+            .await
+            .context("Failed to delete chapter images")?;
+
+            let result = sqlx::query!(
+                "DELETE FROM manga_chapters WHERE id = $1",
+                chapter_id
+            )
+            .execute(&mut *tx)
+            .await
+            .context("Failed to delete chapter")?;
+
+            // If transaction was successful, commit it
+            tx.commit().await.context("Failed to commit transaction")?;
+
+            Ok(result.rows_affected())
+        } else {
+            Ok(0) // No chapter found to delete
+        }
+    }
+
+    pub async fn get_images_urls_for_chapter_series(
+        &self,
+        series_id: i32,
+        chapter_number: f32,
+    ) -> AnyhowResult<Vec<String>> {
+        let urls = sqlx::query_scalar!(
+            r#"
+            SELECT ci.image_url
+            FROM chapter_images ci
+            JOIN manga_chapters mc ON ci.chapter_id = mc.id
+            WHERE mc.series_id = $1 AND mc.chapter_number = $2
+            "#,
+            series_id,
+            chapter_number,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to get images URLs for chapter series")?;
+
+        Ok(urls)
+    }
 }
 
 // Retrieves all manhwa series from the database, ordered by title.
-// (This function was commented out in the original, uncommented and kept for completeness)
 /*pub fn get_all_manhwa_series(conn: &Connection) -> Result<Vec<ManhwaSeries>> {
     let mut stmt = conn.prepare("SELECT id, title, current_source_url, source_website_host, last_chapter_found_in_storage, processing_status, check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at FROM manhwa_series ORDER BY title ASC")?;
     let series_iter = stmt.query_map([], row_manhwa_series)?;
@@ -506,9 +561,7 @@ impl DatabaseService {
 }*/
 
 // Retrieves manhwa series that are due for checking.
-// (This function was commented out in the original, uncommented and improved)
 // A series is due if `next_checked_at` is past or NULL, and status is not 'paused' or 'completed'.
-
 /*pub fn get_series_to_check(conn: &Connection, limit: Option<u32>) -> Result<Vec<ManhwaSeries>> {
     let now = current_timestamp();
     // Define statuses to ignore directly in the query for simplicity with params.

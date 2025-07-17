@@ -44,7 +44,6 @@ async fn fetch_with_retry<T, F, Fut>(
     client: &Client,
     url: &str,
     // This function takes a successful HTTP response and converts it to type T
-    // Examples: response.text() for HTML, response.bytes() for images
     processor: F,
 ) -> Result<T>
 where
@@ -60,7 +59,6 @@ where
     // Define the operation we want to retry
     // This closure captures all the variables it needs (client, url, processor)
     let operation = || async {
-        // Send the HTTP request
         // This can fail due to: DNS resolution, connection refused, timeouts, etc.
         let response =
             client.get(url).send().await.with_context(|| {
@@ -74,17 +72,12 @@ where
             format!("Request to {} returned a non-success status", url)
         })?;
 
-        // We got a successful response! Log it for debugging
         println!("[FETCHER] HTML from {} fetched successfully", url);
 
-        // Process the response body into the desired format
-        // Processor function does the conversion to get the final result
         processor(response).await
     };
 
     // Execute the operation with the retry logic, only retry on transient errors
-    // It calls `is_transient_error` function to decide.
-    // It uses the `.retry()` method.
     operation
         .retry(backoff)
         .when(|e| {
@@ -111,10 +104,8 @@ where
 pub async fn fetch_html(client: &Client, url: &str) -> Result<String> {
     println!("[FETCHER] Attempting to fetch HTML from {}", url);
 
-    // Provide a closure that processes the response body into a String.
     // Call generic fetch function with binary-specific processor
     fetch_with_retry(client, url, |response| async {
-        // Convert HTTP response body to UTF-8 string
         // This can fail if: response is not valid UTF-8, connection drops during read
         response.text().await.with_context(|| {
             format!("Failed to read response body from {}", url)
@@ -129,7 +120,6 @@ pub async fn fetch_image_bytes(client: &Client, url: &str) -> Result<Bytes> {
 
     // Call generic fetch function with binary-specific processor
     fetch_with_retry(client, url, |response| async {
-        // Convert HTTP response body to raw bytes
         // This preserves the exact binary data without any text conversion
         response.bytes().await.with_context(|| {
             format!("Failed to read bytes from response of {}", url)

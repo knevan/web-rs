@@ -14,8 +14,7 @@ pub struct ChapterInfo {
     pub number: f32,
 }
 
-/// Extracts image URLs from the HTML content of a chapter page.
-pub fn extract_image_urls(
+pub fn extract_image_urls_from_html_content(
     html_content: &str,
     base_url_relative_path: &str, // Should be the chapter page URL
     config: &SiteScrapingConfig,
@@ -111,16 +110,12 @@ pub fn extract_image_urls(
 
             // If still not found, as a last resort, check common attributes like 'src' or 'data-src' if not already primary/fallback
             // This part is a bit redundant if config is comprehensive, but can be a safety net.
-            // For now, relying on the config being correctly set up.
-
             if let Some(url_to_add) = image_source_found {
                 if !url_to_add.is_empty() && !image_urls.contains(&url_to_add) {
                     // Avoid duplicates URLs
                     image_urls.push(url_to_add)
                 }
             } else {
-                // Log if an image element was selected but no URL could be extracted
-                // It might be useful to log element_img.html() here for debugging selectors
                 eprintln!(
                     "[PARSER] Could not extract a valid image URL from element: {:?}",
                     img_element.value().name()
@@ -137,9 +132,9 @@ pub fn extract_image_urls(
 /// Note: Regex compilation can be a performance bottleneck if called very frequently for many series.
 /// Consider pre-compiling regexes or using once_cell::sync::Lazy if this becomes an issue.
 pub async fn extract_chapter_links(
-    series_page_html: &str, // HTML content of the series main page
-    series_page_url: &str, // URL of the series main page (for absolutifying relative links)
-    config: &SiteScrapingConfig, // Scraping configuration for this site
+    series_page_html: &str,
+    series_page_url: &str,
+    config: &SiteScrapingConfig,
 ) -> Result<Vec<ChapterInfo>> {
     println!(
         "[PARSER] Parsing series page HTML for chapter links using selector: '{}'",

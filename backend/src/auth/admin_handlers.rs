@@ -16,8 +16,7 @@ pub struct SeriesRequest {
     check_interval_minutes: i32,
 }
 
-/// Handler to create a new manhwa series.
-/// This route is protected and can only be accessed by a logged-in admin-dashboard.
+// This route is protected and can only be accessed by a logged-in admin-dashboard.
 pub async fn create_series_handler(
     claims: Claims,
     State(state): State<AppState>,
@@ -31,7 +30,7 @@ pub async fn create_series_handler(
     );
 
     match db_service
-        .add_manga_series(
+        .add_new_manga_series(
             &payload.title,
             payload.description.as_deref(),
             payload.cover_image_url.as_deref(),
@@ -53,8 +52,7 @@ pub async fn create_series_handler(
     }
 }
 
-/// Handler to update an existing manhwa series.
-/// This route is also protected and can only be accessed by a logged-in admin-dashboard.
+// This route is also protected and can only be accessed by a logged-in as admin
 pub async fn update_series_handler(
     claims: Claims,
     State(state): State<AppState>,
@@ -70,7 +68,7 @@ pub async fn update_series_handler(
 
     // Call the async method on the DatabaseService instance
     match db_service
-        .add_manga_series(
+        .add_new_manga_series(
             &payload.title,
             payload.description.as_deref(),
             payload.cover_image_url.as_deref(),
