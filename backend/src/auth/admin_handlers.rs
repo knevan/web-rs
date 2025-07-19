@@ -1,5 +1,6 @@
 use crate::builder::startup::AppState;
 use crate::common::jwt::Claims;
+use crate::db::db::{NewMangaSeriesData, UpdateMangaSeriesData};
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -34,16 +35,17 @@ pub async fn create_manga_series_handler(
 
     let check_interval_minutes = rand::rng().random_range(100..=150);
 
-    match db_service
-        .add_new_manga_series(
-            &payload.title,
-            payload.original_title.as_deref(),
-            payload.authors.as_ref(),
-            &payload.description,
-            &payload.cover_image_url,
-            &payload.source_url,
-            check_interval_minutes
-        )
+    let new_series_data = NewMangaSeriesData {
+        title: &payload.title,
+        original_title: payload.original_title.as_deref(),
+        authors: payload.authors.as_ref(),
+        description: &payload.description,
+        cover_image_url: &payload.cover_image_url,
+        source_url: &payload.source_url,
+        check_interval_minutes,
+    };
+
+    match db_service.add_new_manga_series(&new_series_data)
         .await
     {
         Ok(new_id) => (
@@ -63,6 +65,7 @@ pub async fn create_manga_series_handler(
 pub struct UpdateSeriesRequest {
     title: Option<String>,
     original_title: Option<String>,
+    authors: Option<Vec<String>>,
     description: Option<String>,
     cover_image_url: Option<String>,
     source_url: Option<String>,
@@ -81,17 +84,19 @@ pub async fn update_manga_series_handler(
         "HANDLER", claims.sub, series_id
     );
 
+    let update_series_data = UpdateMangaSeriesData {
+        title: payload.title.as_deref(),
+        original_title: payload.original_title.as_deref(),
+        authors: payload.authors.as_ref(),
+        description: payload.description.as_deref(),
+        cover_image_url: payload.cover_image_url.as_deref(),
+        source_url: payload.source_url.as_deref(),
+        check_interval_minutes: None,
+    };
+
     // Call the async method on the DatabaseService instance
     match db_service
-        .update_manga_series_metadata(
-            series_id,
-            payload.title.as_deref(),
-            payload.original_title.as_deref(),
-            payload.description.as_deref(),
-            payload.cover_image_url.as_deref(),
-            payload.source_url.as_deref(),
-            None,
-        )
+        .update_manga_series_metadata(series_id, &update_series_data)
         .await
     {
         Ok(rows_affected) if rows_affected > 0 => {
@@ -148,7 +153,11 @@ pub async fn upload_series_cover_image_handler(
 
         return match state
             .storage_client
-            .upload_image_file(file_data, &unique_image_key, &content_type)
+            .upload_cover_image_file(
+                file_data,
+                &unique_image_key,
+                &content_type,
+            )
             .await
         {
             Ok(url) => (
