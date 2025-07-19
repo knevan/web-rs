@@ -1,8 +1,5 @@
 name: Rust
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
@@ -28,12 +25,13 @@ jobs:
           version: 1.0
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2.8.0
-      - name: Clippy
-        #env: SQLX_OFFLINE: true
+      - name: Run linter (clippy action)
+        env:
+          SQLX_OFFLINE: true
         uses: auguwu/clippy-action@1.4.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          check-args: --verbose --workspace
+          check-args: --workspace
           # args: --verbose -- -W warnings
 
   formatting:
