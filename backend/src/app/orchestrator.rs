@@ -159,7 +159,7 @@ pub async fn repair_specific_chapter_in_series(
             })
             .collect();
 
-        storage_client.delete_objects(key_to_delete).await?;
+        storage_client.delete_image_objects(key_to_delete).await?;
         println!("[REPAIR] Deleted images from storage");
     }
 

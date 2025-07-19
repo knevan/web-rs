@@ -18,7 +18,6 @@ pub fn covert_image_bytes_to_avif(image_bytes: &[u8]) -> Result<Vec<u8>> {
     let width = width_u32 as usize;
     let height = height_u32 as usize;
 
-    // Configure the AVIF encoder.
     // Quality: 0-100 (higher is better iamge quality, larger file size).
     // Speed: 0-10 (higher is faster encoding, lower quality/compression size).
     // A quality of ~40-50 and speed of ~5-6 is a good balance (good image quality and good compression size).
@@ -32,11 +31,11 @@ pub fn covert_image_bytes_to_avif(image_bytes: &[u8]) -> Result<Vec<u8>> {
     let avif_result = if img.color().has_alpha() {
         let rgba_image = img.to_rgba8();
         // Use the FromSlice trait to perform a zero-cost cast from &[u8] to &[RGBA8]
-        let pixels = &*rgba_image.as_rgba();
+        let pixels = rgba_image.as_rgba();
         encoder.encode_rgba(Img::new(pixels, width, height))
     } else {
         let rgb_image = img.to_rgb8();
-        let pixels = &*rgb_image.as_rgb();
+        let pixels = rgb_image.as_rgb();
         encoder.encode_rgb(Img::new(pixels, width, height))
     };
 

@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use aws_sdk_s3::Client;
 use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::primitives::ByteStream;
@@ -74,7 +74,7 @@ impl StorageClient {
     /// * `data` - The raw bytes of the object to upload.
     /// * `content_type` - The MIME type of the object (e.g., "image/avif").
     /// The full public CDN URL to the uploaded object.
-    pub async fn upload_objects(
+    pub async fn upload_image_objects(
         &self,
         key: &str,
         data: Vec<u8>,
@@ -105,7 +105,7 @@ impl StorageClient {
 
     /// Deletes multiple objects from the R2 bucket.
     /// * `keys` - A vector of object keys to delete.
-    pub async fn delete_objects(&self, keys: Vec<String>) -> Result<()> {
+    pub async fn delete_image_objects(&self, keys: Vec<String>) -> Result<()> {
         // If there are no keys to delete, do nothing.
         if keys.is_empty() {
             println!("[STORAGE] No objects to delete");
@@ -167,5 +167,28 @@ impl StorageClient {
             deleted_count
         );
         Ok(())
+    }
+
+    pub async fn upload_cover_image_file(
+        &self,
+        file_bytes: Vec<u8>,
+        file_name: &str,
+        content_type: &str,
+    ) -> Result<String> {
+        let body = ByteStream::from(file_bytes);
+
+        self.client
+            .put_object()
+            .bucket(&self.bucket_name)
+            .key(file_name)
+            .body(body)
+            .content_type(content_type)
+            .send()
+            .await
+            .map_err(|e| anyhow!("Failed to upload file: {:?}", e))?;
+
+        let public_url = format!("{}/cover/{}", self.public_cdn_url, file_name);
+
+        Ok(public_url)
     }
 }

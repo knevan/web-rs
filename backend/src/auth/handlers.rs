@@ -16,64 +16,8 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-// Struct for payloads
-#[derive(Deserialize)]
-pub struct LoginRequest {
-    identifier: String,
-    password: String,
-}
-
-#[derive(Deserialize)]
-pub struct RegisterPayload {
-    username: String,
-    email: String,
-    password: String,
-}
-
-#[derive(Deserialize)]
-pub struct CheckUsernamePayload {
-    username: String,
-}
-
-#[derive(Deserialize)]
-pub struct ForgotPasswordRequest {
-    pub email: String,
-}
-
-#[derive(Deserialize)]
-pub struct ResetPasswordRequest {
-    pub token: String,
-    pub new_password: String,
-}
-
-// Struct for Responses
-#[derive(Serialize)]
-pub struct UserData {
-    username: String,
-    role: String,
-}
-
-#[derive(Serialize)]
-pub struct LoginResponse {
-    message: String,
-    user: UserData,
-}
-
-#[derive(Serialize)]
-pub struct ProtectedResponse {
-    message: String,
-    user_id: String,
-    session_expires_at: i64,
-}
-
 #[derive(Serialize)]
 pub struct GenericMessageResponse {
-    message: String,
-}
-
-#[derive(Serialize)]
-pub struct CheckUsernameResponse {
-    available: bool,
     message: String,
 }
 
@@ -95,159 +39,41 @@ async fn get_role_name(
         })
 }
 
-// Accepts a `CookieJar` and return modified `CookieJar`
-// with the token set as a cookie
-pub async fn login_handler(
-    jar: CookieJar,
-    State(state): State<AppState>,
-    Json(payload): Json<LoginRequest>,
-) -> Result<(CookieJar, Json<LoginResponse>), AuthError> {
-    let db_service = &state.db_service;
+#[derive(Deserialize)]
+pub struct RegisterPayload {
+    username: String,
+    email: String,
+    password: String,
+}
 
-    // Simple validation
-    if payload.identifier.is_empty() || payload.password.is_empty() {
-        return Err(AuthError::MissingCredentials);
+impl RegisterPayload {
+    fn validate_input(&self) -> Result<(), AuthError> {
+        if self.username.trim().len() < 4 {
+            return Err(AuthError::InvalidCharacter(
+                "Username should be at least 4 characters long.".to_string(),
+            ));
+        }
+        if self.email.is_empty() || self.password.is_empty() {
+            return Err(AuthError::MissingCredentials);
+        }
+
+        Ok(())
     }
-
-    // Find user identifier
-    let user = db_service
-        .get_user_by_identifier(&payload.identifier)
-        .await
-        .map_err(|e| {
-            eprintln!("Database error on user lookup: {}", e);
-            AuthError::WrongCredentials
-        })?
-        .ok_or(AuthError::WrongCredentials)?;
-
-    // Verify
-    let is_valid_password =
-        verify_password(&payload.password, &user.password_hash).map_err(
-            |e| {
-                eprintln!("Password verification error: {}", e);
-                AuthError::WrongCredentials
-            },
-        )?;
-
-    if !is_valid_password {
-        return Err(AuthError::WrongCredentials);
-    }
-
-    let role_name = get_role_name(db_service, user.role_id).await?;
-
-    // Generate access token and refresh token
-    let access_token =
-        create_access_jwt(user.username.clone(), role_name.clone())?;
-    let refresh_token = create_refresh_jwt(user.username.clone())?;
-
-    // Set cookie for access tokens
-    let access_cookie = Cookie::build(("token", access_token))
-        .path("/")
-        .http_only(true)
-        .secure(false) // Only send via HTTPS (disable for local development)
-        .same_site(SameSite::Lax)
-        .max_age(time::Duration::seconds(15 * 60))
-        .build();
-
-    // Set cookie for refresh tokens
-    let refresh_cookie = Cookie::build(("refresh-token", refresh_token))
-        .path("/")
-        .http_only(true)
-        .secure(false) // Only send via HTTPS (disable for local development)
-        .same_site(SameSite::Lax)
-        .max_age(time::Duration::days(7))
-        .build();
-
-    // Add both cookie to the jar
-    let new_jar = jar.add(access_cookie).add(refresh_cookie);
-
-    let response = LoginResponse {
-        message: "Login Successfull".to_string(),
-        user: UserData {
-            username: user.username,
-            role: role_name,
-        },
-    };
-
-    Ok((new_jar, Json(response)))
 }
 
-pub async fn refresh_token_handler(
-    jar: CookieJar,
-    State(state): State<AppState>,
-    claims: RefreshClaims,
-) -> Result<(CookieJar, Json<GenericMessageResponse>), AuthError> {
-    let user = state
-        .db_service
-        .get_user_by_identifier(&claims.sub)
-        .await
-        .map_err(|_| AuthError::InvalidToken)?
-        .ok_or(AuthError::InvalidToken)?;
-
-    let role_name = get_role_name(&state.db_service, user.role_id).await?;
-
-    let new_access_token =
-        create_access_jwt(claims.sub.clone(), role_name.clone())?;
-
-    /*let new_access_token = create_access_jwt(claims.sub)?;*/
-
-    let new_access_cookie = Cookie::build(("token", new_access_token))
-        .path("/")
-        .http_only(true)
-        .secure(false) // Only send via HTTPS (disable for local development)
-        .same_site(SameSite::Lax)
-        .max_age(time::Duration::minutes(15))
-        .build();
-
-    let new_jar = jar.add(new_access_cookie);
-    let response_body = GenericMessageResponse {
-        message: "Token refreshed successfully".to_string(),
-    };
-
-    Ok((new_jar, Json(response_body)))
+#[derive(Deserialize)]
+pub struct CheckUsernamePayload {
+    username: String,
 }
 
-pub async fn logout_handler(
-    jar: CookieJar,
-) -> Result<(CookieJar, Json<GenericMessageResponse>), AuthError> {
-    // Clear all cookies
-    let access_removal_cookie = Cookie::build("token")
-        .path("/")
-        .max_age(time::Duration::ZERO)
-        .build();
-
-    // Clear refresh token cookie
-    let refresh_removal_cookie = Cookie::build("refresh_token")
-        .path("/")
-        .max_age(time::Duration::ZERO)
-        .build();
-
-    let new_jar = jar.add(access_removal_cookie).add(refresh_removal_cookie);
-    let response_body = GenericMessageResponse {
-        message: "Logged out successfully".to_string(),
-    };
-
-    Ok((new_jar, Json(response_body)))
+#[derive(Serialize)]
+pub struct CheckUsernameResponse {
+    available: bool,
+    message: String,
 }
 
-/// Protected handler. `Claims` acts as a guard.
-pub async fn protected_handler(claims: Claims) -> Json<ProtectedResponse> {
-    println!(
-        "[API] Request received at /api/auth/user for user: {}",
-        claims.sub
-    );
-
-    // This handler will only be called if `claims` is extracted successfully (valid token)
-    let response = ProtectedResponse {
-        message: "Welcome to protected area".to_string(),
-        user_id: claims.sub,
-        session_expires_at: claims.exp as i64,
-    };
-    Json(response)
-}
-
-/// Handler for registering new users
 /// it checks for uniqueness and create new user in the database
-pub async fn register_user_handler(
+pub async fn register_new_user_handler(
     State(state): State<AppState>,
     Json(payload): Json<RegisterPayload>,
 ) -> Result<(StatusCode, Json<GenericMessageResponse>), AuthError> {
@@ -315,8 +141,7 @@ pub async fn register_user_handler(
     Ok((StatusCode::CREATED, Json(response)))
 }
 
-// Handler for real-time checking username availability
-pub async fn check_username_handler(
+pub async fn realtime_check_username_handler(
     State(state): State<AppState>,
     Json(payload): Json<CheckUsernamePayload>,
 ) -> (StatusCode, Json<CheckUsernameResponse>) {
@@ -365,26 +190,226 @@ pub async fn check_username_handler(
     }
 }
 
+// Struct for payloads
+#[derive(Deserialize)]
+pub struct LoginRequest {
+    identifier: String,
+    password: String,
+}
+
+impl LoginRequest {
+    fn validate_input(&self) -> Result<(), AuthError> {
+        if self.identifier.is_empty() || self.password.is_empty() {
+            return Err(AuthError::MissingCredentials);
+        }
+
+        Ok(())
+    }
+}
+
+// Struct for Responses
+#[derive(Serialize)]
+pub struct UserData {
+    username: String,
+    role: String,
+}
+
+#[derive(Serialize)]
+pub struct LoginResponse {
+    message: String,
+    user: UserData,
+}
+
+// Accepts a `CookieJar` and return modified `CookieJar`
+// with the token set as a cookie
+pub async fn login_handler(
+    jar: CookieJar,
+    State(state): State<AppState>,
+    Json(payload): Json<LoginRequest>,
+) -> Result<(CookieJar, Json<LoginResponse>), AuthError> {
+    payload.validate_input()?;
+
+    let db_service = &state.db_service;
+
+    let user = db_service
+        .get_user_by_identifier(&payload.identifier)
+        .await
+        .map_err(|e| {
+            eprintln!("Database error on user lookup: {}", e);
+            AuthError::WrongCredentials
+        })?
+        .ok_or(AuthError::WrongCredentials)?;
+
+    verify_password(&payload.password, &user.password_hash)
+        .map_err(|_| AuthError::WrongCredentials)?;
+
+    let role_name = get_role_name(db_service, user.role_id).await?;
+
+    let access_token =
+        create_access_jwt(user.username.clone(), role_name.clone())?;
+    let refresh_token = create_refresh_jwt(user.username.clone())?;
+
+    // Set cookie
+    let access_cookie = Cookie::build(("token", access_token))
+        .path("/")
+        .http_only(true)
+        .secure(false) // Only send via HTTPS (disable for local development)
+        .same_site(SameSite::Lax)
+        .max_age(time::Duration::seconds(15 * 60))
+        .build();
+
+    // Set cookie
+    let refresh_cookie = Cookie::build(("refresh-token", refresh_token))
+        .path("/")
+        .http_only(true)
+        .secure(false) // Only send via HTTPS (disable for local development)
+        .same_site(SameSite::Lax)
+        .max_age(time::Duration::days(7))
+        .build();
+
+    // Add both to the jar
+    let new_jar = jar.add(access_cookie).add(refresh_cookie);
+
+    let response = LoginResponse {
+        message: "Login Successfull".to_string(),
+        user: UserData {
+            username: user.username,
+            role: role_name,
+        },
+    };
+
+    Ok((new_jar, Json(response)))
+}
+
+pub async fn refresh_token_handler(
+    jar: CookieJar,
+    State(state): State<AppState>,
+    claims: RefreshClaims,
+) -> Result<(CookieJar, Json<GenericMessageResponse>), AuthError> {
+    let user = state
+        .db_service
+        .get_user_by_identifier(&claims.sub)
+        .await
+        .map_err(|_| AuthError::InvalidToken)?
+        .ok_or(AuthError::InvalidToken)?;
+
+    let role_name = get_role_name(&state.db_service, user.role_id).await?;
+
+    let new_access_token =
+        create_access_jwt(claims.sub.clone(), role_name.clone())?;
+
+    /*let new_access_token = create_access_jwt(claims.sub)?;*/
+
+    let new_access_cookie = Cookie::build(("token", new_access_token))
+        .path("/")
+        .http_only(true)
+        .secure(false) // Only send via HTTPS (disable for local development)
+        .same_site(SameSite::Lax)
+        .max_age(time::Duration::minutes(15))
+        .build();
+
+    let new_jar = jar.add(new_access_cookie);
+    let response_body = GenericMessageResponse {
+        message: "Token refreshed successfully".to_string(),
+    };
+
+    Ok((new_jar, Json(response_body)))
+}
+
+pub async fn logout_handler(
+    jar: CookieJar,
+) -> Result<(CookieJar, Json<GenericMessageResponse>), AuthError> {
+    fn create_expired_cookie(name: &'static str) -> Cookie<'static> {
+        Cookie::build(name)
+            .path("/")
+            .max_age(time::Duration::ZERO)
+            .http_only(true)
+            .secure(false) // Only send via HTTPS (disable for local development)
+            .same_site(SameSite::Lax)
+            .build()
+    }
+
+    let clear_access_token_cookie = create_expired_cookie("token");
+    let clear_refresh_token_cookie = create_expired_cookie("refresh-token");
+
+    let new_jar = jar
+        .add(clear_access_token_cookie)
+        .add(clear_refresh_token_cookie);
+
+    let response_body = GenericMessageResponse {
+        message: "Logged out successfully".to_string(),
+    };
+
+    Ok((new_jar, Json(response_body)))
+}
+
+#[derive(Serialize)]
+pub struct ProtectedResponse {
+    message: String,
+    user_id: String,
+    session_expires_at: i64,
+}
+
+/// Protected handler. `Claims` acts as a guard.
+pub async fn protected_handler(claims: Claims) -> Json<ProtectedResponse> {
+    println!(
+        "[API] Request received at /api/auth/user for user: {}",
+        claims.sub
+    );
+
+    // This handler will only be called if `claims` is extracted successfully (valid token)
+    let response = ProtectedResponse {
+        message: "Welcome to protected area".to_string(),
+        user_id: claims.sub,
+        session_expires_at: claims.exp as i64,
+    };
+    Json(response)
+}
+
+#[derive(Deserialize)]
+pub struct ForgotPasswordRequest {
+    pub email: String,
+}
+
+#[derive(Deserialize)]
+pub struct ResetPasswordRequest {
+    pub token: String,
+    pub new_password: String,
+}
+
+impl ResetPasswordRequest {
+    fn validate_input(&self) -> Result<(), AuthError> {
+        if self.token.is_empty() || self.new_password.is_empty() {
+            return Err(AuthError::MissingCredentials);
+        }
+
+        Ok(())
+    }
+}
+
 // Handler for the password reset request
 // Finds a user by email, generates a token, and in a real app, sends an email.
 pub async fn forgot_password_handler(
     State(state): State<AppState>,
     Json(payload): Json<ForgotPasswordRequest>,
 ) -> Result<Json<GenericMessageResponse>, AuthError> {
-    let db_service = &state.db_service;
-
     // Find user by email
-    if let Ok(Some(user)) =
-        db_service.get_user_by_identifier(&payload.email).await
+    if let Ok(Some(user)) = state
+        .db_service
+        .get_user_by_identifier(&payload.email)
+        .await
     {
-        // Generate unique password reset token
-        let token = Uuid::new_v4().to_string();
-        // Token valid for 1 hour
+        let unique_reset_token = Uuid::new_v4().to_string();
         let expired_at = Utc::now() + Duration::hours(1);
 
         // Store reset token in the database
-        db_service
-            .create_password_reset_token(user.id, &token, expired_at)
+        state
+            .db_service
+            .create_password_reset_token(
+                user.id,
+                &unique_reset_token,
+                expired_at,
+            )
             .await
             .map_err(|_| AuthError::InternalServerError)?;
 
@@ -393,12 +418,12 @@ pub async fn forgot_password_handler(
             &state.mailer,
             &user.email,
             &user.username,
-            &token,
+            &unique_reset_token,
         )
         .await
         {
             // Error log if sending email fails
-            eprintln!(
+            error!(
                 "[AUTH HANDLER] Failed to send password reset email: {:?}",
                 e
             );
@@ -418,33 +443,25 @@ pub async fn reset_password_handler(
     State(state): State<AppState>,
     Json(payload): Json<ResetPasswordRequest>,
 ) -> Result<Json<GenericMessageResponse>, AuthError> {
+    payload.validate_input()?;
+
     let db_service = &state.db_service;
 
-    // Validate input: ensure token and password not empty
-    if payload.token.is_empty() || payload.new_password.is_empty() {
-        return Err(AuthError::MissingCredentials);
-    }
-
-    // Find user and token details from database
     let (user_id, expires_at) = db_service
         .get_user_by_reset_token(&payload.token)
         .await?
         .ok_or(AuthError::InvalidCredentials)?;
 
-    // Check if token is expired
     if Utc::now() > expires_at {
-        // Clean up expired tokens
         db_service
             .delete_password_reset_token(&payload.token)
             .await?;
         return Err(AuthError::MissingCredentials);
     }
 
-    // Hash the new password before storing it in the database
     let hashed_password = hash_password(&payload.new_password)
         .map_err(|_| AuthError::InvalidCredentials)?;
 
-    // Update user's password in the database
     db_service
         .update_user_password_hash_after_reset_password(
             user_id,
@@ -453,7 +470,6 @@ pub async fn reset_password_handler(
         .await
         .map_err(|_| AuthError::InternalServerError)?;
 
-    // Invalidate token by deleting it after successful use
     db_service
         .delete_password_reset_token(&payload.token)
         .await?;

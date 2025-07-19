@@ -9,6 +9,7 @@ pub enum AuthError {
     InvalidCredentials,
     TokenCreation,
     InvalidRefreshToken,
+    InvalidCharacter(String),
     UserAlreadyExists { field: String },
     InternalServerError,
 }
@@ -35,6 +36,9 @@ impl IntoResponse for AuthError {
             AuthError::InvalidRefreshToken => {
                 (StatusCode::UNAUTHORIZED, "Invalid refresh token")
             }
+            AuthError::InternalServerError => {
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
+            }
             AuthError::UserAlreadyExists { field } => {
                 return (
                     StatusCode::CONFLICT,
@@ -42,8 +46,12 @@ impl IntoResponse for AuthError {
                     )
                     .into_response();
             }
-            AuthError::InternalServerError => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
+            AuthError::InvalidCharacter(message) => {
+                return (
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    Json(serde_json::json!({"message": message})),
+                )
+                    .into_response();
             }
         };
 

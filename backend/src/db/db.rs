@@ -1,6 +1,6 @@
 use anyhow::{Context, Result as AnyhowResult, anyhow};
 use chrono::{DateTime, Utc};
-use rand::Rng;
+use rand::prelude::*;
 use sqlx::{FromRow, PgPool};
 use url::Url;
 
@@ -13,6 +13,7 @@ pub type DbPool = PgPool;
 pub struct MangaSeries {
     pub id: i32,
     pub title: String,
+    pub original_title: String,
     pub description: String,
     pub cover_image_url: String,
     pub current_source_url: String,
@@ -47,6 +48,28 @@ pub struct Users {
     pub email: String,
     pub password_hash: String,
     pub role_id: i32,
+}
+
+#[derive(Debug)]
+pub struct NewMangaSeriesData<'a> {
+    pub title: &'a str,
+    pub original_title: Option<&'a str>,
+    pub authors: Option<&'a Vec<String>>,
+    pub description: &'a str,
+    pub cover_image_url: &'a str,
+    pub source_url: &'a str,
+    pub check_interval_minutes: i32,
+}
+
+#[derive(Debug, Default)]
+pub struct UpdateMangaSeriesData<'a> {
+    pub title: Option<&'a str>,
+    pub original_title: Option<&'a str>,
+    pub authors: Option<&'a Vec<String>>,
+    pub description: Option<&'a str>,
+    pub cover_image_url: Option<&'a str>,
+    pub source_url: Option<&'a str>,
+    pub check_interval_minutes: Option<i32>,
 }
 
 // A helper function to extract a hostname from an optional URL string.
@@ -92,64 +115,148 @@ impl DatabaseService {
         DatabaseService { pool }
     }
 
-    /// The `next_checked_at` is initially set to the current time to allow immediate processing.
     pub async fn add_new_manga_series(
         &self,
-        title: &str,
-        description: Option<&str>,
-        cover_image_url: Option<&str>,
-        source_url: Option<&str>,
-        interval_minutes: i32,
+        data: &NewMangaSeriesData<'_>,
     ) -> AnyhowResult<i32> {
-        let host = get_host_from_url(source_url);
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to begin transaction")?;
 
-        let new_id = sqlx::query_scalar!(
-            "INSERT INTO manga_series (title, description, cover_image_url, current_source_url, source_website_host, check_interval_minutes)
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
-            title,
-            description,
-            cover_image_url,
-            source_url,
+        let host = get_host_from_url(Some(data.source_url));
+
+        let new_manga_id = sqlx::query_scalar!(
+            r#"INSERT INTO manga_series
+            (title, original_title, description, cover_image_url, current_source_url, source_website_host, check_interval_minutes)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id"#,
+            data.title,
+            data.original_title,
+            data.description,
+            data.cover_image_url,
+            data.source_url,
             host,
-            interval_minutes,
-        ).fetch_one(&self.pool).await.context("Failed to add manga series with sqlx")?;
+            data.check_interval_minutes,
+        )
+            .fetch_one(&mut *tx)
+            .await
+            .context("Failed to add manga series with sqlx")?;
 
-        Ok(new_id)
+        if let Some(author_names) = data.authors {
+            for name in author_names {
+                let author_id = sqlx::query_scalar!(
+                    r#"
+                    WITH ins AS(
+                        INSERT INTO authors (name)
+                        VALUES ($1)
+                        ON CONFLICT (name) DO NOTHING
+                        RETURNING id
+                    )
+                    SELECT id FROM ins
+                    UNION ALL
+                    SELECT id FROM authors WHERE name = $1
+                    LIMIT 1
+                    "#,
+                    name
+                )
+                .fetch_one(&mut *tx)
+                .await
+                .context("Failed to find or create author with sqlx")?;
+
+                sqlx::query!(
+                    "INSERT INTO manga_authors (manga_id, author_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                    new_manga_id,
+                    author_id
+                ).execute(&mut *tx).await.context(format!("Failed to link author {} to manga", name))?;
+            }
+        }
+        tx.commit().await.context("Failed to commit transaction")?;
+
+        Ok(new_manga_id)
     }
 
     pub async fn update_manga_series_metadata(
         &self,
         series_id: i32,
-        title: &str,
-        description: Option<&str>,
-        cover_image_url: Option<&str>,
-        source_url: Option<&str>,
-        interval_minutes: i32,
+        data: &UpdateMangaSeriesData<'_>,
     ) -> AnyhowResult<u64> {
-        let host = get_host_from_url(source_url);
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to begin transaction")?;
+
+        let host = get_host_from_url(data.source_url);
 
         let result = sqlx::query!(
             "UPDATE manga_series
             SET
                 title = COALESCE($1, title),
-                description = COALESCE($2, description),
-                cover_image_url = COALESCE($3, cover_image_url),
-                current_source_url = COALESCE($4, current_source_url),
-                source_website_host = COALESCE($5, source_website_host),
-                check_interval_minutes = COALESCE($6, check_interval_minutes),
+                original_title = COALESCE($2, original_title),
+                description = COALESCE($3, description),
+                cover_image_url = COALESCE($4, cover_image_url),
+                current_source_url = COALESCE($5, current_source_url),
+                source_website_host = COALESCE($6, source_website_host),
+                check_interval_minutes = COALESCE($7, check_interval_minutes),
             updated_at = NOW()
-            WHERE id = $7",
-            title,
-            description,
-            cover_image_url,
-            source_url,
+            WHERE id = $8",
+            data.title,
+            data.original_title,
+            data.description,
+            data.cover_image_url,
+            data.source_url,
             host,
-            interval_minutes,
+            data.check_interval_minutes,
             series_id
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .context("Failed to update manga series with sqlx")?;
+
+        if let Some(author_names) = data.authors {
+            sqlx::query!(
+                "DELETE FROM manga_authors WHERE manga_id = $1",
+                series_id
+            )
+            .execute(&mut *tx)
+            .await
+            .context("Failed to delete existing authors for manga")?;
+
+            for name in author_names {
+                let author_id = sqlx::query_scalar!(
+                    r#"
+                    WITH ins AS (
+                        INSERT INTO authors (name) VALUES ($1)
+                        ON CONFLICT (name) DO NOTHING
+                        RETURNING id
+                    )
+                    SELECT id FROM ins
+                    UNION ALL
+                    SELECT id FROM authors WHERE name = $1
+                    LIMIT 1
+                    "#,
+                    name
+                )
+                .fetch_one(&mut *tx)
+                .await
+                .context(format!(
+                    "Failed to find or create author: {}",
+                    name
+                ))?;
+
+                sqlx::query!(
+                    "INSERT INTO manga_authors (manga_id, author_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                    series_id,
+                    author_id
+                )
+                .execute(&mut *tx)
+                   .await
+                   .context(format!("Failed to link author {} to manga", name))?;
+            }
+        }
+        tx.commit().await.context("Failed to commit transaction")?;
 
         Ok(result.rows_affected())
     }
@@ -202,11 +309,10 @@ impl DatabaseService {
     ) -> AnyhowResult<Option<MangaSeries>> {
         let series = sqlx::query_as!(
             MangaSeries,
-            "SELECT id, title, description, cover_image_url, current_source_url, 
-            source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage,
-            processing_status, check_interval_minutes, last_checked_at, next_checked_at,
-            created_at, updated_at
-            FROM manga_series WHERE id = $1",
+            "SELECT id, title, original_title, description, cover_image_url, current_source_url,
+       source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage, processing_status,
+       check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at
+       FROM manga_series WHERE id = $1",
             id
         )
         .fetch_optional(&self.pool)
@@ -221,7 +327,7 @@ impl DatabaseService {
     ) -> AnyhowResult<Option<MangaSeries>> {
         let series = sqlx::query_as!(
             MangaSeries,
-            "SELECT id, title, description, cover_image_url, current_source_url, 
+            "SELECT id, title, original_title, description, cover_image_url, current_source_url,
             source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage, processing_status,
             check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at
             FROM manga_series WHERE title = $1",

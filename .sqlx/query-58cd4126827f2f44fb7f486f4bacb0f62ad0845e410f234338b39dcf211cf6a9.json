@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, title, description, cover_image_url, current_source_url, \n            source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage,\n            processing_status, check_interval_minutes, last_checked_at, next_checked_at,\n            created_at, updated_at\n            FROM manga_series WHERE id = $1",
+  "query": "SELECT id, title, original_title, description, cover_image_url, current_source_url,\n       source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage, processing_status,\n       check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at\n       FROM manga_series WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -15,66 +15,71 @@
       },
       {
         "ordinal": 2,
-        "name": "description",
+        "name": "original_title",
         "type_info": "Text"
       },
       {
         "ordinal": 3,
-        "name": "cover_image_url",
+        "name": "description",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "current_source_url",
+        "name": "cover_image_url",
         "type_info": "Text"
       },
       {
         "ordinal": 5,
-        "name": "source_website_host",
+        "name": "current_source_url",
         "type_info": "Text"
       },
       {
         "ordinal": 6,
+        "name": "source_website_host",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
         "name": "views_count",
         "type_info": "Int4"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "bookmarks_count",
         "type_info": "Int4"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "last_chapter_found_in_storage",
         "type_info": "Float4"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "processing_status",
         "type_info": "Text"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "check_interval_minutes",
         "type_info": "Int4"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "last_checked_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "next_checked_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 14,
+        "ordinal": 15,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -93,6 +98,7 @@
       false,
       false,
       false,
+      false,
       true,
       false,
       false,
@@ -102,5 +108,5 @@
       false
     ]
   },
-  "hash": "8e462719c48cce158817af30bf4a97ac6f5a1d879847f82e4b59cfffd2e67d16"
+  "hash": "58cd4126827f2f44fb7f486f4bacb0f62ad0845e410f234338b39dcf211cf6a9"
 }
