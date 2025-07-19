@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO manga_series (title, description, cover_image_url, current_source_url, source_website_host, check_interval_minutes)\n             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+  "query": "INSERT INTO manga_series\n            (title, original_title, description, cover_image_url, current_source_url, source_website_host, check_interval_minutes)\n            VALUES ($1, $2, $3, $4, $5, $6, $7)\n            RETURNING id",
   "describe": {
     "columns": [
       {
@@ -16,6 +16,7 @@
         "Text",
         "Text",
         "Text",
+        "Text",
         "Int4"
       ]
     },
@@ -23,5 +24,5 @@
       false
     ]
   },
-  "hash": "ab930569fdd0101cf606d9facf872f18ec2af088232785bfc63331b46b5e6690"
+  "hash": "385e97166d6cfe4693d2f601dd869c4e013b5e91bdde428ecc22a0f653a900e6"
 }
