@@ -13,11 +13,11 @@
     let sourceUrl = $state('');
     // let host = $state('');
     let coverImageFile = $state<File | null>(null);
-
     let fileInput = $state<HTMLInputElement | null>(null);
-    let coverPreviewUrl = $derived(coverImageFile ? URL.createObjectURL(coverImageFile) : null);
     let isSubmitting = $state(false);
     let isDragging = $state(false);
+
+    let coverPreviewUrl = $derived(coverImageFile ? URL.createObjectURL(coverImageFile) : null);
 
     function handleFileChange(event: Event) {
         const target = event.target as HTMLInputElement;
@@ -54,7 +54,8 @@
     }
 
     function addAuthor() {
-        authors.push({id: Date.now(), name: ''});
+        authors = [...authors, {id: Date.now(), name: ''}];
+        // authors.push({id: Date.now(), name: ''});
     }
 
     function removeAuthor(id: number) {
@@ -74,7 +75,7 @@
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch('/api/admin/upload-cover-image', {
+        const response = await fetch('/api/admin/upload/image', {
             method: 'POST',
             body: formData,
         });
@@ -103,14 +104,14 @@
 
             const payload = {
                 title,
-                originalTitle: originalTitle || null,
+                original_title: originalTitle || null,
                 authors: authors.map(a => a.name).filter(name => name.trim() !== ''),
                 description,
-                coverImageUrl: uploadedCoverUrl,
-                sourceUrl: sourceUrl,
+                cover_image_url: uploadedCoverUrl,
+                source_url: sourceUrl,
             };
 
-            const response = await fetch('/api/admin/series', {
+            const response = await fetch('/api/admin/series/add', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -156,12 +157,12 @@
                     <!-- Left Column Data -->
                     <div class="md:col-span-2 flex flex-col gap-4">
                         <div class="grid w-full items-center gap-1.5">
-                            <Label for="seriesName">Series Name <span
+                            <Label for="seriesName">Series Title <span
                                     class="text-red-500">*</span> </Label>
                             <Input id="seriesName" bind:value={title}/>
                         </div>
                         <div class="grid w-full items-center gap-1.5">
-                            <Label for="originalName">Original Name</Label>
+                            <Label for="originalName">Original Title</Label>
                             <Input id="originalName" bind:value={originalTitle}
                                    placeholder="Optional"/>
                         </div>
@@ -196,11 +197,6 @@
                                       placeholder="Series Description"></textarea>
                         </div>
                         <div class="grid w-full items-center gap-1.5">
-                            <Label for="host">Host <span class="text-red-500">*</span>
-                            </Label>
-                            <Input id="host"/>
-                        </div>
-                        <div class="grid w-full items-center gap-1.5">
                             <Label for="sourceUrl">Source Url <span
                                     class="text-red-500">*</span> </Label>
                             <Input id="sourceUrl" type="url" bind:value={sourceUrl}/>
@@ -209,7 +205,6 @@
 
                     <div class="md:col-span-1 flex flex-col gap-1.5">
                         <Label>Cover Image <span class="text-red-500">*</span> </Label>
-
                         <div class="aspect-[3/4] w-full" ondragover={handleDragOver}
                              ondrop={handleDrop} ondragleave={handleDragLeave}
                              role="button" tabindex="0">
