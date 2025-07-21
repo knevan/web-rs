@@ -12,7 +12,7 @@ use crate::builder::startup::AppState;
 pub fn routes() -> Router<AppState> {
     // Router for admin-dashboard, protected inside handler
     let admin_api_routes =
-        Router::<AppState>::new().nest("/admin-dashboard", admin_routes());
+        Router::<AppState>::new().nest("/admin", admin_routes());
 
     // Router for public auth
     let auth_api_routes = Router::new()
@@ -29,5 +29,5 @@ pub fn routes() -> Router<AppState> {
     // The structure is flat, avoiding double nesting.
     Router::new()
         .nest("/api/auth", auth_api_routes)
-        .nest("/api/admin-dashboard", admin_api_routes)
+        .nest("/api", admin_api_routes)
 }
