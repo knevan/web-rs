@@ -8,7 +8,7 @@ rust-version = "1.88.0"
 
 [dependencies]
 anyhow = "1.0.98"
-axum = { version = "0.8.4" }
+axum = { version = "0.8.4", features = ["macros"] }
 chrono = "0.4.41"
 image = "0.25.6"
 jsonwebtoken = "9.3.1"
@@ -21,7 +21,7 @@ serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "~1.45.1", features = ["full"] }
 toml = "0.8.23"
 url = "2.5.4"
-axum-extra = { version = "0.10.1", features = ["typed-header", "erased-json", "cookie"] }
+axum-extra = { version = "0.10.1", features = ["typed-header", "erased-json", "cookie", "multipart"] }
 axum-core = "0.5.2"
 serde_json = "1.0.140"
 time = "0.3.41"

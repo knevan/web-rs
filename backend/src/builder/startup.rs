@@ -1,5 +1,6 @@
 use crate::auth;
 use crate::db::db::DatabaseService;
+use crate::db::storage::StorageClient;
 use axum::http::{HeaderValue, Method, header};
 use axum::{Router, serve};
 use lettre::AsyncSmtpTransport;
@@ -17,20 +18,24 @@ pub struct AppState {
     pub db_service: DatabaseService,
     pub mailer: Mailer,
     pub http_client: Client,
+    pub storage_client: StorageClient,
 }
 
-// Function to setup builder and server
+// Function to set up builder and server
 pub async fn run(
     listener: TcpListener,
     db_pool: sqlx::PgPool,
     mailer: Mailer,
     http_client: Client,
 ) -> anyhow::Result<()> {
+    let storage_client = StorageClient::new_from_env().await?;
+
     // Create AppState
     let app_state = AppState {
         db_service: DatabaseService::new(db_pool),
         mailer,
         http_client,
+        storage_client,
     };
 
     // CORS Configuration

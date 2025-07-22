@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    WITH ins AS (\n                        INSERT INTO authors (name) VALUES ($1)\n                        ON CONFLICT (name) DO NOTHING\n                        RETURNING id\n                    )\n                    SELECT id FROM ins\n                    UNION ALL\n                    SELECT id FROM authors WHERE name = $1\n                    LIMIT 1\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9fc420d33660fba6d8f17a52588dbda0d676595455b73633405cb6c719f6fd5c"
+}
