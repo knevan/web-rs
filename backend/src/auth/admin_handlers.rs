@@ -2,7 +2,7 @@ use crate::builder::startup::AppState;
 use crate::common::jwt::Claims;
 use crate::db::db::{NewMangaSeriesData, UpdateMangaSeriesData};
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum_core::response::{IntoResponse, Response};
 use axum_extra::extract::Multipart;
@@ -182,4 +182,84 @@ pub async fn upload_series_cover_image_handler(
         StatusCode::BAD_REQUEST,
         Json(serde_json::json!({"status": "error", "message": "No cover image file found"}))
     ).into_response()
+}
+
+#[derive(Deserialize)]
+pub struct PaginationParams {
+    #[serde(default = "default_page")]
+    page: u32,
+    #[serde(default = "default_page_size")]
+    page_size: u32,
+}
+
+fn default_page() -> u32 {
+    1
+}
+fn default_page_size() -> u32 {
+    25
+}
+#[derive(Serialize)]
+pub struct SeriesResponse {
+    id: i32,
+    title: String,
+    original_title: String,
+    description: String,
+    cover_image_url: String,
+    source_url: String,
+    authors: Vec<String>,
+    last_updated: String,
+}
+
+#[derive(Serialize)]
+pub struct PaginatedSeriesResponse {
+    items: Vec<SeriesResponse>,
+    total_items: i64,
+}
+
+pub async fn get_all_manga_series_handler(
+    claims: Claims,
+    State(state): State<AppState>,
+    Query(pagination): Query<PaginationParams>,
+) -> Response {
+    println!(
+        "->> {:<12} - get_all_manga_series_handler - user: {}",
+        "HANDLER", claims.sub
+    );
+
+    match state
+        .db_service
+        .get_paginated_series_with_authors(pagination.page, pagination.page_size)
+        .await
+    {
+        Ok(paginated_result) => {
+            let response_series_items: Vec<SeriesResponse> = paginated_result
+                .items
+                .into_iter()
+                .map(|s| SeriesResponse {
+                    id: s.id,
+                    title: s.title,
+                    original_title: s.original_title,
+                    description: s.description,
+                    cover_image_url: s.cover_image_url,
+                    source_url: s.current_source_url,
+                    authors: serde_json::from_value(s.authors).unwrap_or_else(|_| vec![]),
+                    last_updated: s.updated_at.format("%Y-%m-%d %H:%M:%S").to_string(),
+                })
+                .collect();
+
+            let response_series_data = PaginatedSeriesResponse {
+                items: response_series_items,
+                total_items: paginated_result.total_items,
+            };
+
+            (StatusCode::OK, Json(response_series_data)).into_response()
+        }
+        Err(e) => {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
 }

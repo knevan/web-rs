@@ -72,6 +72,19 @@ pub struct UpdateMangaSeriesData<'a> {
     pub check_interval_minutes: Option<i32>,
 }
 
+#[derive(Debug, FromRow)]
+pub struct SeriesWithAuthors {
+    pub id: i32,
+    pub title: String,
+    pub original_title: String,
+    pub description: String,
+    pub cover_image_url: String,
+    pub current_source_url: String,
+    pub updated_at: DateTime<Utc>,
+    #[sqlx(json)]
+    pub authors: serde_json::Value,
+}
+
 // A helper function to extract a hostname from an optional URL string.
 // This is created to avoid code duplication, following the DRY principle.
 fn get_host_from_url(url_option: Option<&str>) -> Option<String> {
@@ -82,10 +95,16 @@ fn get_host_from_url(url_option: Option<&str>) -> Option<String> {
     })
 }
 
-/// Database operations with connection pool
+// Database operations with connection pool
 #[derive(Clone)]
 pub struct DatabaseService {
     pool: DbPool,
+}
+
+#[derive(Debug)]
+pub struct PaginatedResult<T> {
+    pub items: Vec<T>,
+    pub total_items: i64,
 }
 
 /// Macros `sqlx::query!`
@@ -337,6 +356,94 @@ impl DatabaseService {
         .await
         .context("Failed to query series by title")?;
         Ok(series)
+    }
+
+    pub async fn get_paginated_series_with_authors(
+        &self,
+        page: u32,
+        page_size: u32,
+    ) -> AnyhowResult<PaginatedResult<SeriesWithAuthors>> {
+        let page = page.max(1);
+
+        let limit = page_size as i64;
+        let offset = (page as i64 - 1) * limit;
+
+        #[derive(Debug, FromRow)]
+        struct QueryResult {
+            id: i32,
+            title: String,
+            original_title: String,
+            description: String,
+            cover_image_url: String,
+            current_source_url: String,
+            updated_at: DateTime<Utc>,
+            #[sqlx(json)]
+            authors: serde_json::Value,
+            total_items: Option<i64>,
+        }
+
+        let record_list = sqlx::query_as!(
+            QueryResult,
+            r#"
+            SELECT
+                ms.id,
+                ms.title,
+                ms.original_title,
+                ms.description,
+                ms.cover_image_url,
+                ms.current_source_url,
+                ms.updated_at,
+                -- Use a LEFT JOIN to include all authors, even if they are not linked to the series.
+                -- Aggregate author names into a JSON array. If no authors, return an empty array.
+                COALESCE(
+                    json_agg(a.name) FILTER (WHERE a.id IS NOT NULL),
+                    '[]'::json
+                ) as "authors!",
+                -- The '!' asserts the value is not null, matching COALESCE
+                -- Use a window function to get the total count of series without a separate query.
+                COUNT(*) OVER () as total_items
+            FROM
+                manga_series ms
+            LEFT JOIN
+                manga_authors ma ON ms.id = ma.manga_id
+            LEFT JOIN
+                authors a ON ma.author_id = a.id
+            GROUP BY
+                ms.id
+            ORDER BY
+                ms.updated_at DESC
+            LIMIT $1
+            OFFSET $2
+            "#,
+            limit,
+            offset
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to query all series")?;
+
+        let total_items = record_list
+            .first()
+            .map_or(0, |row| row.total_items.unwrap_or(0));
+
+        let series_list = record_list
+            .into_iter()
+            .map(|r| SeriesWithAuthors {
+                id: r.id,
+                title: r.title,
+                original_title: r.original_title,
+                description: r.description,
+                cover_image_url: r.cover_image_url,
+                current_source_url: r.current_source_url,
+                updated_at: r.updated_at,
+                authors: serde_json::from_value(r.authors).unwrap_or_default(),
+            })
+            .collect();
+
+        Ok(PaginatedResult {
+            items: series_list,
+            total_items,
+        })
     }
 
     pub async fn update_series_last_chapter_found_in_storage(
