@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                ms.id,\n                ms.title,\n                ms.original_title,\n                ms.description,\n                ms.cover_image_url,\n                ms.current_source_url,\n                ms.updated_at,\n                -- Use a LEFT JOIN to include all authors, even if they are not linked to the series.\n                -- Aggregate author names into a JSON array. If no authors, return an empty array.\n                COALESCE(\n                    json_agg(a.name) FILTER (WHERE a.id IS NOT NULL),\n                    '[]'::json\n                ) as \"authors!\",\n                -- The '!' asserts the value is not null, matching COALESCE\n                -- Use a window function to get the total count of series without a separate query.\n                COUNT(*) OVER () as total_items\n            FROM\n                manga_series ms\n            LEFT JOIN\n                manga_authors ma ON ms.id = ma.manga_id\n            LEFT JOIN\n                authors a ON ma.author_id = a.id\n            GROUP BY\n                ms.id\n            ORDER BY\n                ms.updated_at DESC\n            LIMIT $1\n            OFFSET $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "original_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "cover_image_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "current_source_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "authors!",
+        "type_info": "Json"
+      },
+      {
+        "ordinal": 8,
+        "name": "total_items",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "62a7260caec90e8169f035fcef858bec9b61b276a17a5d62540cc246358281bd"
+}

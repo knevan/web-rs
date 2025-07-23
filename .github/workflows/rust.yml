@@ -28,8 +28,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2.8.0
       - name: Run linter (clippy action)
-        env:
-          SQLX_OFFLINE: true
+        #env: SQLX_OFFLINE: true
         uses: auguwu/clippy-action@1.4.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
