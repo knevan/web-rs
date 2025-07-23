@@ -4,6 +4,7 @@
     import {Button} from "$lib/components/ui/button";
 
     interface Props {
+        open?: boolean;
         title?: string;
         description?: string;
         confirmText?: string;
@@ -17,10 +18,10 @@
         footer?: Snippet;
         onConfirm?: () => void;
         onCancel?: () => void;
-        onOpenChange?: (open: boolean) => void;
     }
 
-    const {
+    let {
+        open = $bindable(),
         title = "Dialog Title",
         description = "",
         confirmText = "Confirm",
@@ -36,20 +37,15 @@
         },
         onCancel = () => {
         },
-        onOpenChange = (open: boolean) => {
-        }
     }: Props = $props();
 
-    let open = $state(false);
+    // let open = $state(false);
 
     const hasCustomFooter = $derived(!!footer);
 
-    $effect(() => {
-        if (onOpenChange !== (() => {
-        })) {
-            onOpenChange(open);
-        }
-    });
+    if (open === undefined) {
+        open = false;
+    }
 </script>
 
 <Dialog.Root bind:open>
@@ -70,7 +66,9 @@
 
         <Dialog.Footer>
             {#if hasCustomFooter}
-                {@render footer()}
+                {#if footer}
+                    {@render footer()}
+                {/if}
             {:else}
                 {#if showCancelButton}
                     <Dialog.Close>
