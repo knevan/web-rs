@@ -62,6 +62,7 @@ pub async fn create_manga_series_handler(
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateSeriesRequest {
     title: Option<String>,
     original_title: Option<String>,

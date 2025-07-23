@@ -255,7 +255,7 @@ pub async fn login_handler(
         .http_only(true)
         .secure(false) // Only send via HTTPS (disable for local development)
         .same_site(SameSite::Lax)
-        .max_age(time::Duration::seconds(15 * 60))
+        .max_age(time::Duration::seconds(30 * 60))
         .build();
 
     // Set cookie

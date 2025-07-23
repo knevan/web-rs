@@ -18,7 +18,7 @@ pub fn routes() -> Router<AppState> {
     let auth_api_routes = Router::new()
         .route("/login", post(login_handler))
         .route("/register", post(register_new_user_handler))
-        .route("/refresh", get(refresh_token_handler))
+        .route("/refresh", post(refresh_token_handler))
         .route("/logout", post(logout_handler))
         .route("/user", post(protected_handler))
         .route("/check-username", post(realtime_check_username_handler))
