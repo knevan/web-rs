@@ -1,8 +1,10 @@
 <script lang="ts">
     import EditSeries from "$lib/components/EditSeries.svelte";
     import {Button} from "$lib/components/ui/button";
-    import {apiFetch} from "$lib/store/auth";
+    // import {apiFetch} from "$lib/store/auth"; // No longer needed for mocking
+    import Pagination from "$lib/components/Pagination.svelte";
 
+    // Define the type for a series item
     type Series = {
         id: number;
         title: string;
@@ -11,82 +13,96 @@
         description: string;
         coverImageUrl: string;
         sourceUrl: string;
-        // totalChapters: number;
-        // lastChapter: number;
         lastUpdated: string;
     };
 
-    type SeriesApiResponse = {
-        id: number;
-        title: string;
-        original_title: string;
-        description: string;
-        cover_image_url: string;
-        source_url: string;
-        authors: string[];
-        last_updated: string;
+    // --- Mock Data Generation ---
+    // A helper function to create a single mock series item.
+    function createMockSeries(id: number): Series {
+        return {
+            id: id,
+            title: `Manga Title ${id}`,
+            originalTitle: `Original Manga Title ${id}`,
+            authors: [`Author ${id % 5 + 1}`],
+            description: `This is a mock description for manga series number ${id}.`,
+            coverImageUrl: `https://via.placeholder.com/150/0000FF/808080?Text=Manga+${id}`,
+            sourceUrl: `#`,
+            lastUpdated: new Date(Date.now() - id * 1000 * 3600).toISOString(),
+        };
     }
+
+    // Generate a large array of mock data to test pagination thoroughly.
+    const MOCK_DATA: Series[] = Array.from({length: 2500}, (_, i) => createMockSeries(i + 1));
+    // --- End of Mock Data Generation ---
+
 
     let series = $state<Series[] | null>(null);
     let editingSeries = $state<Series | null>(null);
     let isLoading = $state(true);
     let errorMessage = $state<string | null>(null);
     let totalItems = $state(0);
+    let currentPage = $state(1);
+    let pageSize = $state(25); // You can change this to test different page sizes
+    let totalPages = $derived(Math.ceil(totalItems / pageSize));
 
-    // let {series = []}: { series: Series[] } = $props();
-    async function loadSeries() {
+    // This function now loads data from our MOCK_DATA array instead of an API.
+    async function loadSeries(page: number) {
         isLoading = true;
         errorMessage = null;
-        try {
-            const response = await apiFetch("/api/admin/series/list?page=1&page_size=25");
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to fetch series. Status: ${response.status}');
+        // Simulate a network delay to make the loading state visible.
+        setTimeout(() => {
+            try {
+                // Calculate the start and end index for the current page.
+                const start = (page - 1) * pageSize;
+                const end = start + pageSize;
+
+                // Get the slice of data for the current page.
+                const pagedItems = MOCK_DATA.slice(start, end);
+
+                series = pagedItems;
+                totalItems = MOCK_DATA.length; // Set total items to the full length of our mock data.
+
+            } catch (error: any) {
+                console.error("Failed to load mock series", error);
+                errorMessage = error.message;
+            } finally {
+                isLoading = false;
             }
-
-            const data: {
-                items: SeriesApiResponse[],
-                total_items: number
-            } = await response.json();
-
-            series = data.items.map(item => ({
-                id: item.id,
-                title: item.title,
-                originalTitle: item.original_title,
-                authors: item.authors,
-                description: item.description,
-                coverImageUrl: item.cover_image_url,
-                sourceUrl: item.source_url,
-                lastUpdated: item.last_updated,
-            }));
-
-            totalItems = data.total_items;
-
-        } catch (error: any) {
-            console.error("Failed to load series", error);
-            errorMessage = error.message;
-        } finally {
-            isLoading = false;
-        }
+        }, 500); // 500ms delay
     }
-
-    $effect(() => {
-        loadSeries();
-    });
 
     function handleClose() {
         editingSeries = null;
-        // Optionally, you can add logic here to refresh the table data
-        loadSeries();
+        // We still reload the data to simulate a refresh after editing.
+        loadSeries(currentPage);
     }
 
-    const editIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>`;
+    // This $effect hook will run whenever `currentPage` changes,
+    // triggering our new mock `loadSeries` function.
+    $effect(() => {
+        loadSeries(currentPage);
+    });
 
+    const editIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>`;
 </script>
 
 {#if editingSeries}
     <EditSeries series={editingSeries} onclose={handleClose}/>
+{/if}
+
+<div class="overflow-x-auto bg-white rounded-lg shadow">
+    <table class="min-w-full text-sm text-left text-gray-500">
+    </table>
+</div>
+
+{#if totalPages > 1}
+    <div class="flex justify-center mt-4">
+        <Pagination
+                bind:currentPage={currentPage}
+                totalPages={totalPages}
+        />
+    </div>
 {/if}
 
 <div class="overflow-x-auto bg-white rounded-lg shadow">
