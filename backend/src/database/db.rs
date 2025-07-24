@@ -4,7 +4,7 @@ use rand::prelude::*;
 use sqlx::{FromRow, PgPool};
 use url::Url;
 
-// Type alias for db connection pool
+// Type alias for database connection pool
 pub type DbPool = PgPool;
 
 /// Struct represents a manga series stored in the database.

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use url::Url;
 
-use crate::db::db::MangaSeries;
+use crate::database::db::MangaSeries;
 
 // Utility function to get the host from a series source URL.
 pub fn get_series_host(series: &MangaSeries) -> Result<String> {

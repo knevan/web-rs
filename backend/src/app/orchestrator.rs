@@ -1,7 +1,7 @@
 use crate::app::coordinator;
 use crate::common::utils::random_sleep_time;
-use crate::db::db::{DatabaseService, MangaSeries};
-use crate::db::storage::StorageClient;
+use crate::database::db::{DatabaseService, MangaSeries};
+use crate::database::storage::StorageClient;
 use crate::scraping::model::AppConfig;
 use crate::scraping::parser::ChapterInfo;
 use crate::scraping::{fetcher, parser};

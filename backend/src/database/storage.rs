@@ -121,7 +121,6 @@ impl StorageClient {
         let objects_to_delete = objects_to_delete
             .context("Failed to build ObjectIdentifier objects")?;
 
-        // Create delete payload
         let delete_payload = Delete::builder()
             .set_objects(Some(objects_to_delete))
             .build()
@@ -190,5 +189,9 @@ impl StorageClient {
         let public_url = format!("{}/cover/{}", self.public_cdn_url, file_name);
 
         Ok(public_url)
+    }
+
+    pub fn public_cdn_url(&self) -> &str {
+        &self.public_cdn_url
     }
 }

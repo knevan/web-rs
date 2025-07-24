@@ -1,6 +1,6 @@
 use crate::builder::startup::AppState;
 use crate::common::jwt::Claims;
-use crate::db::db::{NewMangaSeriesData, UpdateMangaSeriesData};
+use crate::database::db::{NewMangaSeriesData, UpdateMangaSeriesData};
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;

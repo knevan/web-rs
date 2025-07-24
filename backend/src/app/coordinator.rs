@@ -4,8 +4,8 @@ use slug::slugify;
 use tokio::task;
 
 use crate::common::utils::random_sleep_time;
-use crate::db::db::{DatabaseService, MangaSeries};
-use crate::db::storage::StorageClient;
+use crate::database::db::{DatabaseService, MangaSeries};
+use crate::database::storage::StorageClient;
 use crate::encoding::image_encoding;
 use crate::scraping::model::SiteScrapingConfig;
 use crate::scraping::{fetcher, parser};
