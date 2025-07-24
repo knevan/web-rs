@@ -5,6 +5,7 @@
     import {Button} from "$lib/components/ui/button/index.js";
     import ModalDialog from "$lib/components/ModalDialog.svelte";
     import {X, Plus, Minus} from "@lucide/svelte";
+    import {apiFetch} from "$lib/store/auth";
 
     let title = $state('');
     let originalTitle = $state('');
@@ -16,8 +17,25 @@
     let fileInput = $state<HTMLInputElement | null>(null);
     let isSubmitting = $state(false);
     let isDragging = $state(false);
+    let open = $state(false);
+    let notification = $state<{
+        message: string;
+        type: 'success' | 'error'
+    } | null>(null);
 
     let coverPreviewUrl = $derived(coverImageFile ? URL.createObjectURL(coverImageFile) : null);
+
+    function resetForm() {
+        title = '';
+        originalTitle = '';
+        description = '';
+        authors = [{id: Date.now(), name: ''}];
+        sourceUrl = '';
+        coverImageFile = null;
+        if (fileInput) {
+            fileInput.value = '';
+        }
+    }
 
     function handleFileChange(event: Event) {
         const target = event.target as HTMLInputElement;
@@ -75,7 +93,7 @@
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch('/api/admin/upload/image', {
+        const response = await apiFetch('/api/admin/upload/image', {
             method: 'POST',
             body: formData,
         });
@@ -92,6 +110,7 @@
 
     async function handleAddSeries() {
         isSubmitting = true;
+        notification = null;
 
         if (!title || !coverImageFile || !description || !sourceUrl) {
             alert("Please fill in all required fields.");
@@ -111,7 +130,7 @@
                 source_url: sourceUrl,
             };
 
-            const response = await fetch('/api/admin/series/add', {
+            const response = await apiFetch('/api/admin/series/add', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -121,12 +140,21 @@
 
             if (response.ok) {
                 const result = await response.json();
-                alert(`Series added successfully with ID: ${result.id}`);
+                notification = {
+                    message: `Series added with ID: ${result.id}, Title: ${title}`,
+                    type: 'success'
+                };
+
+                setTimeout(() => {
+                    open = false;
+                }, 3000);
+
+                resetForm();
                 // TODO: Close the modal and refresh the series list automatically
             } else {
                 const errorData = await response.json().catch(() =>
                     ({message: 'Failed to add series. Unknown error occurred.'}));
-                alert(`Error: ${errorData.message}`);
+                notification = {message: errorData.message, type: 'error'};
             }
         } catch (error) {
             alert((error as Error).message);
@@ -138,8 +166,9 @@
 </script>
 
 <aside class="p-4 rounded-lg shadow">
-    <div class="flex flex-col space-y-3">
+    <form class="flex flex-col space-y-3">
         <ModalDialog
+                bind:open={open}
                 title="Add New Series"
                 confirmText={isSubmitting ? "Creating..." : "Create Series"}
                 onConfirm={handleAddSeries}
@@ -255,9 +284,19 @@
                         </div>
                     </div>
                 </div>
+                {#if notification}
+                    <div class="mt-2 text-sm p-3 rounded-md"
+                         class:bg-red-50={notification.type === 'error'}
+                         class:text-red-700={notification.type === 'error'}
+                         class:bg-green-50={notification.type ==='success'}
+                         class:text-green-700={notification.type ==='success'}
+                    >
+                        {notification.message}
+                    </div>
+                {/if}
             {/snippet}
         </ModalDialog>
-    </div>
+    </form>
 </aside>
 
 <style>
