@@ -1,6 +1,6 @@
 use crate::builder::startup::AppState;
 use crate::common::jwt::Claims;
-use crate::database::db::{NewMangaSeriesData, UpdateMangaSeriesData};
+use crate::database::{NewSeriesData, UpdateSeriesData};
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
@@ -35,7 +35,7 @@ pub async fn create_manga_series_handler(
 
     let check_interval_minutes = rand::rng().random_range(100..=150);
 
-    let new_series_data = NewMangaSeriesData {
+    let new_series_data = NewSeriesData {
         title: &payload.title,
         original_title: payload.original_title.as_deref(),
         authors: payload.authors.as_ref(),
@@ -45,7 +45,7 @@ pub async fn create_manga_series_handler(
         check_interval_minutes,
     };
 
-    match db_service.add_new_manga_series(&new_series_data)
+    match db_service.add_new_series(&new_series_data)
         .await
     {
         Ok(new_id) => (
@@ -85,7 +85,7 @@ pub async fn update_manga_series_handler(
         "HANDLER", claims.sub, series_id
     );
 
-    let update_series_data = UpdateMangaSeriesData {
+    let update_series_data = UpdateSeriesData {
         title: payload.title.as_deref(),
         original_title: payload.original_title.as_deref(),
         authors: payload.authors.as_ref(),
@@ -259,6 +259,126 @@ pub async fn get_all_manga_series_handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"status": "error", "message": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
+
+fn extract_object_key_from_url(url: &str, base_url: &str) -> Option<String> {
+    // Ensure base url does not have trailing slash
+    let trimmed_base_url = base_url.trim_end_matches('/');
+    if url.starts_with(trimmed_base_url) {
+        // Remove base url(cdn url) and leading slash to get object key
+        Some(
+            url[trimmed_base_url.len()..]
+                .trim_start_matches('/')
+                .to_string(),
+        )
+    } else {
+        None
+    }
+}
+
+pub async fn delete_series_handler(
+    Path(series_id): Path<i32>,
+    claims: Claims,
+    State(state): State<AppState>,
+) -> Response {
+    println!(
+        "->> {:<12} - delete_series_handler - user: {}, series_id: {}",
+        "HANDLER", claims.sub, series_id
+    );
+
+    let db_service = &state.db_service;
+    let storage_client = &state.storage_client;
+
+    // Get all image urls from DB and verify series exist
+    let image_data = match db_service
+        .get_image_keys_for_series_deletion(series_id)
+        .await
+    {
+        Ok(Some(data)) => data,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"status": "error", "message": format!("Series with id {} not found", series_id)}),
+                ),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": format!("Failed to retrieve data for deletion: {}", e)}),
+                ),
+            )
+                .into_response()
+        }
+    };
+
+    // Collect object key and delete from storage
+    let mut keys_to_delete_in_storage: Vec<String> = Vec::new();
+    let domain_cdn_url = storage_client.domain_cdn_url();
+
+    if let Some(cover_series_url) = image_data.cover_image_url {
+        if let Some(key) =
+            extract_object_key_from_url(&cover_series_url, domain_cdn_url)
+        {
+            keys_to_delete_in_storage.push(key);
+        } else {
+            eprintln!(
+                "Could not parse key from cover series url: {}",
+                cover_series_url
+            );
+        }
+    }
+
+    for chapter_image_url in image_data.chapter_image_urls {
+        if let Some(key) =
+            extract_object_key_from_url(&chapter_image_url, domain_cdn_url)
+        {
+            keys_to_delete_in_storage.push(key);
+        } else {
+            eprintln!(
+                "Could not parse key from chapter image url: {}",
+                chapter_image_url
+            );
+        }
+    }
+
+    if !keys_to_delete_in_storage.is_empty() {
+        if let Err(e) = storage_client
+            .delete_image_objects(keys_to_delete_in_storage)
+            .await
+        {
+            // If storage deletion fails, stop immediately to allow retry
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": format!("Failed to delete images from storage: {}. DB not modified", e)})),
+                )
+                .into_response();
+        }
+    }
+
+    // Delete series and all related records(data) from DB
+    match db_service.delete_series_by_id(series_id).await {
+        Ok(row_affected) if row_affected > 0 => (
+            StatusCode::OK,
+            Json(serde_json::json!({"status": "success", "message": format!("Series {} and all related data deleted successfully", series_id)})),
+        )
+            .into_response(),
+        Ok(_) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"status": "error", "message": format!("Series {} not found for final deletion", series_id)})),
+        )
+            .into_response(),
+        Err(e) => {
+            // CRITICAL: Files are gone from storage, but DB records remain. Manual intervention is required.
+            eprintln!("CRITICAL ERROR: Files for series {} deleted from storage, but DB deletion failed: {}", series_id, e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": format!("CRITICAL: DB deletion failed after storage cleanup. Manual intervention required for series_id {}. Error: {}", series_id, e)})),
             )
                 .into_response()
         }

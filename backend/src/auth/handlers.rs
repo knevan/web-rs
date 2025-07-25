@@ -5,7 +5,7 @@ use crate::common::hashing::{hash_password, verify_password};
 use crate::common::jwt::{
     Claims, RefreshClaims, create_access_jwt, create_refresh_jwt,
 };
-use crate::database::db::DatabaseService;
+use crate::database::DatabaseService;
 use axum::Json;
 use axum::extract::State;
 use axum_core::__private::tracing::error;
