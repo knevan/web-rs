@@ -1,5 +1,5 @@
 use crate::auth;
-use crate::database::db::DatabaseService;
+use crate::database::DatabaseService;
 use crate::database::storage::StorageClient;
 use axum::http::{HeaderValue, Method, header};
 use axum::{Router, serve};

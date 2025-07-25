@@ -1,7 +1,7 @@
 use crate::app::coordinator;
 use crate::common::utils::random_sleep_time;
-use crate::database::db::{DatabaseService, MangaSeries};
 use crate::database::storage::StorageClient;
+use crate::database::{DatabaseService, Series};
 use crate::scraping::model::AppConfig;
 use crate::scraping::parser::ChapterInfo;
 use crate::scraping::{fetcher, parser};
@@ -14,7 +14,7 @@ use url::Url;
 /// The main "engine" for a bulk scraping task.
 /// This function can be called from anywhere, including a background task.
 pub async fn run_bulk_series_scraping(
-    series: MangaSeries,
+    series: Series,
     http_client: Client,
     db_service: &DatabaseService,
     app_config: Arc<AppConfig>,

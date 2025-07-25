@@ -4,15 +4,15 @@ use slug::slugify;
 use tokio::task;
 
 use crate::common::utils::random_sleep_time;
-use crate::database::db::{DatabaseService, MangaSeries};
 use crate::database::storage::StorageClient;
+use crate::database::{DatabaseService, Series};
 use crate::encoding::image_encoding;
 use crate::scraping::model::SiteScrapingConfig;
 use crate::scraping::{fetcher, parser};
 
 // Loops through a list of chapters and processes them one by one.
 pub async fn process_series_chapters_from_list(
-    series_data: &MangaSeries,
+    series_data: &Series,
     chapters_to_process: &[parser::ChapterInfo],
     http_client: &Client,
     storage_client: &StorageClient,
@@ -58,7 +58,7 @@ pub async fn process_series_chapters_from_list(
 
 /// Process scraping and downloading single chapters
 pub async fn process_single_chapter(
-    series: &MangaSeries,
+    series: &Series,
     chapter_info: &parser::ChapterInfo,
     http_client: &Client,
     storage_client: &StorageClient,
