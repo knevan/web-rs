@@ -1,7 +1,7 @@
 use crate::app::coordinator;
 use crate::common::utils::random_sleep_time;
-use crate::db::db::{DatabaseService, MangaSeries};
-use crate::db::storage::StorageClient;
+use crate::database::storage::StorageClient;
+use crate::database::{DatabaseService, Series};
 use crate::scraping::model::AppConfig;
 use crate::scraping::parser::ChapterInfo;
 use crate::scraping::{fetcher, parser};
@@ -14,7 +14,7 @@ use url::Url;
 /// The main "engine" for a bulk scraping task.
 /// This function can be called from anywhere, including a background task.
 pub async fn run_bulk_series_scraping(
-    series: MangaSeries,
+    series: Series,
     http_client: Client,
     db_service: &DatabaseService,
     app_config: Arc<AppConfig>,
@@ -151,7 +151,7 @@ pub async fn repair_specific_chapter_in_series(
         );
 
         let public_cdn_url = env::var("PUBLIC_CDN_URL")?;
-        let key_to_delete = image_urls_to_delete
+        let key_to_delete: Vec<String> = image_urls_to_delete
             .into_iter()
             .filter_map(|url| {
                 url.strip_prefix(&format!("{}/", public_cdn_url))
@@ -159,7 +159,7 @@ pub async fn repair_specific_chapter_in_series(
             })
             .collect();
 
-        storage_client.delete_image_objects(key_to_delete).await?;
+        storage_client.delete_image_objects(&key_to_delete).await?;
         println!("[REPAIR] Deleted images from storage");
     }
 
