@@ -151,7 +151,7 @@ pub async fn repair_specific_chapter_in_series(
         );
 
         let public_cdn_url = env::var("PUBLIC_CDN_URL")?;
-        let key_to_delete = image_urls_to_delete
+        let key_to_delete: Vec<String> = image_urls_to_delete
             .into_iter()
             .filter_map(|url| {
                 url.strip_prefix(&format!("{}/", public_cdn_url))
@@ -159,7 +159,7 @@ pub async fn repair_specific_chapter_in_series(
             })
             .collect();
 
-        storage_client.delete_image_objects(key_to_delete).await?;
+        storage_client.delete_image_objects(&key_to_delete).await?;
         println!("[REPAIR] Deleted images from storage");
     }
 
