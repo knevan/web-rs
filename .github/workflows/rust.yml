@@ -27,12 +27,14 @@ jobs:
           version: 1.0
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2.8.0
+        with:
+          cache-on-failure: true
       - name: Run linter (clippy action)
         #env: SQLX_OFFLINE: true
-        uses: auguwu/clippy-action@1.4.0
+        uses: clechasseur/rs-clippy-check@v4.0.5
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          check-args: --workspace
+          #token: ${{ secrets.GITHUB_TOKEN }}
+          args: --workspace
           # args: --verbose -- -W warnings
 
   formatting:
