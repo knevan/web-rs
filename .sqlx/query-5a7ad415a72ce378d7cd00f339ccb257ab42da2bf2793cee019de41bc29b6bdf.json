@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT ci.image_url\n            FROM chapter_images ci\n            JOIN series_chapters mc ON ci.chapter_id = mc.id\n            WHERE mc.series_id = $1 AND mc.chapter_number = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "image_url",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Float4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5a7ad415a72ce378d7cd00f339ccb257ab42da2bf2793cee019de41bc29b6bdf"
+}

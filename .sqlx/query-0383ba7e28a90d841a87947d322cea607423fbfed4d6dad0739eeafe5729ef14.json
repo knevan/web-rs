@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, title, original_title, description, cover_image_url, current_source_url,\n            source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage, processing_status,\n            check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at\n            FROM manga_series WHERE title = $1",
+  "query": "SELECT id, title, original_title, description, cover_image_url, current_source_url,\n            source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage, processing_status,\n            check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at\n            FROM series WHERE title = $1",
   "describe": {
     "columns": [
       {
@@ -108,5 +108,5 @@
       false
     ]
   },
-  "hash": "2ef06099cc9b588665498b6f73004836b27058b73fe7617ad436edd698a52dea"
+  "hash": "0383ba7e28a90d841a87947d322cea607423fbfed4d6dad0739eeafe5729ef14"
 }

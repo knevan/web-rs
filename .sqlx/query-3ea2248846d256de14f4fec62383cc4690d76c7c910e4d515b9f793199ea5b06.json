@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "DELETE FROM manga_authors WHERE manga_id = $1",
+  "query": "DELETE FROM series_authors WHERE series_id = $1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -10,5 +10,5 @@
     },
     "nullable": []
   },
-  "hash": "049100faeab4657cf64f3dcd25537991642e8f103e96a969fb5988bad5572c27"
+  "hash": "3ea2248846d256de14f4fec62383cc4690d76c7c910e4d515b9f793199ea5b06"
 }

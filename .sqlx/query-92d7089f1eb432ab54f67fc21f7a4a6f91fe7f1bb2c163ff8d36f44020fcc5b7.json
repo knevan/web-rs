@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO manga_chapters (series_id, chapter_number, title, source_url)\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (source_url) DO UPDATE SET updated_at = NOW()\n            RETURNING id",
+  "query": "INSERT INTO series_chapters (series_id, chapter_number, title, source_url)\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (source_url) DO UPDATE SET updated_at = NOW()\n            RETURNING id",
   "describe": {
     "columns": [
       {
@@ -21,5 +21,5 @@
       false
     ]
   },
-  "hash": "6c6a0d2f6fd4245b77397c3c0809b45704d9fbaf3d9bf19eb1d4642a5dcb9ca1"
+  "hash": "92d7089f1eb432ab54f67fc21f7a4a6f91fe7f1bb2c163ff8d36f44020fcc5b7"
 }

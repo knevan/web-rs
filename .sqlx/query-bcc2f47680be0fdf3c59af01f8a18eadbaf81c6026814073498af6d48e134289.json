@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id FROM manga_chapters WHERE series_id = $1 AND chapter_number = $2",
+  "query": "SELECT id FROM series_chapters WHERE series_id = $1 AND chapter_number = $2",
   "describe": {
     "columns": [
       {
@@ -19,5 +19,5 @@
       false
     ]
   },
-  "hash": "168a88281c94d8ee96ab833c4ea149d9493a98c4a23bf81e36042790c7137fcd"
+  "hash": "bcc2f47680be0fdf3c59af01f8a18eadbaf81c6026814073498af6d48e134289"
 }
