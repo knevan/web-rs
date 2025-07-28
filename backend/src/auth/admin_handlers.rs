@@ -1,6 +1,7 @@
 use crate::builder::startup::AppState;
 use crate::common::jwt::Claims;
 use crate::database::{NewSeriesData, UpdateSeriesData};
+use crate::task_workers::repair_chapter_worker;
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
@@ -21,7 +22,7 @@ pub struct CreateSeriesRequest {
 }
 
 // This route is protected and can only be accessed by a logged-in admin-dashboard.
-pub async fn create_manga_series_handler(
+pub async fn create_new_series_handler(
     claims: Claims,
     State(state): State<AppState>,
     Json(payload): Json<CreateSeriesRequest>,
@@ -72,7 +73,7 @@ pub struct UpdateSeriesRequest {
     source_url: Option<String>,
 }
 
-pub async fn update_manga_series_handler(
+pub async fn update_existing_series_handler(
     Path(series_id): Path<i32>,
     claims: Claims,
     State(state): State<AppState>,
@@ -265,6 +266,50 @@ pub async fn get_all_manga_series_handler(
     }
 }
 
+#[derive(Deserialize)]
+pub struct RepairChapterRequest {
+    pub chapter_number: f32,
+    pub new_chapter_url: String,
+    pub new_chapter_title: Option<String>,
+}
+
+pub async fn repair_chapter_handler(
+    claims: Claims,
+    Path(series_id): Path<i32>,
+    State(state): State<AppState>,
+    Json(payload): Json<RepairChapterRequest>,
+) -> Response {
+    println!(
+        "->> {:<12} - repair_chapter_handler - user: {}, series_id: {}",
+        "HANDLER", claims.sub, series_id
+    );
+
+    let repair_chapter_msg = repair_chapter_worker::RepairChapterMsg {
+        series_id,
+        chapter_number: payload.chapter_number,
+        new_chapter_url: payload.new_chapter_url,
+        new_chapter_title: payload.new_chapter_title,
+    };
+
+    match state.worker_channels.repair_tx.send(repair_chapter_msg).await {
+        Ok(_) => {
+            (
+                StatusCode::ACCEPTED,
+                Json(serde_json::json!({"status": "success", "message": "Chapter has been scheduled for repair"})),
+            )
+                .into_response()
+        }
+        Err(_) => {
+            // This error occurs if the worker has crashed and the channel is closed.
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": "Could not schedule repair. The repair service may be down."})),
+            )
+                .into_response()
+        }
+    }
+}
+
 pub async fn delete_series_handler(
     claims: Claims,
     Path(series_id): Path<i32>,
@@ -276,7 +321,7 @@ pub async fn delete_series_handler(
     );
 
     // Send series_id to deletion worker with channel
-    match state.deletion_tx.send(series_id).await {
+    match state.worker_channels.deletion_tx.send(series_id).await {
         Ok(_) => {
             (
                 StatusCode::ACCEPTED,
