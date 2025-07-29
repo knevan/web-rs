@@ -2,9 +2,10 @@ use crate::app::coordinator;
 use crate::common::utils::random_sleep_time;
 use crate::database::storage::StorageClient;
 use crate::database::{DatabaseService, Series};
-use crate::scraping::model::AppConfig;
+use crate::scraping::model::SitesConfig;
 use crate::scraping::parser::ChapterInfo;
 use crate::scraping::{fetcher, parser};
+use crate::task_workers::repair_chapter_worker::RepairChapterMsg;
 use anyhow::{Result, anyhow};
 use reqwest::Client;
 use std::env;
@@ -17,7 +18,7 @@ pub async fn run_bulk_series_scraping(
     series: Series,
     http_client: Client,
     db_service: &DatabaseService,
-    app_config: Arc<AppConfig>,
+    sites_config: Arc<SitesConfig>,
     storage_client: Arc<StorageClient>,
 ) -> Result<()> {
     println!("[BULK SCRAPE] Starting for series: '{}'", series.title);
@@ -26,7 +27,7 @@ pub async fn run_bulk_series_scraping(
 
     let host = &series.source_website_host;
 
-    let site_config = app_config
+    let site_config = sites_config
         .get_site_config(host)
         .ok_or_else(|| anyhow!("No scraping config for host: {}", host))?;
 
@@ -88,7 +89,7 @@ pub async fn run_bulk_series_scraping(
             &series,
             &chapters_to_scrape,
             &http_client,
-            &storage_client,
+            storage_client,
             site_config,
             db_service,
         )
@@ -111,37 +112,27 @@ pub async fn run_bulk_series_scraping(
     Ok(())
 }
 
-pub struct RepairChapterArgs<'a> {
-    pub series_id: i32,
-    pub broken_chapter_number: f32,
-    pub new_chapter_url: &'a str,
-    pub new_chapter_title: Option<&'a str>,
-}
-
-pub async fn repair_specific_chapter_in_series(
-    args: RepairChapterArgs<'_>,
-    http_client: Client,
+pub async fn repair_specific_chapter_series(
+    msg: RepairChapterMsg,
     db_service: &DatabaseService,
     storage_client: Arc<StorageClient>,
-    app_config: Arc<AppConfig>,
+    http_client: Client,
+    sites_config: Arc<SitesConfig>,
 ) -> Result<()> {
     println!(
         "[REPAIR] Repairing chapter {} in series {}.",
-        args.broken_chapter_number, args.series_id
+        msg.chapter_number, msg.series_id
     );
 
     let series = db_service
-        .get_manga_series_by_id(args.series_id)
+        .get_manga_series_by_id(msg.series_id)
         .await?
         .ok_or_else(|| {
-            anyhow!("Series with ID {} not found.", args.series_id)
+            anyhow!("Series with ID {} not found.", msg.series_id)
         })?;
 
     let image_urls_to_delete = db_service
-        .get_images_urls_for_chapter_series(
-            args.series_id,
-            args.broken_chapter_number,
-        )
+        .get_images_urls_for_chapter_series(msg.series_id, msg.chapter_number)
         .await?;
 
     if !image_urls_to_delete.is_empty() {
@@ -164,38 +155,35 @@ pub async fn repair_specific_chapter_in_series(
     }
 
     db_service
-        .delete_chapter_and_images_for_chapter(
-            series.id,
-            args.broken_chapter_number,
-        )
+        .delete_chapter_and_images_for_chapter(series.id, msg.chapter_number)
         .await?;
     println!("[REPAIR] Successfully delete old data from database");
 
-    let new_host = Url::parse(args.new_chapter_url)?
+    let new_host = Url::parse(&msg.new_chapter_url)?
         .host_str()
         .ok_or_else(|| {
-            anyhow!("Invalid new chapter URL: {}", args.new_chapter_url)
+            anyhow!("Invalid new chapter URL: {}", &msg.new_chapter_url)
         })?
         .to_string();
 
-    let site_config = app_config
+    let site_config = sites_config
         .get_site_config(&new_host)
         .ok_or_else(|| anyhow!("No scraping config for host: {}", new_host))?;
 
     let chapter_info_to_scrape = ChapterInfo {
-        title: args
+        title: msg
             .new_chapter_title
             .map(|s| s.to_string())
             .unwrap_or_default(),
-        url: args.new_chapter_url.to_string(),
-        number: args.broken_chapter_number,
+        url: msg.new_chapter_url.to_string(),
+        number: msg.chapter_number,
     };
 
     coordinator::process_single_chapter(
         &series,
         &chapter_info_to_scrape,
         &http_client,
-        &storage_client,
+        storage_client,
         site_config,
         db_service,
     )
@@ -203,7 +191,7 @@ pub async fn repair_specific_chapter_in_series(
 
     println!(
         "[REPAIR] Repaired chapter {} in series {}.",
-        args.broken_chapter_number, args.series_id
+        msg.chapter_number, msg.series_id
     );
 
     Ok(())

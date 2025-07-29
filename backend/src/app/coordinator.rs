@@ -1,6 +1,7 @@
 use anyhow::Result;
 use reqwest::Client;
 use slug::slugify;
+use std::sync::Arc;
 use tokio::task;
 
 use crate::common::utils::random_sleep_time;
@@ -15,7 +16,7 @@ pub async fn process_series_chapters_from_list(
     series_data: &Series,
     chapters_to_process: &[parser::ChapterInfo],
     http_client: &Client,
-    storage_client: &StorageClient,
+    storage_client: Arc<StorageClient>,
     config: &SiteScrapingConfig,
     db_service: &DatabaseService,
 ) -> Result<Option<f32>> {
@@ -31,7 +32,7 @@ pub async fn process_series_chapters_from_list(
             series_data,
             chapter_info,
             http_client,
-            storage_client,
+            storage_client.clone(),
             config,
             db_service,
         )
@@ -61,7 +62,7 @@ pub async fn process_single_chapter(
     series: &Series,
     chapter_info: &parser::ChapterInfo,
     http_client: &Client,
-    storage_client: &StorageClient,
+    storage_client: Arc<StorageClient>,
     config: &SiteScrapingConfig,
     db_service: &DatabaseService,
 ) -> Result<Option<f32>> {
