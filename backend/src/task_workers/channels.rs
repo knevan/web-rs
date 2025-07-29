@@ -11,7 +11,6 @@ use tokio::sync::mpsc;
 
 #[derive(Clone)]
 pub struct WorkerChannels {
-    pub deletion_tx: mpsc::Sender<i32>,
     pub repair_tx: mpsc::Sender<RepairChapterMsg>,
 }
 
@@ -21,10 +20,8 @@ pub fn setup_worker_channels(
     http_client: Client,
     sites_config: Arc<SitesConfig>,
 ) -> WorkerChannels {
-    // Deletion worker channels
-    let (deletion_tx, deletion_rx) = mpsc::channel::<i32>(32);
+    // Deletion worker
     tokio::spawn(run_deletion_background_worker(
-        deletion_rx,
         db_service.clone(),
         storage_client.clone(),
     ));
@@ -39,8 +36,5 @@ pub fn setup_worker_channels(
         sites_config.clone(),
     ));
 
-    WorkerChannels {
-        deletion_tx,
-        repair_tx,
-    }
+    WorkerChannels { repair_tx }
 }

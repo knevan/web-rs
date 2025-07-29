@@ -199,4 +199,14 @@ impl StorageClient {
 
         Ok(public_url)
     }
+
+    // Helper function to extract storage object key from CDN URL
+    pub fn extract_object_key_from_url(&self, url: &str) -> Option<String> {
+        // Ensure base url does not have trailing slash
+        let base_url = self.domain_cdn_url.trim_end_matches('/');
+
+        url.strip_prefix(base_url)
+            // Remove base url(cdn url) and leading slash to get object key
+            .map(|remaining| remaining.trim_start_matches('/').to_string())
+    }
 }

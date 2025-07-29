@@ -321,11 +321,18 @@ pub async fn delete_series_handler(
     );
 
     // Send series_id to deletion worker with channel
-    match state.worker_channels.deletion_tx.send(series_id).await {
-        Ok(_) => {
+    match state.db_service.mark_series_for_deletion(series_id).await {
+        Ok(row_affected) if row_affected > 0 => {
             (
                 StatusCode::ACCEPTED,
-                Json(serde_json::json!({"status": "success", "message": "Series has been scheduled for deletion"})),
+                Json(serde_json::json!({"status": "success", "message": "Series has been scheduled for deletion."})),
+            )
+                .into_response()
+        }
+        Ok(_) => {
+            (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"status": "error", "message": "Series not found or already pending deletion."})),
             )
                 .into_response()
         }

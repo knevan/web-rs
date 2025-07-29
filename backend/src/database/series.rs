@@ -465,4 +465,51 @@ impl DatabaseService {
 
         Ok(result.rows_affected())
     }
+
+    pub async fn mark_series_for_deletion(
+        &self,
+        series_id: i32,
+    ) -> AnyhowResult<u64> {
+        let result = sqlx::query!(
+            "UPDATE series SET processing_status = 'pending_deletion',
+                  updated_at = NOW() WHERE id = $1 AND processing_status = 'available'",
+            series_id
+        )
+            .execute(&self.pool)
+            .await
+            .context("Failed to mark series for deletion with sqlx")?;
+
+        Ok(result.rows_affected())
+    }
+
+    pub async fn find_and_lock_series_for_job_deletion(
+        &self,
+    ) -> AnyhowResult<Option<Series>> {
+        // If the row is already locked by another transaction,
+        // it will skip it and look for the next row.
+        let series = sqlx::query_as!(
+            Series,
+            r#"
+            WITH candidate AS (
+                SELECT id FROM series
+                WHERE processing_status = 'pending_deletion'
+                LIMIT 1
+                FOR UPDATE SKIP LOCKED
+            )
+            UPDATE series
+            SET processing_status = 'deleting'
+            WHERE id = (SELECT id FROM candidate)
+            RETURNING
+                id, title, original_title, description, cover_image_url, current_source_url,
+                source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage,
+                'deleting' as "processing_status!", check_interval_minutes, last_checked_at,
+                next_checked_at, created_at, updated_at
+            "#
+        )
+            .fetch_optional(&self.pool)
+            .await
+            .context("Failed to find and lock series for job deletion with sqlx")?;
+
+        Ok(series)
+    }
 }

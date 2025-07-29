@@ -109,6 +109,17 @@ pub struct SeriesDeletionImagekeys {
     pub chapter_image_urls: Vec<String>,
 }
 
+impl SeriesDeletionImagekeys {
+    // Helper function to get all urls in a single iteration
+    pub fn all_urls(&self) -> impl Iterator<Item = &str> {
+        // Combine cover image and chapter image urls into a single iterator
+        self.cover_image_url
+            .as_deref()
+            .into_iter()
+            .chain(self.chapter_image_urls.iter().map(String::as_str))
+    }
+}
+
 #[derive(Debug)]
 pub struct PaginatedResult<T> {
     pub items: Vec<T>,
