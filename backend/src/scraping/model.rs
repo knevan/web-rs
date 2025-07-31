@@ -1,12 +1,12 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
 /// Configuration for scraping a specific website.
 #[derive(Deserialize, Clone, Debug)]
 pub struct SiteScrapingConfig {
-    pub host_name: String,
     pub chapter_link_selector: String, // CSS selector for chapter links on the series page
     pub chapter_number_from_url_regex: Option<String>, // Regex to extract chapter number from chapter URL
     pub chapter_number_from_text_regex: Option<String>, // Regex to extract chapter number from link text
@@ -24,12 +24,12 @@ pub struct SiteScrapingConfig {
 
 /// Main application configuration, loaded from a TOML file.
 #[derive(Deserialize)]
-pub struct AppConfig {
-    #[serde(rename = "sites")]
-    pub site_configs: Vec<SiteScrapingConfig>,
+pub struct SitesConfig {
+    // The key is the host_name (String), and the value is the config.
+    pub sites: HashMap<String, SiteScrapingConfig>,
 }
 
-impl AppConfig {
+impl SitesConfig {
     /// Loads application configuration from the specified path.
     pub fn load(config_path_str: &str) -> Result<Self> {
         let config_path = Path::new(config_path_str);
@@ -48,7 +48,8 @@ impl AppConfig {
                 )
             })?;
 
-        let app_config: AppConfig = toml::from_str(&config_content)
+        // Serde will automatically handle the TOML structure.
+        let app_config: SitesConfig = toml::from_str(&config_content)
             .with_context(|| {
                 format!(
                     "[CONFIG] Failed to parse TOML configuration: {}",
@@ -58,7 +59,7 @@ impl AppConfig {
 
         println!(
             "[CONFIG] Configuration loaded successfully {} site(s) from {}",
-            app_config.site_configs.len(),
+            app_config.sites.len(),
             config_path_str
         );
         Ok(app_config)
@@ -69,8 +70,6 @@ impl AppConfig {
         &self,
         host_name: &str,
     ) -> Option<&SiteScrapingConfig> {
-        self.site_configs
-            .iter()
-            .find(|sc| sc.host_name == host_name)
+        self.sites.get(host_name)
     }
 }
