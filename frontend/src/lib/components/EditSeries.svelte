@@ -1,5 +1,4 @@
 <script lang="ts">
-
     import ModalDialog from "$lib/components/ModalDialog.svelte";
     import {Label} from "$lib/components/ui/label";
     import {Input} from "$lib/components/ui/input";
@@ -77,15 +76,16 @@
         disableConfirm={isSubmitting}
 >
     {#snippet children()}
-        <form class="space-y-4 pt-4 text-gray-800  max-h-[75vh] overflow-y-auto pr-3">
+        <form class="space-y-4 pt-4 text-gray-800 dark:text-gray-100  max-h-[75vh] overflow-y-auto pr-3">
             <div>
                 <Label for="title"
-                       class="block text-sm font-medium text-gray-700">Title</Label>
+                       class="block text-sm font-medium text-gray-700 dark:text-gray-100">Title</Label>
                 <Input id="title" type="text" bind:value={formData.title} required/>
             </div>
             <div>
                 <Label for="originalTitle"
-                       class="block text-sm font-medium text-gray-700">Original Title
+                       class="block text-sm font-medium text-gray-700 dark:text-gray-100">Original
+                    Title
                     (optional)</Label>
                 <Input id="originalTitle" type="text"
                        bind:value={formData.originalTitle}/>
