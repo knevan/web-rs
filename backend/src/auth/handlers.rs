@@ -79,13 +79,8 @@ pub async fn register_new_user_handler(
 ) -> Result<(StatusCode, Json<GenericMessageResponse>), AuthError> {
     let db_service = &state.db_service;
 
-    // Validate input: ensure no fields are empty
-    if payload.username.is_empty()
-        || payload.email.is_empty()
-        || payload.password.is_empty()
-    {
-        return Err(AuthError::MissingCredentials);
-    }
+    // Validate input
+    payload.validate_input()?;
 
     // Check if user already exists in the database
     // We use existing `get_user_by_identifier` method
@@ -210,7 +205,7 @@ impl LoginRequest {
 // Struct for Responses
 #[derive(Serialize)]
 pub struct UserData {
-    username: String,
+    identifier: String,
     role: String,
 }
 
@@ -273,7 +268,7 @@ pub async fn login_handler(
     let response = LoginResponse {
         message: "Login Successfull".to_string(),
         user: UserData {
-            username: user.username,
+            identifier: user.username,
             role: role_name,
         },
     };
@@ -349,21 +344,29 @@ pub struct ProtectedResponse {
     user_id: String,
     session_expires_at: i64,
 }
+#[derive(Serialize)]
+pub struct UserResponse {
+    user: UserData,
+}
 
 /// Protected handler. `Claims` acts as a guard.
-pub async fn protected_handler(claims: Claims) -> Json<ProtectedResponse> {
+pub async fn protected_handler(
+    claims: Claims,
+) -> (StatusCode, Json<UserResponse>) {
     println!(
         "[API] Request received at /api/auth/user for user: {}",
         claims.sub
     );
 
-    // This handler will only be called if `claims` is extracted successfully (valid token)
-    let response = ProtectedResponse {
-        message: "Welcome to protected area".to_string(),
-        user_id: claims.sub,
-        session_expires_at: claims.exp as i64,
+    let user_data = UserData {
+        identifier: claims.sub,
+        role: claims.role,
     };
-    Json(response)
+
+    // This handler will only be called if `claims` is extracted successfully (valid token)
+    let response = UserResponse { user: user_data };
+
+    (StatusCode::OK, Json(response))
 }
 
 #[derive(Deserialize)]
