@@ -3,6 +3,8 @@
     import {Button} from "$lib/components/ui/button";
     // import {apiFetch} from "$lib/store/auth"; // No longer needed for mocking
     import Pagination from "$lib/components/Pagination.svelte";
+    import {FilePen} from "@lucide/svelte";
+    import {Wrench} from "@lucide/svelte";
 
     // Define the type for a series item
     type Series = {
@@ -44,6 +46,7 @@
     let currentPage = $state(1);
     let pageSize = $state(25); // You can change this to test different page sizes
     let totalPages = $derived(Math.ceil(totalItems / pageSize));
+    let activeSeriesId = $state<number | null>(null);
 
     // This function now loads data from our MOCK_DATA array instead of an API.
     async function loadSeries(page: number) {
@@ -74,8 +77,13 @@
 
     function handleClose() {
         editingSeries = null;
+        activeSeriesId = null;
         // We still reload the data to simulate a refresh after editing.
         loadSeries(currentPage);
+    }
+
+    function handleRowClick(id: number) {
+        activeSeriesId = activeSeriesId === id ? null : id;
     }
 
     // This $effect hook will run whenever `currentPage` changes,
@@ -84,7 +92,6 @@
         loadSeries(currentPage);
     });
 
-    const editIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>`;
 </script>
 
 {#if editingSeries}
@@ -96,20 +103,12 @@
     </table>
 </div>
 
-{#if totalPages > 1}
-    <div class="flex justify-center mt-4">
-        <Pagination
-                bind:currentPage={currentPage}
-                totalPages={totalPages}
-        />
-    </div>
-{/if}
-
-<div class="overflow-x-auto bg-white rounded-lg shadow">
-    <table class="min-w-full text-sm text-left text-gray-500">
-        <thead class="bg-gray-100 text-xs text-gray-700 uppercase">
+<div class="border bg-card text-card-foreground rounded-lg shadow-sm overflow-x-auto">
+    <table class="series-table text-sm w-full">
+        <thead class="bg-muted/50 text-muted-foreground uppercase">
         <tr>
             <th scope="col" class="px-4 py-3">Edit</th>
+            <th scope="col" class="px-4 py-3">Repair</th>
             <th scope="col" class="px-4 py-3">Manga Name</th>
             <th scope="col" class="px-4 py-3">Manga Id</th>
             <th scope="col" class="px-4 py-3">Author</th>
@@ -122,31 +121,42 @@
         <tbody>
         {#if isLoading}
             <tr>
-                <td colspan="6" class="text-center py-8 text-gray-500">Loading manga
+                <td colspan="6" class="text-center py-8 text-muted-foreground">Loading
+                    manga
                     list...
                 </td>
             </tr>
         {:else if errorMessage}
             <tr>
-                <td colspan="6" class="text-center py-8 text-gray-500">{errorMessage}</td>
+                <td colspan="6"
+                    class="text-center py-8 text-destructive">{errorMessage}</td>
             </tr>
         {:else if series && series.length > 0}
             {#each series as manga (manga.id)}
-                <tr class="border-b hover:bg-gray-50">
-                    <td class="px-4 py-3">
+                <tr class="border-b border-border hover:bg-muted/50 transition-colors">
+                    <td class="px-2 py-2">
                         <Button onclick={ () => editingSeries = manga }
-                                class="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded-full transition-colors"
+                                size="icon"
+                                class="hover:text-blue-800 hover:bg-blue-100 transition-colors cursor-pointer"
                                 title="Edit {manga.title}">
-                            {@html editIcon}
+                            <FilePen/>
                         </Button>
                     </td>
-                    <td class="px-4 py-3 font-medium text-gray-900">{manga.title}</td>
-                    <td class="px-4 py-3 text-gray-900">{manga.id}</td>
-                    <td class="px-4 py-3 text-gray-900">{manga.authors.join(', ')}</td>
-                    <td class="px-4 py-3 text-gray-900">{manga.lastUpdated}</td>
-                    <td class="px-4 py-3 text-gray-900">
+                    <td class="px-4 py-2">
+                        <Button onclick={ () => editingSeries = manga }
+                                size="icon"
+                                class="cursor-pointer"
+                        >
+                            <Wrench/>
+                        </Button>
+                    </td>
+                    <td class="px-4 py-3 font-medium text-foreground">{manga.title}</td>
+                    <td class="px-4 py-3 text-foreground">{manga.id}</td>
+                    <td class="px-4 py-3 text-foreground">{manga.authors.join(', ')}</td>
+                    <td class="px-4 py-3 text-foreground">{manga.lastUpdated}</td>
+                    <td class="px-4 py-3 text-foreground">
                         <a href={manga.sourceUrl} target="_blank"
-                           class="text-blue-600 hover:underline">
+                           class="text-primary hover:underline">
                             Source URLs
                         </a>
                     </td>
@@ -154,9 +164,28 @@
             {/each}
         {:else}
             <tr>
-                <td colspan="8" class="text-center py-8 text-gray-500">No Manga Found</td>
+                <td colspan="8" class="text-center py-8 text-muted-foreground">No Manga
+                    Found
+                </td>
             </tr>
         {/if}
         </tbody>
     </table>
 </div>
+
+{#if totalPages > 1}
+    <div class="flex justify-center mt-4">
+        <Pagination
+                bind:currentPage={currentPage}
+                totalPages={totalPages}
+        />
+    </div>
+{/if}
+
+<style>
+    .series-table {
+        min-width: 100%;
+        text-align: left;
+
+    }
+</style>
