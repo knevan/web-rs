@@ -346,3 +346,98 @@ pub async fn delete_series_handler(
         }
     }
 }
+
+#[derive(Deserialize)]
+pub struct CreateCategoryTagRequest {
+    pub name: String,
+}
+
+pub async fn create_category_tag_handler(
+    claims: Claims,
+    State(state): State<AppState>,
+    Json(payload): Json<CreateCategoryTagRequest>,
+) -> Response {
+    println!(
+        "->> {:<12} - create_category_tag_handler - user: {}",
+        "HANDLER", claims.sub
+    );
+
+    match state.db_service.create_category_tag(&payload.name).await {
+        Ok(new_category) => {
+            (StatusCode::CREATED, Json(serde_json::json!({"status": "success", "category": new_category})),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            // Check for unique violation error from PostgreSQL (code 23505)
+            if let Some(sqlx::Error::Database(db_error)) =
+                e.root_cause().downcast_ref::<sqlx::Error>()
+            {
+                if db_error.code() == Some(std::borrow::Cow::from("23505")) {
+                    return (
+                            StatusCode::CONFLICT,
+                            Json(serde_json::json!({"status": "error", "message": "Category tag already exists."})),
+                        )
+                            .into_response();
+                }
+            }
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
+
+pub async fn delete_category_tag_handler(
+    claims: Claims,
+    State(state): State<AppState>,
+    Path(category_id): Path<i32>,
+) -> Response {
+    println!(
+        "->> {:<12} - delete_category_tag_handler - user: {}, category_id: {}",
+        "HANDLER", claims.sub, category_id
+    );
+
+    match state.db_service.delete_category_tag(category_id).await {
+        Ok(row_affected) if row_affected > 0 => (
+            StatusCode::OK,
+            Json(serde_json::json!({"status": "success", "message": "Category tag has been deleted."})),
+        )
+            .into_response(),
+        Ok(_) => ( // row_affected is 0
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"status": "error", "message": "Category tag not found."})),
+        )
+            .into_response(),
+        Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": e.to_string()})),
+            )
+                .into_response(),
+    }
+}
+
+pub async fn get_list_category_tags_handler(
+    claims: Claims,
+    State(state): State<AppState>,
+) -> Response {
+    println!(
+        "->> {:<12} - get_list_category_tags_handler - user: {}",
+        "HANDLER", claims.sub
+    );
+
+    match state.db_service.get_list_all_categories().await {
+        Ok(categories) => (
+            StatusCode::OK,
+            Json(serde_json::json!({"status": "success", "categories": categories})),
+        )
+            .into_response(),
+        Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": e.to_string()})),
+        )
+            .into_response(),
+    }
+}

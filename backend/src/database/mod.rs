@@ -1,6 +1,7 @@
 use anyhow::{Context, Result as AnyhowResult};
 use chrono::{DateTime, Utc};
 use rand::prelude::*;
+use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
 use url::Url;
 
@@ -124,6 +125,12 @@ impl SeriesDeletionImagekeys {
 pub struct PaginatedResult<T> {
     pub items: Vec<T>,
     pub total_items: i64,
+}
+
+#[derive(Debug, FromRow, Serialize, Deserialize)]
+pub struct CategoryTag {
+    pub id: i32,
+    pub name: String,
 }
 
 // A helper function to extract a hostname from an optional URL string.

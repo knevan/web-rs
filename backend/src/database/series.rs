@@ -512,4 +512,41 @@ impl DatabaseService {
 
         Ok(series)
     }
+
+    pub async fn create_category_tag(
+        &self,
+        name: &str,
+    ) -> AnyhowResult<CategoryTag> {
+        let category = sqlx::query_as!(
+            CategoryTag,
+            "INSERT INTO categories (name) VALUES ($1) RETURNING id, name",
+            name
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("Failed to create category tag with sqlx")?;
+
+        Ok(category)
+    }
+
+    pub async fn delete_category_tag(&self, id: i32) -> AnyhowResult<u64> {
+        let result = sqlx::query!("DELETE FROM categories WHERE id = $1", id)
+            .execute(&self.pool)
+            .await
+            .context("Failed to delete category tag with sqlx")?;
+
+        Ok(result.rows_affected())
+    }
+
+    pub async fn get_list_all_categories(
+        &self,
+    ) -> AnyhowResult<Vec<CategoryTag>> {
+        let categories =
+            sqlx::query_as!(CategoryTag, "SELECT id, name FROM categories")
+                .fetch_all(&self.pool)
+                .await
+                .context("Failed to list all categories with sqlx")?;
+
+        Ok(categories)
+    }
 }
