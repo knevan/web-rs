@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE series SET processing_status = 'pending_deletion',\n                  updated_at = NOW() WHERE id = $1 AND processing_status = 'available'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8608fb3d40a2326a41f12fc0b2a2e1c5c9cb32db44a11a3d77111e452baff30b"
+}
