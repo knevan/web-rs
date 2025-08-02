@@ -3,8 +3,8 @@
     import {Button} from "$lib/components/ui/button";
     // import {apiFetch} from "$lib/store/auth"; // No longer needed for mocking
     import Pagination from "$lib/components/Pagination.svelte";
-    import {FilePen} from "@lucide/svelte";
-    import {Wrench} from "@lucide/svelte";
+    import {FilePen, Wrench, Trash2} from "@lucide/svelte";
+    import RepairChapterSeries from "$lib/components/RepairChapterSeries.svelte";
 
     // Define the type for a series item
     type Series = {
@@ -40,6 +40,7 @@
 
     let series = $state<Series[] | null>(null);
     let editingSeries = $state<Series | null>(null);
+    let repairSeriesId = $state<number | null>(null);
     let isLoading = $state(true);
     let errorMessage = $state<string | null>(null);
     let totalItems = $state(0);
@@ -75,7 +76,7 @@
         }, 500); // 500ms delay
     }
 
-    function handleClose() {
+    function handleEditClose() {
         editingSeries = null;
         activeSeriesId = null;
         // We still reload the data to simulate a refresh after editing.
@@ -86,6 +87,10 @@
         activeSeriesId = activeSeriesId === id ? null : id;
     }
 
+    function handleRepairClose() {
+        repairSeriesId = null;
+    }
+
     // This $effect hook will run whenever `currentPage` changes,
     // triggering our new mock `loadSeries` function.
     $effect(() => {
@@ -94,8 +99,13 @@
 
 </script>
 
+<!-- Conditionally render the modals based on their state -->
 {#if editingSeries}
-    <EditSeries series={editingSeries} onclose={handleClose}/>
+    <EditSeries series={editingSeries} onclose={handleEditClose}/>
+{/if}
+
+{#if repairSeriesId}
+    <RepairChapterSeries seriesId={repairSeriesId} onclose={handleRepairClose}/>
 {/if}
 
 <div class="overflow-x-auto bg-white rounded-lg shadow">
@@ -107,13 +117,9 @@
     <table class="series-table text-sm w-full">
         <thead class="bg-muted/50 text-muted-foreground uppercase">
         <tr>
-            <th scope="col" class="px-4 py-3">Edit</th>
-            <th scope="col" class="px-4 py-3">Repair</th>
-            <th scope="col" class="px-4 py-3">Manga Name</th>
-            <th scope="col" class="px-4 py-3">Manga Id</th>
+            <th scope="col" class="px-4 py-3">Series Name</th>
+            <th scope="col" class="px-4 py-3">Series Id</th>
             <th scope="col" class="px-4 py-3">Author</th>
-            <!--th scope="col" class="px-4 py-3">Total Chapter</th>-->
-            <!--<th scope="col" class="px-4 py-3">Last Chapters</th>-->
             <th scope="col" class="px-4 py-3">Last Updated</th>
             <th scope="col" class="px-4 py-3">Source Urls</th>
         </tr>
@@ -121,50 +127,60 @@
         <tbody>
         {#if isLoading}
             <tr>
-                <td colspan="6" class="text-center py-8 text-muted-foreground">Loading
-                    manga
-                    list...
+                <td colspan="5" class="text-center py-8 text-muted-foreground">
+                    Loading manga list...
                 </td>
             </tr>
         {:else if errorMessage}
             <tr>
-                <td colspan="6"
+                <td colspan="5"
                     class="text-center py-8 text-destructive">{errorMessage}</td>
             </tr>
         {:else if series && series.length > 0}
             {#each series as manga (manga.id)}
-                <tr class="border-b border-border hover:bg-muted/50 transition-colors">
-                    <td class="px-2 py-2">
-                        <Button onclick={ () => editingSeries = manga }
-                                size="icon"
-                                class="hover:text-blue-800 hover:bg-blue-100 transition-colors cursor-pointer"
-                                title="Edit {manga.title}">
-                            <FilePen/>
-                        </Button>
-                    </td>
-                    <td class="px-4 py-2">
-                        <Button onclick={ () => editingSeries = manga }
-                                size="icon"
-                                class="cursor-pointer"
-                        >
-                            <Wrench/>
-                        </Button>
-                    </td>
-                    <td class="px-4 py-3 font-medium text-foreground">{manga.title}</td>
-                    <td class="px-4 py-3 text-foreground">{manga.id}</td>
-                    <td class="px-4 py-3 text-foreground">{manga.authors.join(', ')}</td>
-                    <td class="px-4 py-3 text-foreground">{manga.lastUpdated}</td>
-                    <td class="px-4 py-3 text-foreground">
-                        <a href={manga.sourceUrl} target="_blank"
-                           class="text-primary hover:underline">
-                            Source URLs
-                        </a>
-                    </td>
+                <tr class="border-b border-border hover:bg-muted/50 transition-colors cursor-pointer"
+                    onclick={() => handleRowClick(manga.id)}>
+                    <td class="px-4 py-3 font-medium text-foreground justify-center">{manga.title}</td>
+                    {#if activeSeriesId === manga.id}
+                        <td colspan="4" class="px-4 py-2">
+                            <div class="flex items-center justify-center space-x-2">
+                                <Button onclick={(e) => { e.stopPropagation(); editingSeries = manga; }}
+                                        size="iconLabel"
+                                        class="hover:text-blue-800 hover:bg-blue-100 transition-colors cursor-pointer"
+                                        title="Edit {manga.title}">
+                                    <FilePen/>
+                                    Edit
+                                </Button>
+                                <Button onclick={(e) => { e.stopPropagation(); repairSeriesId = manga.id }}
+                                        size="iconLabel"
+                                        title="Repair {manga.title}">
+                                    <Wrench/>
+                                    Repair
+                                </Button>
+                                <Button onclick={(e) => {e.stopPropagation();}}
+                                        size="iconLabel"
+                                        title="Delete {manga.title}">
+                                    <Trash2/>
+                                    Delete
+                                </Button>
+                            </div>
+                        </td>
+                    {:else}
+                        <td class="px-4 py-3 text-foreground text-center">{manga.id}</td>
+                        <td class="px-4 py-3 text-foreground">{manga.authors.join(', ')}</td>
+                        <td class="px-4 py-2 text-left">{manga.lastUpdated}</td>
+                        <td class="px-4 py-3 text-foreground">
+                            <a href={manga.sourceUrl} target="_blank"
+                               class="text-primary hover:underline">
+                                Source URLs
+                            </a>
+                        </td>
+                    {/if}
                 </tr>
             {/each}
         {:else}
             <tr>
-                <td colspan="8" class="text-center py-8 text-muted-foreground">No Manga
+                <td colspan="5" class="text-center py-8 text-muted-foreground">No Manga
                     Found
                 </td>
             </tr>
