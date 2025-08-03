@@ -231,12 +231,22 @@ pub async fn login_handler(
         .await
         .map_err(|e| {
             eprintln!("Database error on user lookup: {}", e);
-            AuthError::WrongCredentials
+            AuthError::InternalServerError
         })?
         .ok_or(AuthError::WrongCredentials)?;
 
-    verify_password(&payload.password, &user.password_hash)
-        .map_err(|_| AuthError::WrongCredentials)?;
+    let is_password_valid = verify_password(
+        &payload.password,
+        &user.password_hash,
+    )
+    .map_err(|_| {
+        error!("Password verification failed for user {}", user.username);
+        AuthError::WrongCredentials
+    })?;
+
+    if !is_password_valid {
+        return Err(AuthError::WrongCredentials);
+    }
 
     let role_name = get_role_name(db_service, user.role_id).await?;
 
