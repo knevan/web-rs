@@ -5,6 +5,7 @@
     import Pagination from "$lib/components/Pagination.svelte";
     import {FilePen, Wrench, Trash2} from "@lucide/svelte";
     import RepairChapterSeries from "$lib/components/RepairChapterSeries.svelte";
+    import ConfirmationAlert from "./ConfirmationAlert.svelte";
 
     // Define the type for a series item
     type Series = {
@@ -37,6 +38,7 @@
     const MOCK_DATA: Series[] = Array.from({length: 2500}, (_, i) => createMockSeries(i + 1));
     // --- End of Mock Data Generation ---
 
+    let {rowsPerPage = 20} = $props();
 
     let series = $state<Series[] | null>(null);
     let editingSeries = $state<Series | null>(null);
@@ -45,9 +47,10 @@
     let errorMessage = $state<string | null>(null);
     let totalItems = $state(0);
     let currentPage = $state(1);
-    let pageSize = $state(25); // You can change this to test different page sizes
-    let totalPages = $derived(Math.ceil(totalItems / pageSize));
+    let totalPages = $derived(Math.ceil(totalItems / rowsPerPage));
     let activeSeriesId = $state<number | null>(null);
+    let deleteSeries = $state<Series | null>(null);
+    let prevRowsPerPage = $state(rowsPerPage);
 
     // This function now loads data from our MOCK_DATA array instead of an API.
     async function loadSeries(page: number) {
@@ -58,8 +61,8 @@
         setTimeout(() => {
             try {
                 // Calculate the start and end index for the current page.
-                const start = (page - 1) * pageSize;
-                const end = start + pageSize;
+                const start = (page - 1) * rowsPerPage;
+                const end = start + rowsPerPage;
 
                 // Get the slice of data for the current page.
                 const pagedItems = MOCK_DATA.slice(start, end);
@@ -74,6 +77,42 @@
                 isLoading = false;
             }
         }, 500); // 500ms delay
+    }
+
+    async function confirmDelete() {
+        if (!deleteSeries) return;
+
+        const {id, title} = deleteSeries;
+
+        deleteSeries = null;
+        isLoading = true;
+        errorMessage = null;
+        try {
+            const response = await fetch(`/api/admin/series/delete/${id}`, {
+                method: "DELETE",
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({
+                    message: "Failed to delete series",
+                }));
+                throw new Error(errorData.message);
+            }
+
+            console.log(`Series "${title}" schedule for deletion`);
+
+            await loadSeries(currentPage);
+        } catch (error: any) {
+            console.error("Failed to delete series", error);
+            errorMessage = error.message;
+        } finally {
+            isLoading = false;
+            activeSeriesId = null;
+        }
+    }
+
+    function cancelDelete() {
+        deleteSeries = null;
     }
 
     function handleEditClose() {
@@ -91,9 +130,13 @@
         repairSeriesId = null;
     }
 
-    // This $effect hook will run whenever `currentPage` changes,
-    // triggering our new mock `loadSeries` function.
     $effect(() => {
+        if (rowsPerPage !== prevRowsPerPage) {
+            currentPage = 1;
+            prevRowsPerPage = rowsPerPage;
+            return;
+        }
+
         loadSeries(currentPage);
     });
 
@@ -106,6 +149,16 @@
 
 {#if repairSeriesId}
     <RepairChapterSeries seriesId={repairSeriesId} onclose={handleRepairClose}/>
+{/if}
+
+{#if deleteSeries}
+    <ConfirmationAlert
+            open={!!deleteSeries}
+            title="Are you sure to delete series?"
+            message={`This action will permanently mark the series "${deleteSeries.title}" for deletion. This cannot be undone.`}
+            onConfirm={confirmDelete}
+            onCancel={cancelDelete}
+    />
 {/if}
 
 <div class="overflow-x-auto bg-white rounded-lg shadow">
@@ -157,8 +210,10 @@
                                     <Wrench/>
                                     Repair
                                 </Button>
-                                <Button onclick={(e) => {e.stopPropagation();}}
+                                <Button onclick={(e) => {e.stopPropagation(); deleteSeries = manga; }}
                                         size="iconLabel"
+                                        variant="destructive"
+                                        class="hover:bg-destructive/90 transition-colors"
                                         title="Delete {manga.title}">
                                     <Trash2/>
                                     Delete

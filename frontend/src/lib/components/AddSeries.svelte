@@ -23,6 +23,8 @@
         type: 'success' | 'error'
     } | null>(null);
 
+    let {children} = $props();
+
     let coverPreviewUrl = $derived(coverImageFile ? URL.createObjectURL(coverImageFile) : null);
 
     function resetForm() {
@@ -165,103 +167,107 @@
     }
 </script>
 
-<aside class="p-4 rounded-lg shadow">
-    <form class="flex flex-col space-y-3">
-        <ModalDialog
-                bind:open={open}
-                title="Add New Series"
-                confirmText={isSubmitting ? "Creating..." : "Create Series"}
-                onConfirm={handleAddSeries}
-                dialogClass="sm:max-w-2xl lg:max-w-4xl"
-                disableConfirm={isSubmitting}
-        >
-            {#snippet trigger()}
+
+<form class="flex flex-col space-y-3">
+    <ModalDialog
+            bind:open={open}
+            title="Add New Series"
+            confirmText={isSubmitting ? "Creating..." : "Create Series"}
+            onConfirm={handleAddSeries}
+            dialogClass="sm:max-w-2xl lg:max-w-4xl"
+            disableConfirm={isSubmitting}
+    >
+        {#snippet trigger()}
+            {#if children}
+                {@render children()}
+            {:else}
                 <Button class="cursor-pointer">
                     Add Series
                 </Button>
-            {/snippet}
+            {/if}
+        {/snippet}
 
-            {#snippet children()}
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-4 max-h-[80vh] overflow-y-auto pr-3 custom-scrollbar">
-                    <!-- Left Column Data -->
-                    <div class="md:col-span-2 flex flex-col gap-4">
-                        <div class="grid w-full items-center gap-1.5">
-                            <Label for="seriesName">Series Title <span
-                                    class="text-red-500">*</span> </Label>
-                            <Input id="seriesName" bind:value={title}/>
-                        </div>
-                        <div class="grid w-full items-center gap-1.5">
-                            <Label for="originalName">Original Title</Label>
-                            <Input id="originalName" bind:value={originalTitle}
-                                   placeholder="Optional"/>
-                        </div>
-                        <div class="grid w-full items-center gap-1.5">
-                            <Label for="author" class="text-right">Author</Label>
-                            <div class="col-span-3 flex flex-col gap-2">
-                                {#each authors as author, index (author.id)}
-                                    <div class="flex items-center gap-2">
-                                        <Input bind:value={author.name}/>
-                                        {#if index === 0}
-                                            <Button onclick={addAuthor} size="icon"
-                                                    type="button" aria-label="Add Author">
-                                                <Plus class="h-4 w-4"/>
-                                            </Button>
-                                        {:else}
-                                            <Button onclick={() => removeAuthor(author.id)}
-                                                    size="icon" type="button"
-                                                    aria-label="Remove Author">
-                                                <Minus class="h-4 w-4"/>
-                                            </Button>
-                                        {/if}
-                                    </div>
-                                {/each}
-                            </div>
-                        </div>
-                        <div class="grid w-full items-center gap-1.5">
-                            <Label for="description"
-                                   class="text-right">Description <span
-                                    class="text-red-500">*</span> </Label>
-                            <textarea id="description" bind:value={description}
-                                      class="flex min-h-[150px] w-full rounded-md border-input px-3 py-3 text-sm"
-                                      placeholder="Series Description"></textarea>
-                        </div>
-                        <div class="grid w-full items-center gap-1.5">
-                            <Label for="sourceUrl">Source Url <span
-                                    class="text-red-500">*</span> </Label>
-                            <Input id="sourceUrl" type="url" bind:value={sourceUrl}/>
+        {#snippet children()}
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-4 max-h-[80vh] overflow-y-auto pr-3 custom-scrollbar">
+                <!-- Left Column Data -->
+                <div class="md:col-span-2 flex flex-col gap-4">
+                    <div class="grid w-full items-center gap-1.5">
+                        <Label for="seriesName">Series Title <span
+                                class="text-red-500">*</span> </Label>
+                        <Input id="seriesName" bind:value={title}/>
+                    </div>
+                    <div class="grid w-full items-center gap-1.5">
+                        <Label for="originalName">Original Title</Label>
+                        <Input id="originalName" bind:value={originalTitle}
+                               placeholder="Optional"/>
+                    </div>
+                    <div class="grid w-full items-center gap-1.5">
+                        <Label for="author" class="text-right">Author</Label>
+                        <div class="col-span-3 flex flex-col gap-2">
+                            {#each authors as author, index (author.id)}
+                                <div class="flex items-center gap-2">
+                                    <Input bind:value={author.name}/>
+                                    {#if index === 0}
+                                        <Button onclick={addAuthor} size="icon"
+                                                type="button" aria-label="Add Author">
+                                            <Plus class="h-4 w-4"/>
+                                        </Button>
+                                    {:else}
+                                        <Button onclick={() => removeAuthor(author.id)}
+                                                size="icon" type="button"
+                                                aria-label="Remove Author">
+                                            <Minus class="h-4 w-4"/>
+                                        </Button>
+                                    {/if}
+                                </div>
+                            {/each}
                         </div>
                     </div>
+                    <div class="grid w-full items-center gap-1.5">
+                        <Label for="description"
+                               class="text-right">Description <span
+                                class="text-red-500">*</span> </Label>
+                        <textarea id="description" bind:value={description}
+                                  class="flex min-h-[150px] w-full rounded-md border-input px-3 py-3 text-sm"
+                                  placeholder="Series Description"></textarea>
+                    </div>
+                    <div class="grid w-full items-center gap-1.5">
+                        <Label for="sourceUrl">Source Url <span
+                                class="text-red-500">*</span> </Label>
+                        <Input id="sourceUrl" type="url" bind:value={sourceUrl}/>
+                    </div>
+                </div>
 
-                    <div class="md:col-span-1 flex flex-col gap-1.5">
-                        <Label>Cover Image <span class="text-red-500">*</span> </Label>
-                        <div class="aspect-[3/4] w-full" ondragover={handleDragOver}
-                             ondrop={handleDrop} ondragleave={handleDragLeave}
-                             role="button" tabindex="0">
-                            {#if coverPreviewUrl}
-                                <div class="relative h-full w-full">
-                                    <img
-                                            src={coverPreviewUrl}
-                                            alt="Cover preview"
-                                            class="h-full w-full rounded-md object-cover"
-                                    />
-                                    <Button
-                                            onclick={removeImage}
-                                            variant="destructive"
-                                            size="icon"
-                                            class="absolute right-2 top-2 h-4 w-4 rounded-full cursor-pointer"
-                                            aria-label="Remove image"
-                                    >
-                                        <X class="h-4 w-4"/>
-                                    </Button>
-                                </div>
-                            {:else}
-                                <Label
-                                        for="coverImageInput"
-                                        class="flex h-full w-full cursor-pointer
+                <div class="md:col-span-1 flex flex-col gap-1.5">
+                    <Label>Cover Image <span class="text-red-500">*</span> </Label>
+                    <div class="aspect-[3/4] w-full" ondragover={handleDragOver}
+                         ondrop={handleDrop} ondragleave={handleDragLeave}
+                         role="button" tabindex="0">
+                        {#if coverPreviewUrl}
+                            <div class="relative h-full w-full">
+                                <img
+                                        src={coverPreviewUrl}
+                                        alt="Cover preview"
+                                        class="h-full w-full rounded-md object-cover"
+                                />
+                                <Button
+                                        onclick={removeImage}
+                                        variant="destructive"
+                                        size="icon"
+                                        class="absolute right-2 top-2 h-4 w-4 rounded-full cursor-pointer"
+                                        aria-label="Remove image"
+                                >
+                                    <X class="h-4 w-4"/>
+                                </Button>
+                            </div>
+                        {:else}
+                            <Label
+                                    for="coverImageInput"
+                                    class="flex h-full w-full cursor-pointer
                                         flex-col items-center justify-center rounded-md
                                         border-2 border-dashed border-input bg-background
                                         hover:bg-accent {isDragging ? 'border-blue-500' : ''}"
-                                >
+                            >
                                     <span class="text-sm text-muted-foreground"
                                           class:text-blue-500={isDragging}>
                                         {#if isDragging}
@@ -270,34 +276,33 @@
                                             Choose file
                                         {/if}
                                     </span>
-                                </Label>
-                                <input
-                                        bind:this={fileInput}
-                                        onchange={handleFileChange}
-                                        id="coverImageInput"
-                                        type="file"
-                                        class="hidden"
-                                        accept="image/png, image/jpeg, image/webp, image/avif"
-                                        required
-                                />
-                            {/if}
-                        </div>
+                            </Label>
+                            <input
+                                    bind:this={fileInput}
+                                    onchange={handleFileChange}
+                                    id="coverImageInput"
+                                    type="file"
+                                    class="hidden"
+                                    accept="image/png, image/jpeg, image/webp, image/avif"
+                                    required
+                            />
+                        {/if}
                     </div>
                 </div>
-                {#if notification}
-                    <div class="mt-2 text-sm p-3 rounded-md"
-                         class:bg-red-50={notification.type === 'error'}
-                         class:text-red-700={notification.type === 'error'}
-                         class:bg-green-50={notification.type ==='success'}
-                         class:text-green-700={notification.type ==='success'}
-                    >
-                        {notification.message}
-                    </div>
-                {/if}
-            {/snippet}
-        </ModalDialog>
-    </form>
-</aside>
+            </div>
+            {#if notification}
+                <div class="mt-2 text-sm p-3 rounded-md"
+                     class:bg-red-50={notification.type === 'error'}
+                     class:text-red-700={notification.type === 'error'}
+                     class:bg-green-50={notification.type ==='success'}
+                     class:text-green-700={notification.type ==='success'}
+                >
+                    {notification.message}
+                </div>
+            {/if}
+        {/snippet}
+    </ModalDialog>
+</form>
 
 <style>
     /*
