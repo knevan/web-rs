@@ -201,6 +201,7 @@ fn default_page_size() -> u32 {
     25
 }
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SeriesResponse {
     id: i32,
     title: String,
@@ -213,6 +214,7 @@ pub struct SeriesResponse {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PaginatedSeriesResponse {
     items: Vec<SeriesResponse>,
     total_items: i64,
