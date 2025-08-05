@@ -2,6 +2,7 @@ use crate::database::DatabaseService;
 use crate::database::storage::StorageClient;
 use crate::scraping::model::SitesConfig;
 use crate::task_workers::delete_series_worker::run_deletion_background_worker;
+use crate::task_workers::log_view_cleanup_worker::run_log_view_cleanup_worker;
 use crate::task_workers::repair_chapter_worker::{
     RepairChapterMsg, run_repair_chapter_worker,
 };
@@ -35,6 +36,9 @@ pub fn setup_worker_channels(
         http_client.clone(),
         sites_config.clone(),
     ));
+
+    // Log View Cleanup worker
+    tokio::spawn(run_log_view_cleanup_worker(db_service.clone()));
 
     WorkerChannels { repair_tx }
 }

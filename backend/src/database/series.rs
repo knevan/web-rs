@@ -1,5 +1,6 @@
 use super::*;
 use anyhow::{Context, anyhow};
+use sqlx::postgres::types::PgInterval;
 
 /// Macros `sqlx::query!`
 /// For DML operations (INSERT, UPDATE, DELETE) or SELECTs,
@@ -548,5 +549,116 @@ impl DatabaseService {
                 .context("Failed to list all categories with sqlx")?;
 
         Ok(categories)
+    }
+
+    pub async fn record_series_view(&self, series_id: i32) -> AnyhowResult<()> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to begin transaction.")?;
+
+        sqlx::query!(
+            "INSERT INTO series_view_log (series_id) VALUES ($1)",
+            series_id
+        )
+        .execute(&mut *tx)
+        .await
+        .context("Failed to record series view with sqlx")?;
+
+        // Increment the total view count
+        sqlx::query!(
+            "UPDATE series SET views_count = views_count + 1 WHERE id = $1",
+            series_id
+        )
+        .execute(&mut *tx)
+        .await
+        .context("Failed to increment series view count with sqlx")?;
+
+        tx.commit().await.context("Failed to commit transaction.")?;
+
+        Ok(())
+    }
+
+    pub async fn fetch_most_viewed_series(
+        &self,
+        period: &str,
+        limit: i64,
+    ) -> AnyhowResult<Vec<MostViewedSeries>> {
+        let pg_interval = match period {
+            "1 hour" => PgInterval {
+                months: 0,
+                days: 0,
+                microseconds: 3_600_000_000,
+            },
+            "1 day" => PgInterval {
+                months: 0,
+                days: 1,
+                microseconds: 0,
+            },
+            "1 week" => PgInterval {
+                months: 0,
+                days: 7,
+                microseconds: 0,
+            },
+            "1 month" => PgInterval {
+                months: 1,
+                days: 0,
+                microseconds: 0,
+            },
+            // Default to 1 day
+            _ => PgInterval {
+                months: 0,
+                days: 1,
+                microseconds: 0,
+            },
+        };
+
+        let series_list = sqlx::query_as!(
+            MostViewedSeries,
+            r#"
+            SELECT
+                s.id,
+                s.title,
+                s.cover_image_url,
+                COUNT(svl.series_id) AS "view_count"
+            FROM
+                series s
+            INNER JOIN
+                series_view_log svl ON s.id = svl.series_id
+            WHERE
+                svl.viewed_at >= NOW() - $1::interval
+            GROUP BY
+                s.id
+            ORDER BY
+                view_count DESC
+            LIMIT $2
+            "#,
+            pg_interval,
+            limit
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to fetch most viewed series with sqlx")?;
+
+        Ok(series_list)
+    }
+
+    pub async fn cleanup_old_view_logs(&self) -> AnyhowResult<u64> {
+        let retention_interval = PgInterval {
+            months: 1,
+            days: 0,
+            microseconds: 0,
+        };
+
+        let result = sqlx::query!(
+            "DELETE FROM series_view_log WHERE viewed_at < NOW() - $1::interval",
+            retention_interval as _
+        )
+            .execute(&self.pool)
+            .await
+            .context("Failed to cleanup old view logs with sqlx")?;
+
+        Ok(result.rows_affected())
     }
 }

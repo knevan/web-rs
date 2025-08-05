@@ -7,8 +7,9 @@ use crate::common::jwt::{
 };
 use crate::database::DatabaseService;
 use axum::Json;
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum_core::__private::tracing::error;
+use axum_core::response::{IntoResponse, Response};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use chrono::{Duration, Utc};
@@ -492,4 +493,49 @@ pub async fn reset_password_handler(
     };
 
     Ok(Json(response))
+}
+
+#[derive(Deserialize)]
+pub struct MostViewedParams {
+    #[serde(default = "default_period")]
+    period: String,
+    #[serde(default = "default_limit")]
+    limit: i64,
+}
+
+fn default_period() -> String {
+    "week".to_string()
+}
+
+fn default_limit() -> i64 {
+    20
+}
+
+pub async fn fetch_most_viewed_series_handler(
+    State(state): State<AppState>,
+    Query(params): Query<MostViewedParams>,
+) -> Response {
+    // Map the user-friendly period string
+    let period_str = match params.period.to_lowercase().as_str() {
+        "hour" => "1 hour",
+        "day" => "1 day",
+        "week" => "1 week",
+        "month" => "1 month",
+        _ => "1 days",
+    };
+
+    match state
+        .db_service
+        .fetch_most_viewed_series(period_str, params.limit)
+        .await
+    {
+        Ok(series) => (StatusCode::OK, Json(series)).into_response(),
+        Err(e) => {
+            eprintln!("Error fetching most viewed series: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": "Could not retrieve most viewed series."})),
+            ).into_response()
+        }
+    }
 }

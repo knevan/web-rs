@@ -133,6 +133,14 @@ pub struct CategoryTag {
     pub name: String,
 }
 
+#[derive(Debug, FromRow, Serialize)]
+pub struct MostViewedSeries {
+    pub id: i32,
+    pub title: String,
+    pub cover_image_url: String,
+    pub view_count: Option<i64>,
+}
+
 // A helper function to extract a hostname from an optional URL string.
 // This is created to avoid code duplication, following the DRY principle.
 fn get_host_from_url(url_option: Option<&str>) -> Option<String> {
