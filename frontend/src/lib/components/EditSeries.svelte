@@ -3,6 +3,7 @@
     import {Label} from "$lib/components/ui/label";
     import {Input} from "$lib/components/ui/input";
     import {apiFetch} from "$lib/store/auth";
+    import {toast} from "svelte-sonner";
 
     type Series = {
         id: number;
@@ -35,36 +36,48 @@
         }
     });
 
-    async function handleSubmit() {
-        if (isSubmitting) return;
-        isSubmitting = true;
-        errorMessage = null;
-
+    async function updateSeriesRequest() {
         // Prepare the payload for the backend API, matching the `UpdateSeriesRequest` struct
         const payload = {
             ...formData,
             authors: formData.authors.split(', ').map(author => author.trim()).filter(Boolean),
         };
-
-        try {
-            const response = await apiFetch(`/api/admin/series/update/${series.id}`, {
-                method: 'PUT',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to update series');
-            }
-
-            onclose();
-        } catch (error: any) {
-            console.error('Submisson failed:', error);
-            errorMessage = error.message;
-        } finally {
-            isSubmitting = false;
+        const response = await apiFetch(`/api/admin/series/update/${series.id}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Failed to update series');
         }
+        return series.title;
+    }
+
+    async function handleSubmit() {
+        if (isSubmitting) return;
+        isSubmitting = true;
+
+        toast.promise(updateSeriesRequest(), {
+            position: "top-center",
+            richColors: true,
+            closeButton: false,
+            duration: 3000,
+            class: "[--width:500px]",
+            loading: 'Updating the series...',
+            success: (title) => {
+                onclose();
+                return `Series "${title} has been successfully updated."`
+            },
+            error: (err) => {
+                console.error("Failed to update series: ", err);
+                const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+                return `Failed to update series: ${series.title}: ${errorMessage}`;
+            },
+            finally: () => {
+                isSubmitting = false;
+            },
+        });
     }
 </script>
 

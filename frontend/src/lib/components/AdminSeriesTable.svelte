@@ -6,6 +6,7 @@
     import {FilePen, Wrench, Trash2} from "@lucide/svelte";
     import RepairChapterSeries from "$lib/components/RepairChapterSeries.svelte";
     import ConfirmationAlert from "./ConfirmationAlert.svelte";
+    import {toast} from "svelte-sonner";
 
     // Define the type for a series item
     type Series = {
@@ -82,33 +83,40 @@
     async function confirmDelete() {
         if (!deleteSeries) return;
 
-        const {id, title} = deleteSeries;
-
+        const seriesToDelete = deleteSeries;
         deleteSeries = null;
-        isLoading = true;
-        errorMessage = null;
-        try {
-            const response = await fetch(`/api/admin/series/delete/${id}`, {
+
+        const deleteRequest = async () => {
+            const response = await fetch(`/api/admin/series/delete/${seriesToDelete.id}`, {
                 method: "DELETE",
             });
-
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({
                     message: "Failed to delete series",
                 }));
                 throw new Error(errorData.message);
             }
+            return seriesToDelete.title;
+        };
 
-            console.log(`Series "${title}" schedule for deletion`);
-
-            await loadSeries(currentPage);
-        } catch (error: any) {
-            console.error("Failed to delete series", error);
-            errorMessage = error.message;
-        } finally {
-            isLoading = false;
-            activeSeriesId = null;
-        }
+        toast.promise(deleteRequest(), {
+            position: "top-center",
+            richColors: true,
+            duration: 3000,
+            loading: `Scheduling "${seriesToDelete.title}" for deletion...`,
+            success: (title) => {
+                loadSeries(currentPage);
+                return `Series "${title}" deleted successfully!`;
+            },
+            error: (err) => {
+                const message = err instanceof Error ? err.message : "Unknown error";
+                loadSeries(currentPage);
+                return `Failed to delete series: ${message}`;
+            },
+            finally: () => {
+                activeSeriesId = null;
+            }
+        });
     }
 
     function cancelDelete() {

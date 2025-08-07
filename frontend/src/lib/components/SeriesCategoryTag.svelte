@@ -4,6 +4,7 @@
     import {Badge} from "$lib/components/ui/badge/index.js";
     import {Input} from "$lib/components/ui/input/index.js";
     import {X} from "@lucide/svelte"
+    import {toast} from "svelte-sonner";
 
     type CategoryTag = {
         id: number;
@@ -14,7 +15,6 @@
     let tags = $state<CategoryTag[]>([]);
     let newTagName = $state('');
     let isLoading = $state(false);
-    let errorMessage = $state<string | null>(null);
 
     // Automatic sort tags alphabetically
     const sortedTags = $derived(tags.toSorted((a, b) => a.name.localeCompare(b.name)));
@@ -22,7 +22,6 @@
     // Fetch all tags
     async function loadTags() {
         isLoading = true;
-        errorMessage = null;
 
         try {
             const response = await fetch('/api/admin/category/tag/list');
@@ -35,7 +34,7 @@
             const data = await response.json();
             tags = data.categories;
         } catch (e: any) {
-            errorMessage = e.message;
+            toast.error('Failed to load tags:', {description: e.message});
             console.error('Error adding tags:', e);
         } finally {
             isLoading = false;
@@ -48,9 +47,7 @@
 
         const formattedName = trimmedName.charAt(0).toUpperCase() + trimmedName.slice(1).toLowerCase();
 
-        isLoading = true;
-        errorMessage = null;
-        try {
+        const addRequest = async () => {
             const response = await fetch('/api/admin/category/tag/add', {
                 method: 'POST',
                 headers: {
@@ -58,40 +55,61 @@
                 },
                 body: JSON.stringify({name: formattedName})
             });
-
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.message || 'Failed to add tag');
             }
-            newTagName = '';
-            await loadTags();
-        } catch (e: any) {
-            errorMessage = e.message;
-            console.error('Error adding tag:', e);
-        } finally {
-            isLoading = false;
-        }
+            return formattedName;
+        };
+
+        toast.promise(addRequest(), {
+            position: "top-center",
+            richColors: true,
+            duration: 3000,
+            loading: 'Adding new tag...',
+            success: (name) => {
+                newTagName = '';
+                loadTags();
+                return `Tag "${name}" has been added.`;
+            },
+            error: (err) => {
+                const message = err instanceof Error ? err.message : "Unknown error";
+                return `Failed to add tag: ${message}`;
+            },
+            finally: () => {
+                isLoading = false;
+            }
+        });
     }
 
     async function handleDeleteTag(tagId: number) {
-        isLoading = true;
-        errorMessage = null;
-        try {
+        // Find the tag name to show it in the notification message
+        const tagName = tags.find(t => t.id === tagId)?.name ?? `ID: ${tagId}`;
+
+        const deleteRequest = async () => {
             const response = await fetch(`/api/admin/category/tag/delete/${tagId}`, {
                 method: 'DELETE',
             });
-
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.message || 'Failed to delete tag');
             }
-            await loadTags();
-        } catch (e: any) {
-            errorMessage = e.message;
-            console.error('Error deleting tag:', e);
-        } finally {
-            isLoading = false;
-        }
+        };
+
+        toast.promise(deleteRequest(), {
+            position: "top-center",
+            richColors: true,
+            duration: 3000,
+            loading: 'Deleting tag...',
+            success: () => {
+                loadTags();
+                return `Tag "${tagName}" has been deleted.`;
+            },
+            error: (err) => {
+                const message = err instanceof Error ? err.message : "Unknown error";
+                return `Failed to delete tag: ${message}`;
+            }
+        });
     }
 
     $effect(() => {
@@ -130,10 +148,6 @@
                 {isLoading ? "Adding..." : "Add"}
             </Button>
         </form>
-
-        {#if errorMessage}
-            <p class="-mt-4 text-destructive">{errorMessage}</p>
-        {/if}
 
         <div class="-mt-2 flex flex-wrap gap-2 border-t pt-2">
             {#if isLoading && tags.length === 0}

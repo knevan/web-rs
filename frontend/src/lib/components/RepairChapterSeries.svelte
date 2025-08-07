@@ -2,6 +2,7 @@
     import ModalDialog from "$lib/components/ModalDialog.svelte";
     import {Label} from "$lib/components/ui/label";
     import {Input} from "$lib/components/ui/input/index.js";
+    import {toast} from "svelte-sonner";
 
     // seriesId to target the correct series and onclose to handle closing the modal.
     let {seriesId, onclose}: { seriesId: number, onclose: () => void } = $props();
@@ -14,8 +15,6 @@
 
     // State managing submission
     let isSubmitting = $state(false);
-    let errorMessage = $state<string | null>(null);
-    let successMessage = $state<string | null>(null);
     let open = $state(true);
 
     // call onclose handler
@@ -28,25 +27,18 @@
     async function handleSubmit() {
         if (isSubmitting) return;
         isSubmitting = true;
-        errorMessage = null;
-        successMessage = null;
 
-        // Validation
-        const chapterNumberFloat = parseFloat(formData.chapterNumber);
-        if (isNaN(chapterNumberFloat)) {
-            errorMessage = "Chapter number must be a valid number.";
-            isSubmitting = false;
-            return;
-        }
-
-        // Prepare payload backend struct `RepairChapterRequest`
-        const payload = {
-            chapter_number: chapterNumberFloat,
-            new_chapter_url: formData.newChapterUrl,
-            new_chapter_title: formData.newChapterTitle || null,
-        };
-
-        try {
+        const repairRequest = async () => {
+            // Validation
+            const chapterNumberFloat = parseFloat(formData.chapterNumber);
+            if (isNaN(chapterNumberFloat)) {
+                throw new Error('Chapter number must be a valid number');
+            }
+            const payload = {
+                chapter_number: chapterNumberFloat,
+                new_chapter_url: formData.newChapterUrl,
+                new_chapter_title: formData.newChapterTitle || null,
+            };
             // Send request to repair chapter endpoint
             const response = await fetch(`/api/admin/repair/chapter/${seriesId}`, {
                 method: 'POST',
@@ -55,25 +47,33 @@
                 },
                 body: JSON.stringify(payload)
             });
-
             const result = await response.json();
 
             if (!response.ok) {
                 throw new Error(result.message || 'Failed to schedule repair chapter');
             }
+            return result.message;
+        };
 
-            successMessage = result.message;
-
-            // Close modal after short delay
-            setTimeout(() => {
-                open = false;
-            }, 1500);
-        } catch (error: any) {
-            console.error('Submission failed:', error);
-            errorMessage = error.message;
-        } finally {
-            isSubmitting = false;
-        }
+        toast.promise(repairRequest(), {
+            position: "top-center",
+            richColors: true,
+            duration: 3000,
+            loading: `Submitting repair chapter...`,
+            success: (message) => {
+                setTimeout(() => {
+                    open = false;
+                }, 1500);
+                return message;
+            },
+            error: (err) => {
+                const message = err instanceof Error ? err.message : "Unknown error";
+                return `Submissing failed: ${message}`;
+            },
+            finally: () => {
+                isSubmitting = false;
+            }
+        });
     }
 </script>
 
@@ -107,18 +107,6 @@
                 <Input id="newChapterTitle" type="text"
                        bind:value={formData.newChapterTitle}/>
             </div>
-
-            <!-- Display error or success messages to the user -->
-            {#if errorMessage}
-                <div class="text-red-500 mt-2">
-                    {errorMessage}
-                </div>
-            {/if}
-            {#if successMessage}
-                <div class="text-green-500 mt-2">
-                    {successMessage}
-                </div>
-            {/if}
         </form>
     {/snippet}
 </ModalDialog>
