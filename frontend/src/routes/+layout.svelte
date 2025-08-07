@@ -3,46 +3,53 @@
     import Footer from '$lib/components/Footer.svelte';
     import '../app.css'
     /*import '.style.css';*/
-    import '../app.css'
-    /*import '.style.css';*/
-    import {onMount} from "svelte";
-    import {verifyAuth} from "$lib/store/auth.js";
+    import {auth} from "$lib/store/auth.js";
+    import {Toaster} from "$lib/components/ui/sonner/index.js";
+    import {ModeWatcher} from "mode-watcher";
 
-    // When the app loads, check if the user has a valid session cookie
-    onMount(() => {
-        verifyAuth();
-    });
+    let {data, children} = $props();
 
-    let {children} = $props();
+    // It will sync the `auth` store whenever the `data` from `load` function change
+    $effect(() => {
+        if (data.user) {
+            auth.set({
+                isAuthenticated: true,
+                user: data.user,
+                error: null,
+            });
+        } else {
+            // If no user data, set the store to its initial unauthenticated state.
+            auth.set({
+                isAuthenticated: false,
+                user: null,
+                error: null,
+            })
+        }
+    })
+
 </script>
 
-<div class="app">
+<ModeWatcher/>
+
+<Toaster
+        richColors
+        closeButton
+        class="![--width:clamp(280px,340px,100%)] xl:[--width:clamp(280px,660px,100%)]"
+        toastOptions={{
+            classes: {
+                toast: 'flex items-center w-full px-5 py-3 rounded-lg shadow-lg bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-500 text-zinc-800 dark:text-zinc-200',
+                title: 'font-medium text-sm'
+            }
+        }}
+/>
+
+<div class="flex min-h-screen flex-col">
     <Header/>
 
-    <main>
+    <main class="w-full flex-1 max-w-6xl mx-auto p-4">
         {@render children()}
     </main>
 
     <Footer/>
 
 </div>
-
-<style>
-    .app {
-        display: flex;
-        flex-direction: column;
-        min-height: 100vh;
-        margin: auto;
-    }
-
-    main {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        padding: 1rem;
-        width: 100%;
-        max-width: 64rem;
-        margin: 0 auto;
-        box-sizing: border-box;
-    }
-</style>
