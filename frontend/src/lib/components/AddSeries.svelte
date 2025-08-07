@@ -6,13 +6,13 @@
     import ModalDialog from "$lib/components/ModalDialog.svelte";
     import {X, Plus, Minus} from "@lucide/svelte";
     import {apiFetch} from "$lib/store/auth";
+    import {toast} from "svelte-sonner";
 
     let title = $state('');
     let originalTitle = $state('');
     let description = $state('');
     let authors = $state([{id: Date.now(), name: ''}]);
     let sourceUrl = $state('');
-    // let host = $state('');
     let coverImageFile = $state<File | null>(null);
     let fileInput = $state<HTMLInputElement | null>(null);
     let isSubmitting = $state(false);
@@ -110,60 +110,59 @@
         return result.url;
     }
 
+    async function createSeriesRequest() {
+        if (!title || !coverImageFile || !description || !sourceUrl) {
+            throw new Error("Please fill in all required fields.");
+        }
+
+        const uploadedCoverUrl = await uploadCoverImage(coverImageFile);
+        const payload = {
+            title,
+            original_title: originalTitle || null,
+            authors: authors.map(a => a.name).filter(name => name.trim() !== ''),
+            description,
+            cover_image_url: uploadedCoverUrl,
+            source_url: sourceUrl,
+        };
+        const response = await apiFetch('/api/admin/series/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() =>
+                ({message: 'Failed to add series. Unknown error occurred.'}));
+            throw new Error(errorData.message);
+        }
+
+        const result = await response.json();
+        return {id: result.id, title: title};
+    }
+
     async function handleAddSeries() {
         isSubmitting = true;
-        notification = null;
 
-        if (!title || !coverImageFile || !description || !sourceUrl) {
-            alert("Please fill in all required fields.");
-            isSubmitting = false;
-            return;
-        }
-
-        try {
-            const uploadedCoverUrl = await uploadCoverImage(coverImageFile);
-
-            const payload = {
-                title,
-                original_title: originalTitle || null,
-                authors: authors.map(a => a.name).filter(name => name.trim() !== ''),
-                description,
-                cover_image_url: uploadedCoverUrl,
-                source_url: sourceUrl,
-            };
-
-            const response = await apiFetch('/api/admin/series/add', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload),
-            });
-
-            if (response.ok) {
-                const result = await response.json();
-                notification = {
-                    message: `Series added with ID: ${result.id}, Title: ${title}`,
-                    type: 'success'
-                };
-
-                setTimeout(() => {
-                    open = false;
-                }, 3000);
-
+        toast.promise(createSeriesRequest(), {
+            position: "top-center",
+            richColors: true,
+            duration: 3000,
+            loading: 'Adding new series...',
+            success: (data) => {
+                open = false;
                 resetForm();
-                // TODO: Close the modal and refresh the series list automatically
-            } else {
-                const errorData = await response.json().catch(() =>
-                    ({message: 'Failed to add series. Unknown error occurred.'}));
-                notification = {message: errorData.message, type: 'error'};
-            }
-        } catch (error) {
-            alert((error as Error).message);
-            console.error("Failed to add series: ", error);
-        } finally {
-            isSubmitting = false;
-        }
+                return `Series [${data.id}] "${data.title}"  has been created successfully!`;
+            },
+            error: (err) => {
+                console.error("Failed to add series: ", err);
+                const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+                return `Failed to add series: ${errorMessage} || Please try again later.`;
+            },
+            finally: () => {
+                isSubmitting = false;
+            },
+        });
     }
 </script>
 
