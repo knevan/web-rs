@@ -92,6 +92,47 @@ export async function login(identifier: string, password: string) {
 	}
 }
 
+async function refreshToken(): Promise<boolean> {
+	try {
+		const response = await fetch('/api/auth/refresh', {
+			method: 'POST'
+		});
+
+		if (response.ok) {
+			return true;
+		}
+
+		await logout();
+		return false;
+	} catch (error) {
+		await logout();
+		return false;
+	}
+}
+
+export async function apiFetch(
+	url: string,
+	options: RequestInit = {}
+): Promise<Response> {
+	let response = await fetch(url, options);
+
+	if (response.status === 401) {
+		console.log('Token expired. Attempting to refresh...');
+
+		const refreshed = await refreshToken();
+
+		if (refreshed) {
+			console.log('Token refreshed successfully. Retrying original request...');
+			response = await fetch(url, options);
+		} else {
+			// If refresh failed, the user will be logged out by the refreshToken function.
+			throw new Error('Session expired. Please log in again.');
+		}
+	}
+
+	return response;
+}
+
 // Register a new user by calling the backend endpoint.
 export async function register(username: string, email: string, password: string) {
 	try {
@@ -146,7 +187,10 @@ export async function checkUsernameAvailability(username: string) {
 		// Backend should return a Json object ( available: boolean, message: string)
 		return { available: data.available, message: data.message };
 	} catch (e) {
-		return { available: false, message: 'Failed to connect to server. Please try again later.' };
+		return {
+			available: false,
+			message: 'Failed to connect to server. Please try again later.'
+		};
 	}
 }
 
@@ -156,7 +200,7 @@ export async function verifyAuth() {
 	try {
 		// The 'protected_handler' on the backend verifies the token cookie
 		// and returns user data if valid.
-		const response = await fetch('/api/auth/user', {
+		const response = await apiFetch('/api/auth/user', {
 			method: 'POST' // As defined in routes.rs
 		});
 
@@ -169,8 +213,7 @@ export async function verifyAuth() {
 				error: null
 			}));
 		} else {
-			// If the cookie is invalid or expired, log the user out
-			await logout(false);
+			// If the cookie is invalid or expired, and refresh fails, log the user out.
 		}
 	} catch (e) {
 		auth.update((store) => ({
