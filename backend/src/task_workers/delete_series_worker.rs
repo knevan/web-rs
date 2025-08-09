@@ -1,94 +1,133 @@
-use crate::database::DatabaseService;
 use crate::database::storage::StorageClient;
+use crate::database::{DatabaseService, Series};
 use anyhow::Context;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::mpsc;
 use tokio_retry2::Retry;
 use tokio_retry2::strategy::{FixedInterval, jitter};
 
-pub async fn run_deletion_background_worker(
+#[derive(Debug)]
+pub struct DeletionJob {
+    series: Series,
+}
+
+// Scheduler to pool database for deletion jobs
+pub async fn run_deletion_scheduler(
     db_service: DatabaseService,
-    storage_client: Arc<StorageClient>,
+    job_sender: mpsc::Sender<DeletionJob>,
 ) {
     println!("[WORKER] Deletion worker started");
 
-    loop {
-        let job_processed =
-            process_one_available_job(&db_service, storage_client.clone())
-                .await;
+    // Interval pooling
+    let mut interval = tokio::time::interval(Duration::from_secs(180));
+    // Skip frist tick
+    interval.tick().await;
 
-        // Empty queue wait longer, if job available wait shortlyx`
-        if !job_processed {
-            tokio::time::sleep(Duration::from_secs(60)).await;
-        } else {
-            tokio::time::sleep(Duration::from_millis(500)).await;
+    loop {
+        interval.tick().await;
+
+        // Find looking until the queue is empty in the DB
+        loop {
+            match db_service.find_and_lock_series_for_job_deletion().await {
+                Ok(Some(series)) => {
+                    println!(
+                        "[DELETION-WORKER] Found job for series {}, send to worker",
+                        series.id
+                    );
+                    let job = DeletionJob { series };
+                    if job_sender.send(job).await.is_err() {
+                        eprintln!(
+                            "[DELETION-WORKER] CRITICAL: Receiver channel closed. Shutting down."
+                        );
+                        break;
+                    }
+                }
+                Ok(None) => {
+                    println!("[DELETION-WORKER] No jobs found. Sleeping.");
+                    break;
+                }
+                Err(e) => {
+                    eprintln!(
+                        "[DELETION-WORKER] Error finding job: {}. Retrying later.",
+                        e
+                    );
+                    break;
+                }
+            }
         }
     }
 }
 
-async fn process_one_available_job(
-    db_service: &DatabaseService,
+pub async fn run_deletion_worker(
+    worker_id: usize,
+    db_service: DatabaseService,
     storage_client: Arc<StorageClient>,
-) -> bool {
-    let series_result =
-        db_service.find_and_lock_series_for_job_deletion().await;
+    // Use async-channel in the future for more than 1 worker
+    mut job_receiver: mpsc::Receiver<DeletionJob>,
+) {
+    println!("[DELETION-WORKER] Deletion worker {} started", worker_id);
 
-    let series = match series_result {
-        Ok(Some(s)) => s,
-        Ok(None) => return false,
-        Err(e) => {
-            eprintln!("[WORKER] Error finding job: {}. Retrying later.", e);
-            return false;
-        }
-    };
-
-    let retry_strategy = FixedInterval::from_millis(1000).map(jitter).take(5);
-
-    let db_service_owned = db_service.clone();
-
-    let result = Retry::spawn(retry_strategy, move || {
-        let db_service_attempt = db_service_owned.clone();
-        let storage_client_attempt = storage_client.clone();
-
-        async move {
-            execute_full_deletion(
-                series.id,
-                &db_service_attempt,
-                storage_client_attempt,
-            )
-            .await
-            .map_err(|e| {
-                eprintln!(
-                    "[WORKER] Attempt for series {} failed: {}. Retrying again.",
-                    series.id, e
-                );
-                tokio_retry2::RetryError::transient(e)
-            })
-        }
-    })
-    .await;
-
-    // Handle the result after all try attempts
-    if result.is_err() {
-        eprintln!(
-            "[WORKER] Job for series {} failed after 5 attempt. Moving to 'deletion_failed'.",
-            series.id
+    while let Some(job) = job_receiver.recv().await {
+        println!(
+            "[DELETION-WORKER] Processing job for series {}",
+            job.series.id
         );
 
-        if let Err(e) = db_service
-            .update_series_processing_status(series.id, "deletion_failed")
-            .await
-        {
+        let series_id = job.series.id;
+        let retry_strategy =
+            FixedInterval::from_millis(1000).map(jitter).take(5);
+
+        let db_clone = db_service.clone();
+        let storage_clone = storage_client.clone();
+
+        let result = Retry::spawn(retry_strategy, move || {
+            let db_attempt = db_clone.clone();
+            let storage_attempt = storage_clone.clone();
+
+            async move {
+                execute_full_deletion(series_id, &db_attempt, storage_attempt)
+                    .await
+                    .map_err(|e| {
+                        eprintln!(
+                            "[WORKER] Attempt for series {} failed: {}. Retrying again.",
+                            series_id, e
+                        );
+                        tokio_retry2::RetryError::transient(e)
+                    })
+            }
+        }).await;
+
+        if let Err(e) = result {
             eprintln!(
-                "[WORKER] CRITICAL: Failed to mark series {} as 'deletion_failed'. Error: {}",
-                series.id, e
+                "[DELETION_WORKER] Job for series {} failed after all retry attempts: {}. Moving to 'deletion_failed'",
+                series_id, e
+            );
+
+            if let Err(e_update) = db_service
+                .update_series_processing_status(series_id, "deletion_failed")
+                .await
+            {
+                eprintln!(
+                    "[DELETION-WORKER] CRITICAL: Failed to mark series {} as 'deletion_failed'. Error: {}",
+                    series_id, e_update
+                );
+            }
+        } else {
+            println!(
+                "[DELETION-WORKER] Successfully deleted series {} after retries.",
+                series_id
             );
         }
     }
 
-    true
+    println!(
+        "[DELETION-WORKER] Channel closed {}. Shutting down.",
+        worker_id
+    );
 }
 
+// Execute the full deletion process
 async fn execute_full_deletion(
     series_id: i32,
     db_service: &DatabaseService,
