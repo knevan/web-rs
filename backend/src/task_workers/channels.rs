@@ -1,0 +1,52 @@
+use crate::database::DatabaseService;
+use crate::database::storage::StorageClient;
+use crate::scraping::model::SitesConfig;
+use crate::task_workers::delete_series_worker::{
+    run_deletion_scheduler, run_deletion_worker,
+};
+use crate::task_workers::log_view_cleanup_worker::run_log_view_cleanup_worker;
+use crate::task_workers::repair_chapter_worker::{
+    RepairChapterMsg, run_repair_chapter_worker,
+};
+use reqwest::Client;
+use std::sync::Arc;
+use tokio::sync::mpsc;
+
+#[derive(Clone)]
+pub struct WorkerChannels {
+    pub repair_tx: mpsc::Sender<RepairChapterMsg>,
+}
+
+pub fn setup_worker_channels(
+    db_service: DatabaseService,
+    storage_client: Arc<StorageClient>,
+    http_client: Client,
+    sites_config: Arc<SitesConfig>,
+) -> WorkerChannels {
+    // Deletion worker channels
+    let (deletion_tx, deletion_rx) = mpsc::channel(16);
+
+    tokio::spawn(run_deletion_scheduler(db_service.clone(), deletion_tx));
+
+    tokio::spawn(run_deletion_worker(
+        1,
+        db_service.clone(),
+        storage_client.clone(),
+        deletion_rx,
+    ));
+
+    // Repair worker channels
+    let (repair_tx, repair_rx) = mpsc::channel::<RepairChapterMsg>(32);
+    tokio::spawn(run_repair_chapter_worker(
+        repair_rx,
+        db_service.clone(),
+        storage_client.clone(),
+        http_client.clone(),
+        sites_config.clone(),
+    ));
+
+    // Log View Cleanup worker
+    tokio::spawn(run_log_view_cleanup_worker(db_service.clone()));
+
+    WorkerChannels { repair_tx }
+}

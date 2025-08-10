@@ -1,11 +1,14 @@
 use crate::auth;
-use crate::db::db::DatabaseService;
-use crate::db::storage::StorageClient;
+use crate::database::DatabaseService;
+use crate::database::storage::StorageClient;
+use crate::scraping::model::SitesConfig;
+use crate::task_workers::channels::{WorkerChannels, setup_worker_channels};
 use axum::http::{HeaderValue, Method, header};
 use axum::{Router, serve};
 use lettre::AsyncSmtpTransport;
 use reqwest::Client;
 use std::env;
+use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::signal;
 use tower_http::cors::CorsLayer;
@@ -18,7 +21,9 @@ pub struct AppState {
     pub db_service: DatabaseService,
     pub mailer: Mailer,
     pub http_client: Client,
-    pub storage_client: StorageClient,
+    pub sites_config: Arc<SitesConfig>,
+    pub storage_client: Arc<StorageClient>,
+    pub worker_channels: WorkerChannels,
 }
 
 // Function to set up builder and server
@@ -28,14 +33,29 @@ pub async fn run(
     mailer: Mailer,
     http_client: Client,
 ) -> anyhow::Result<()> {
-    let storage_client = StorageClient::new_from_env().await?;
+    let storage_client_env = StorageClient::new_from_env().await?;
+    let storage_client = Arc::new(storage_client_env);
+
+    let db_service = DatabaseService::new(db_pool);
+    let sites_config =
+        Arc::new(SitesConfig::load("backend/config_sites.toml")?);
+
+    // Create channels
+    let worker_channels = setup_worker_channels(
+        db_service.clone(),
+        storage_client.clone(),
+        http_client.clone(),
+        sites_config.clone(),
+    );
 
     // Create AppState
     let app_state = AppState {
-        db_service: DatabaseService::new(db_pool),
+        db_service,
         mailer,
         http_client,
+        sites_config,
         storage_client,
+        worker_channels,
     };
 
     // CORS Configuration
@@ -66,7 +86,6 @@ pub async fn run(
 
     // Setup App router
     // Initialize the router and attach the authentication routes
-    // The `auth::routes::routes()` function returns a Router with all auth-related endpoints.
     let app = Router::new()
         .merge(auth::routes::routes())
         .with_state(app_state)

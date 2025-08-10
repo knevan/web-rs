@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE series SET processing_status = $1, last_checked_at = NOW(), next_checked_at = $2, updated_at = NOW() WHERE id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "02a01c9fe26ee4b777e80832296f609a386bc6d0d53bc0c3399809b440738d40"
+}

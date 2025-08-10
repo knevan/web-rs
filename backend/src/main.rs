@@ -4,7 +4,7 @@ mod app;
 mod auth;
 mod builder;
 mod common;
-mod db;
+mod database;
 mod encoding;
 mod scraping;
 

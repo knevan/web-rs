@@ -5,10 +5,11 @@ use crate::common::hashing::{hash_password, verify_password};
 use crate::common::jwt::{
     Claims, RefreshClaims, create_access_jwt, create_refresh_jwt,
 };
-use crate::db::db::DatabaseService;
+use crate::database::DatabaseService;
 use axum::Json;
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum_core::__private::tracing::error;
+use axum_core::response::{IntoResponse, Response};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use chrono::{Duration, Utc};
@@ -79,13 +80,8 @@ pub async fn register_new_user_handler(
 ) -> Result<(StatusCode, Json<GenericMessageResponse>), AuthError> {
     let db_service = &state.db_service;
 
-    // Validate input: ensure no fields are empty
-    if payload.username.is_empty()
-        || payload.email.is_empty()
-        || payload.password.is_empty()
-    {
-        return Err(AuthError::MissingCredentials);
-    }
+    // Validate input
+    payload.validate_input()?;
 
     // Check if user already exists in the database
     // We use existing `get_user_by_identifier` method
@@ -210,7 +206,7 @@ impl LoginRequest {
 // Struct for Responses
 #[derive(Serialize)]
 pub struct UserData {
-    username: String,
+    identifier: String,
     role: String,
 }
 
@@ -236,12 +232,22 @@ pub async fn login_handler(
         .await
         .map_err(|e| {
             eprintln!("Database error on user lookup: {}", e);
-            AuthError::WrongCredentials
+            AuthError::InternalServerError
         })?
         .ok_or(AuthError::WrongCredentials)?;
 
-    verify_password(&payload.password, &user.password_hash)
-        .map_err(|_| AuthError::WrongCredentials)?;
+    let is_password_valid = verify_password(
+        &payload.password,
+        &user.password_hash,
+    )
+    .map_err(|_| {
+        error!("Password verification failed for user {}", user.username);
+        AuthError::WrongCredentials
+    })?;
+
+    if !is_password_valid {
+        return Err(AuthError::WrongCredentials);
+    }
 
     let role_name = get_role_name(db_service, user.role_id).await?;
 
@@ -255,7 +261,7 @@ pub async fn login_handler(
         .http_only(true)
         .secure(false) // Only send via HTTPS (disable for local development)
         .same_site(SameSite::Lax)
-        .max_age(time::Duration::seconds(15 * 60))
+        .max_age(time::Duration::seconds(30 * 60))
         .build();
 
     // Set cookie
@@ -273,7 +279,7 @@ pub async fn login_handler(
     let response = LoginResponse {
         message: "Login Successfull".to_string(),
         user: UserData {
-            username: user.username,
+            identifier: user.username,
             role: role_name,
         },
     };
@@ -349,21 +355,29 @@ pub struct ProtectedResponse {
     user_id: String,
     session_expires_at: i64,
 }
+#[derive(Serialize)]
+pub struct UserResponse {
+    user: UserData,
+}
 
 /// Protected handler. `Claims` acts as a guard.
-pub async fn protected_handler(claims: Claims) -> Json<ProtectedResponse> {
+pub async fn protected_handler(
+    claims: Claims,
+) -> (StatusCode, Json<UserResponse>) {
     println!(
         "[API] Request received at /api/auth/user for user: {}",
         claims.sub
     );
 
-    // This handler will only be called if `claims` is extracted successfully (valid token)
-    let response = ProtectedResponse {
-        message: "Welcome to protected area".to_string(),
-        user_id: claims.sub,
-        session_expires_at: claims.exp as i64,
+    let user_data = UserData {
+        identifier: claims.sub,
+        role: claims.role,
     };
-    Json(response)
+
+    // This handler will only be called if `claims` is extracted successfully (valid token)
+    let response = UserResponse { user: user_data };
+
+    (StatusCode::OK, Json(response))
 }
 
 #[derive(Deserialize)]
@@ -479,4 +493,49 @@ pub async fn reset_password_handler(
     };
 
     Ok(Json(response))
+}
+
+#[derive(Deserialize)]
+pub struct MostViewedParams {
+    #[serde(default = "default_period")]
+    period: String,
+    #[serde(default = "default_limit")]
+    limit: i64,
+}
+
+fn default_period() -> String {
+    "week".to_string()
+}
+
+fn default_limit() -> i64 {
+    20
+}
+
+pub async fn fetch_most_viewed_series_handler(
+    State(state): State<AppState>,
+    Query(params): Query<MostViewedParams>,
+) -> Response {
+    // Map the user-friendly period string
+    let period_str = match params.period.to_lowercase().as_str() {
+        "hour" => "1 hour",
+        "day" => "1 day",
+        "week" => "1 week",
+        "month" => "1 month",
+        _ => "1 days",
+    };
+
+    match state
+        .db_service
+        .fetch_most_viewed_series(period_str, params.limit)
+        .await
+    {
+        Ok(series) => (StatusCode::OK, Json(series)).into_response(),
+        Err(e) => {
+            eprintln!("Error fetching most viewed series: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": "Could not retrieve most viewed series."})),
+            ).into_response()
+        }
+    }
 }

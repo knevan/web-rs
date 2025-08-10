@@ -2,7 +2,7 @@ use anyhow::{Context, Result, anyhow};
 use aws_sdk_s3::Client;
 use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::primitives::ByteStream;
-use aws_sdk_s3::types::{Delete, ObjectIdentifier};
+use aws_sdk_s3::types::{Delete, Error as S3Error, ObjectIdentifier};
 use std::env;
 
 /// A client for interacting with an S3-compatible object storage like Cloudflare R2.
@@ -10,7 +10,7 @@ use std::env;
 pub struct StorageClient {
     client: Client,
     bucket_name: String,
-    public_cdn_url: String,
+    domain_cdn_url: String,
 }
 
 impl StorageClient {
@@ -20,7 +20,7 @@ impl StorageClient {
     /// - `R2_ACCOUNT_ID`: Your Cloudflare account ID.
     /// - `R2_ACCESS_KEY_ID`: Your R2 access key ID.
     /// - `R2_SECRET_ACCESS_KEY`: Your R2 secret access key.
-    /// - `R2_PUBLIC_CDN_URL`: The public URL of your bucket (e.g., https://pub-xxxxxxxx.r2.dev or your custom domain).
+    /// - `R2_DOMAIN_CDN_URL`: The public URL of your bucket (https://pub-xxxxxxxx.r2.dev or your custom domain).
     pub async fn new_from_env() -> Result<Self> {
         let bucket_name = env::var("R2_BUCKET_NAME")
             .context("Environment variable R2_BUCKET_NAME is not set")?;
@@ -30,7 +30,7 @@ impl StorageClient {
             .context("Environment variable R2_ACCESS_KEY_ID is not set")?;
         let secret_access_key = env::var("R2_SECRET_ACCESS_KEY")
             .context("Environment variable R2_SECRET_ACCESS_KEY is not set")?;
-        let public_cdn_url = env::var("R2_PUBLIC_CDN_URL")
+        let domain_cdn_url = env::var("R2_DOMAIN_CDN_URL")
             .context("Environment variable R2_PUBLIC_CDN_URL is not set")?;
 
         // Construct the S3 endpoint URL for Cloudflare R2
@@ -65,15 +65,21 @@ impl StorageClient {
         Ok(Self {
             client,
             bucket_name,
-            public_cdn_url,
+            domain_cdn_url,
         })
     }
 
-    /// Uploads an object (an image) to the R2 bucket.
-    /// * `key` - The full path and filename for the object in the bucket (e.g., "series-title/chapter-1/01.avif").
-    /// * `data` - The raw bytes of the object to upload.
-    /// * `content_type` - The MIME type of the object (e.g., "image/avif").
-    /// The full public CDN URL to the uploaded object.
+    // Read-only getter the domain cdn url for the R2 bucket.
+    pub fn domain_cdn_url(&self) -> &str {
+        &self.domain_cdn_url
+    }
+
+    /* Uploads an object (an image) to the R2 bucket.
+     * `key` - The full path and filename for the object in the bucket ("series-title/chapter-1/01.avif").
+     * `data` - The raw bytes of the object to upload.
+     * `content_type` - The MIME type of the object (e.g., "image/avif").
+     * The full public CDN URL to the uploaded object.
+     */
     pub async fn upload_image_objects(
         &self,
         key: &str,
@@ -98,14 +104,16 @@ impl StorageClient {
             })?;
 
         // Construct the public URL
-        let public_url = format!("{}/{}", self.public_cdn_url, key);
+        let public_url = format!("{}/{}", self.domain_cdn_url, key);
         println!("[STORAGE] Successfully uploaded object to: {}", public_url);
         Ok(public_url)
     }
 
-    /// Deletes multiple objects from the R2 bucket.
-    /// * `keys` - A vector of object keys to delete.
-    pub async fn delete_image_objects(&self, keys: Vec<String>) -> Result<()> {
+    /* Deletes multiple objects from the R2 bucket.
+     * `keys` - A vector of object keys to delete.
+     * It will only fail on persistent network/permission errors.
+     */
+    pub async fn delete_image_objects(&self, keys: &[String]) -> Result<()> {
         // If there are no keys to delete, do nothing.
         if keys.is_empty() {
             println!("[STORAGE] No objects to delete");
@@ -113,15 +121,12 @@ impl StorageClient {
         }
 
         // Convert the list of key strings into a list of S3 ObjectIdentifiers
-        let objects_to_delete: Result<Vec<_>, _> = keys
-            .into_iter()
+        let objects_to_delete: Vec<ObjectIdentifier> = keys
+            .iter()
             .map(|key| ObjectIdentifier::builder().key(key).build())
+            .map(Result::unwrap)
             .collect();
 
-        let objects_to_delete = objects_to_delete
-            .context("Failed to build ObjectIdentifier objects")?;
-
-        // Create delete payload
         let delete_payload = Delete::builder()
             .set_objects(Some(objects_to_delete))
             .build()
@@ -141,31 +146,34 @@ impl StorageClient {
                 || "Failed to send delete_objects request to R2 bucket",
             )?;
 
-        let errors = result.errors();
-        if !errors.is_empty() {
-            // Log errors but don't fail the entire operation if some objects were deleted.
-            // [NOTE] Might want to handle this more robustly depending on needs.
-            eprintln!("[STORAGE] Encountered errors while deleting objects:");
-            for error in errors {
-                eprintln!(
-                    "  - Key: {}, Code: {}, Message: {}",
-                    error.key().unwrap_or("Unknown"),
-                    error.code().unwrap_or("Unknown"),
-                    error.message().unwrap_or("Unknown")
-                );
+        // Check for "real" errors. Ignore "NoSuchKey" as it means the object is already gone.
+        if let Some(errors) = result.errors {
+            let persistent_errors: Vec<&S3Error> = errors
+                .iter()
+                .filter(|e| !matches!(e.code.as_deref(), Some("NoSuchKey")))
+                .collect();
+
+            if !persistent_errors.is_empty() {
+                // Log and return the first persistent error
+                for error in persistent_errors {
+                    eprintln!(
+                        "[STORAGE] Persistent error while deleting object: Key: {}, Code: {}, Message: {}",
+                        error.key.as_deref().unwrap_or("Unknown"),
+                        error.code.as_deref().unwrap_or("Unknown"),
+                        error.message.as_deref().unwrap_or("Unknown")
+                    );
+                }
+                return Err(anyhow::anyhow!(
+                    "Encountered persistent errors during object deletion from Storage."
+                ));
             }
-            return Err(anyhow::anyhow!(
-                "Some objects failed to delete from R2."
-            ));
         }
 
-        // Get count of deleted objects
-        let deleted_count =
-            result.deleted.as_ref().map_or(0, |deleted| deleted.len());
         println!(
-            "[STORAGE] Successfully sent request to delete {} objects.",
-            deleted_count
+            "[STORAGE] Successfully deleted or confirmed deletion for {} objects.",
+            result.deleted.map_or(0, |d| d.len())
         );
+
         Ok(())
     }
 
@@ -187,8 +195,18 @@ impl StorageClient {
             .await
             .map_err(|e| anyhow!("Failed to upload file: {:?}", e))?;
 
-        let public_url = format!("{}/cover/{}", self.public_cdn_url, file_name);
+        let public_url = format!("{}/cover/{}", self.domain_cdn_url, file_name);
 
         Ok(public_url)
+    }
+
+    // Helper function to extract storage object key from CDN URL
+    pub fn extract_object_key_from_url(&self, url: &str) -> Option<String> {
+        // Ensure base url does not have trailing slash
+        let base_url = self.domain_cdn_url.trim_end_matches('/');
+
+        url.strip_prefix(base_url)
+            // Remove base url(cdn url) and leading slash to get object key
+            .map(|remaining| remaining.trim_start_matches('/').to_string())
     }
 }
