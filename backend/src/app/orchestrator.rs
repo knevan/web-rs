@@ -2,9 +2,9 @@ use crate::app::coordinator;
 use crate::common::utils::random_sleep_time;
 use crate::database::storage::StorageClient;
 use crate::database::{DatabaseService, Series};
+use crate::scraping::fetcher;
 use crate::scraping::model::SitesConfig;
-use crate::scraping::parser::ChapterInfo;
-use crate::scraping::{fetcher, parser};
+use crate::scraping::parser::{ChapterInfo, ChapterParser};
 use crate::task_workers::repair_chapter_worker::RepairChapterMsg;
 use anyhow::{Result, anyhow};
 use reqwest::Client;
@@ -12,74 +12,126 @@ use std::env;
 use std::sync::Arc;
 use url::Url;
 
-/// The main "engine" for a bulk scraping task.
-/// This function can be called from anywhere, including a background task.
-pub async fn run_bulk_series_scraping(
+// The main "engine" for checking series and scraping task.
+// This function can be called from anywhere, including a background task.
+pub async fn run_series_check(
     series: Series,
     http_client: Client,
     db_service: &DatabaseService,
     sites_config: Arc<SitesConfig>,
     storage_client: Arc<StorageClient>,
 ) -> Result<()> {
-    println!("[BULK SCRAPE] Starting for series: '{}'", series.title);
-
-    let series_main_page_url = &series.current_source_url;
+    println!("[SERIES CHECK] Starting for series: '{}'", series.title);
 
     let host = &series.source_website_host;
-
     let site_config = sites_config
         .get_site_config(host)
         .ok_or_else(|| anyhow!("No scraping config for host: {}", host))?;
 
+    // Initialize parser once. It holds compiled selectors and regexes.
+    let chapter_parser = ChapterParser::new(site_config.clone())?;
+
     println!(
-        "[BULK SCRAPE] Fetching series main page HTML from: {series_main_page_url}"
+        "[SERIES CHECK] Fetching series main page HTML from: {}",
+        series.current_source_url
     );
 
     let series_page_html =
-        fetcher::fetch_html(&http_client, series_main_page_url).await?;
+        fetcher::fetch_html(&http_client, &series.current_source_url).await?;
 
-    random_sleep_time(3, 7).await;
+    random_sleep_time(3, 6).await;
 
-    let all_available_chapter_links = parser::extract_chapter_links(
-        &series_page_html,
-        series_main_page_url,
-        site_config,
-    )
-    .await?;
+    // [Quick Check] Get latest chapter
+    println!("[SERIES CHECK] Performing quick check, get latest chapter.");
+    let latest_site_chapter = chapter_parser
+        .quick_check_extract_latest_chapter_info(
+            &series_page_html,
+            &series.current_source_url,
+        )?;
 
-    if all_available_chapter_links.is_empty() {
+    let last_db_chapter_number =
+        series.last_chapter_found_in_storage.unwrap_or(0.0);
+    let mut chapters_to_scrape: Vec<ChapterInfo> = Vec::new();
+    let mut needs_full_scan = false;
+
+    if let Some(latest_chapter) = latest_site_chapter {
         println!(
-            "[BULK SCRAPE] No chapters found on the series page for '{}'.",
-            series.title
+            "[SERIES CHECK] Latest on site: {:.2}, latest in DB: {:.2}",
+            latest_chapter.number, last_db_chapter_number
         );
+
+        // If latest chapter on site > latest in DB, we need a full scan.
+        if latest_chapter.number > last_db_chapter_number {
+            println!(
+                "[SERIES CHECK] New chapter detected by Quick Check. Triggering full scan."
+            );
+            needs_full_scan = true;
+        } else {
+            // [Count Check] If no new chapter, check for backfills or deletions
+            println!(
+                "[SERIES CHECK] Quick Check passed. Performing Count Check"
+            );
+            let site_chapter_count =
+                chapter_parser.count_chapter_links(&series_page_html)?;
+            let db_chapter_count =
+                db_service.get_series_chapters_count(series.id).await?;
+
+            println!(
+                "[SERIES CHECK] Chapter on site: {}, chapters in DB: {}",
+                site_chapter_count, db_chapter_count
+            );
+
+            if site_chapter_count != db_chapter_count as usize {
+                println!(
+                    "[SERIES CHECK] Count missmatch. Trigger full scan for synchronization."
+                );
+                needs_full_scan = true;
+            }
+        }
+    } else {
+        println!("[SERIES CHECK] Couldnt found any chapter on the site.");
         return Ok(());
     }
-    println!(
-        "[BULK SCRAPE] Found {} total chapters for '{}'.",
-        all_available_chapter_links.len(),
-        series.title
-    );
 
-    // Determine which chapters to scrape.
-    // For bulk scrape, we take all of them that are newer than what we have.
-    let last_chapter_number =
-        series.last_chapter_found_in_storage.unwrap_or(0.0);
+    // [Full Scan] Only run if triggered by one of the checks above.
+    if needs_full_scan {
+        println!("[SERIES CHECK] Run full scan");
+        let all_available_chapters = chapter_parser
+            .full_scan_extract_all_chapter_info(
+                &series_page_html,
+                &series.current_source_url,
+            )?;
 
-    let chapters_to_scrape: Vec<ChapterInfo> = all_available_chapter_links
-        .into_iter()
-        .filter(|ch_info| ch_info.number > last_chapter_number)
-        .collect();
+        if all_available_chapters.is_empty() {
+            println!(
+                "[SERIES CHECK] Full scan found no chapters for '{}'.",
+                series.title
+            );
+            return Ok(());
+        }
+
+        println!(
+            "[SERIES CHECK] Full scan found {} unique chapters.",
+            all_available_chapters.len()
+        );
+
+        // Filter chapters that are actually new to avoid re-scraping on a syncronization.
+        chapters_to_scrape = all_available_chapters
+            .into_iter()
+            .filter(|ch_info| ch_info.number > last_db_chapter_number)
+            .collect();
+    }
 
     if chapters_to_scrape.is_empty() {
         println!(
-            "[BULK SCRAPE] No new chapters to scrape for '{}'. All are up-to-date.",
+            "[SERIES CHECK] No new chapters to scrape for '{}'. All are up-to-date.",
             series.title
         );
         return Ok(());
     }
 
     println!(
-        "[BULK SCRAPE] Will scrape {} new chapters.",
+        "[SERIES CHECK] Found {} new chapters to scrape.",
         chapters_to_scrape.len()
     );
 
@@ -95,7 +147,7 @@ pub async fn run_bulk_series_scraping(
         )
         .await?;
 
-    // Update series data in the database
+    // Update series metadata in the database
     if let Some(last_chapter_num) = last_info_downloaded_chapter {
         db_service
             .update_series_last_chapter_found_in_storage(

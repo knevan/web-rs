@@ -371,6 +371,22 @@ impl DatabaseService {
         Ok(result.rows_affected())
     }
 
+    pub async fn get_series_chapters_count(
+        &self,
+        series_id: i32,
+    ) -> AnyhowResult<i64> {
+        let count = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM series_chapters WHERE series_id = $1",
+            series_id
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("Failed to get series chapters count")?;
+
+        // It will return a row with 0, not NULL, even if no chapters exist
+        Ok(count.unwrap_or(0))
+    }
+
     pub async fn get_image_keys_for_series_deletion(
         &self,
         series_id: i32,
@@ -481,6 +497,38 @@ impl DatabaseService {
             .context("Failed to mark series for deletion with sqlx")?;
 
         Ok(result.rows_affected())
+    }
+
+    pub async fn find_and_lock_series_for_check(
+        &self,
+    ) -> AnyhowResult<Option<Series>> {
+        let series = sqlx::query_as!(
+            Series,
+            r#"
+            WITH candidate AS (
+                SELECT id FROM series
+                WHERE
+                    processing_status = 'available'
+                    AND next_checked_at <= NOW()
+                ORDER BY next_checked_at ASC
+                LIMIT 1
+                FOR UPDATE SKIP LOCKED
+            )
+            UPDATE series
+            SET processing_status = 'processing'
+            WHERE id = (SELECT id FROM candidate)
+            RETURNING
+                id, title, original_title, description, cover_image_url, current_source_url,
+                source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage,
+                'processing' as "processing_status!", check_interval_minutes, last_checked_at,
+                next_checked_at, created_at, updated_at
+            "#
+        )
+            .fetch_optional(&self.pool)
+            .await
+            .context("Failed to find and lock series for check with sqlx")?;
+
+        Ok(series)
     }
 
     pub async fn find_and_lock_series_for_job_deletion(

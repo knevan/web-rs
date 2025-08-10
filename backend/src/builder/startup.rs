@@ -2,7 +2,7 @@ use crate::auth;
 use crate::database::DatabaseService;
 use crate::database::storage::StorageClient;
 use crate::scraping::model::SitesConfig;
-use crate::task_workers::channels::{WorkerChannels, setup_worker_channels};
+use crate::task_workers::channels::{OnDemandChannels, setup_worker_channels};
 use axum::http::{HeaderValue, Method, header};
 use axum::{Router, serve};
 use lettre::AsyncSmtpTransport;
@@ -23,7 +23,7 @@ pub struct AppState {
     pub http_client: Client,
     pub sites_config: Arc<SitesConfig>,
     pub storage_client: Arc<StorageClient>,
-    pub worker_channels: WorkerChannels,
+    pub worker_channels: OnDemandChannels,
 }
 
 // Function to set up builder and server
