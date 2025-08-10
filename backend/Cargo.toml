@@ -46,3 +46,4 @@ lettre = { version = "0.11.17", default-features = false, features = [
     "rustls-native-certs",
     "ring"
 ] }
+async-channel = "2.5.0"
