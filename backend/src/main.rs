@@ -7,6 +7,7 @@ mod common;
 mod database;
 mod encoding;
 mod scraping;
+mod task_workers;
 
 use crate::builder::startup;
 use crate::builder::startup::Mailer;
@@ -43,15 +44,15 @@ async fn main() -> Result<()> {
     println!("[MAIN] Database pool created.");
 
     // Initialize Mailer service external resources
-    let smtp_server =
-        env::var("SMTP_SERVER").context("[MAIN] SMTP_SERVER must be set")?;
+    let smtp_host =
+        env::var("SMTP_HOST").context("[MAIN] SMTP_HOST must be set")?;
     let smtp_username = env::var("SMTP_USERNAME")
         .context("[MAIN] SMTP_USERNAME must be set")?;
     let smtp_password = env::var("SMTP_PASSWORD")
         .context("[MAIN] SMTP_PASSWORD must be set")?;
 
     let creds = Credentials::new(smtp_username, smtp_password);
-    let mailer = Mailer::starttls_relay(&smtp_server)
+    let mailer = Mailer::starttls_relay(&smtp_host)
         .context("[MAIN] Failed to build SMTP relay")?
         .credentials(creds)
         .build();
