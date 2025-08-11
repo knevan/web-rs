@@ -18,28 +18,10 @@
         coverImageUrl: string;
         sourceUrl: string;
         lastUpdated: string;
+        processingStatus: string;
     };
 
-    // --- Mock Data Generation ---
-    // A helper function to create a single mock series item.
-    function createMockSeries(id: number): Series {
-        return {
-            id: id,
-            title: `Manga Title ${id}`,
-            originalTitle: `Original Manga Title ${id}`,
-            authors: [`Author ${id % 5 + 1}`],
-            description: `This is a mock description for manga series number ${id}.`,
-            coverImageUrl: `https://via.placeholder.com/150/0000FF/808080?Text=Manga+${id}`,
-            sourceUrl: `#`,
-            lastUpdated: new Date(Date.now() - id * 1000 * 3600).toISOString(),
-        };
-    }
-
-    // Generate a large array of mock data to test pagination thoroughly.
-    const MOCK_DATA: Series[] = Array.from({length: 2500}, (_, i) => createMockSeries(i + 1));
-    // --- End of Mock Data Generation ---
-
-    let {rowsPerPage = 20} = $props();
+    let {rowsPerPage = 20, searchQuery = ''} = $props();
 
     let series = $state<Series[] | null>(null);
     let editingSeries = $state<Series | null>(null);
@@ -51,33 +33,37 @@
     let totalPages = $derived(Math.ceil(totalItems / rowsPerPage));
     let activeSeriesId = $state<number | null>(null);
     let deleteSeries = $state<Series | null>(null);
-    let prevRowsPerPage = $state(rowsPerPage);
+    let previousSearchQuery = $state(searchQuery);
+    // let prevRowsPerPage = $state(rowsPerPage);
 
     // This function now loads data from our MOCK_DATA array instead of an API.
-    async function loadSeries(page: number) {
+    async function loadSeries(page: number, query: string) {
         isLoading = true;
         errorMessage = null;
 
-        // Simulate a network delay to make the loading state visible.
-        setTimeout(() => {
-            try {
-                // Calculate the start and end index for the current page.
-                const start = (page - 1) * rowsPerPage;
-                const end = start + rowsPerPage;
-
-                // Get the slice of data for the current page.
-                const pagedItems = MOCK_DATA.slice(start, end);
-
-                series = pagedItems;
-                totalItems = MOCK_DATA.length; // Set total items to the full length of our mock data.
-
-            } catch (error: any) {
-                console.error("Failed to load mock series", error);
-                errorMessage = error.message;
-            } finally {
-                isLoading = false;
+        try {
+            const url = new URL('/api/admin/series/list', window.location.origin);
+            url.searchParams.set('page', String(page));
+            url.searchParams.set('pageSize', rowsPerPage.toString());
+            if (query) {
+                url.searchParams.append('search', query);
             }
-        }, 500); // 500ms delay
+
+            const response = await fetch(url.href);
+            // Fetch logic here
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || "Failed to fetch series data");
+            }
+            const data = await response.json();
+            series = data.items;
+            totalItems = data.totalItems;
+        } catch (error: any) {
+            console.error("Failed to load series", error);
+            errorMessage = error.message;
+        } finally {
+            isLoading = false;
+        }
     }
 
     async function confirmDelete() {
@@ -105,12 +91,12 @@
             duration: 3000,
             loading: `Scheduling "${seriesToDelete.title}" for deletion...`,
             success: (title) => {
-                loadSeries(currentPage);
+                loadSeries(currentPage, searchQuery);
                 return `Series "${title}" deleted successfully!`;
             },
             error: (err) => {
                 const message = err instanceof Error ? err.message : "Unknown error";
-                loadSeries(currentPage);
+                loadSeries(currentPage, searchQuery);
                 return `Failed to delete series: ${message}`;
             },
             finally: () => {
@@ -127,7 +113,7 @@
         editingSeries = null;
         activeSeriesId = null;
         // We still reload the data to simulate a refresh after editing.
-        loadSeries(currentPage);
+        loadSeries(currentPage, searchQuery);
     }
 
     function handleRowClick(id: number) {
@@ -139,15 +125,25 @@
     }
 
     $effect(() => {
-        if (rowsPerPage !== prevRowsPerPage) {
-            currentPage = 1;
-            prevRowsPerPage = rowsPerPage;
-            return;
+        // This effect now has a clear, single path.
+
+        let pageToLoad = currentPage;
+
+        // Check if a new search has been performed.
+        if (searchQuery !== previousSearchQuery) {
+            // If it's a new search, we must load page 1.
+            pageToLoad = 1;
+            // Also, update the current page state if it's not already 1.
+            if (currentPage !== 1) {
+                currentPage = 1;
+            }
+            // Update the tracker for the next run.
+            previousSearchQuery = searchQuery;
         }
 
-        loadSeries(currentPage);
+        // Call loadSeries ONCE with the guaranteed correct page and query.
+        loadSeries(pageToLoad, searchQuery);
     });
-
 </script>
 
 <!-- Conditionally render the modals based on their state -->
@@ -178,11 +174,12 @@
     <table class="series-table text-sm w-full">
         <thead class="bg-muted/50 text-muted-foreground uppercase">
         <tr>
-            <th scope="col" class="px-4 py-3">Series Name</th>
-            <th scope="col" class="px-4 py-3">Series Id</th>
-            <th scope="col" class="px-4 py-3">Author</th>
-            <th scope="col" class="px-4 py-3">Last Updated</th>
-            <th scope="col" class="px-4 py-3">Source Urls</th>
+            <th scope="col" class="px-4 py-3 text-center">Series Name</th>
+            <th scope="col" class="px-4 py-3 text-center">Series Id</th>
+            <th scope="col" class="px-4 py-3 text-center">Author</th>
+            <th scope="col" class="px-4 py-3 text-center">Last Updated</th>
+            <th scope="col" class="px-4 py-3 text-center">Status</th>
+            <th scope="col" class="px-4 py-3 text-center">Source Urls</th>
         </tr>
         </thead>
         <tbody>
@@ -232,6 +229,7 @@
                         <td class="px-4 py-3 text-foreground text-center">{manga.id}</td>
                         <td class="px-4 py-3 text-foreground">{manga.authors.join(', ')}</td>
                         <td class="px-4 py-2 text-left">{manga.lastUpdated}</td>
+                        <td class="px-4 py-2 text-foreground text-center">{manga.processingStatus}</td>
                         <td class="px-4 py-3 text-foreground">
                             <a href={manga.sourceUrl} target="_blank"
                                class="text-primary hover:underline">

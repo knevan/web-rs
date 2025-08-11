@@ -123,7 +123,7 @@
             </div>
             <div>
                 <Label for="sourceUrl" class="block text-sm font-medium text-gray-700">Source
-                    URL (optional)</Label>
+                    URL</Label>
                 <Input id="sourceUrl" type="text" bind:value={formData.sourceUrl}/>
             </div>
 
