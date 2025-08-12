@@ -136,10 +136,8 @@ pub async fn process_single_chapter(
                         // Define the key for the object in R2
                         // domain/{series-name}/{chapter-number}/{image-number}.avif
                         let object_key = format!(
-                            "{}/{}/{:03}.avif",
-                            series_slug,
-                            chapter_info.number,
-                            index + 1
+                            "series/{}/chapter-{}/{:03}.avif",
+                            series_slug, chapter_info.number, index
                         );
 
                         // Upload to R2
@@ -177,14 +175,13 @@ pub async fn process_single_chapter(
         };
 
         // Save CDN Url to the database if successful
-        if let Some(cdn_url) = final_cdn_url {
-            if db_service
+        if let Some(cdn_url) = final_cdn_url
+            && db_service
                 .add_chapter_images(chapter_id, (index + 1) as i32, &cdn_url)
                 .await
                 .is_ok()
-            {
-                image_saved_count += 1;
-            }
+        {
+            image_saved_count += 1;
         }
     }
 

@@ -39,7 +39,7 @@ pub async fn run_series_check(
     let series_page_html =
         fetcher::fetch_html(&http_client, &series.current_source_url).await?;
 
-    random_sleep_time(3, 6).await;
+    random_sleep_time(2, 5).await;
 
     // [Quick Check] Get latest chapter
     println!("[SERIES CHECK] Performing quick check, get latest chapter.");
