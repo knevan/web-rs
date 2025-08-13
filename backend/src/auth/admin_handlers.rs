@@ -20,9 +20,10 @@ pub struct CreateSeriesRequest {
     description: String,
     cover_image_url: String,
     source_url: String,
+    category_ids: Vec<i32>,
 }
 
-// This route is protected and can only be accessed by a logged-in admin-dashboard.
+// Admin endpoint to create new series
 pub async fn create_new_series_handler(
     claims: Claims,
     State(state): State<AppState>,
@@ -42,6 +43,7 @@ pub async fn create_new_series_handler(
         title: &payload.title,
         original_title: payload.original_title.as_deref(),
         authors: payload.authors.as_ref(),
+        category_ids: Some(&payload.category_ids),
         description: &payload.description,
         cover_image_url: &payload.cover_image_url,
         source_url: &payload.source_url,
@@ -229,6 +231,8 @@ pub struct PaginationParams {
     page: u32,
     #[serde(default = "default_page_size")]
     page_size: u32,
+    #[serde(default)]
+    search: Option<String>,
 }
 
 fn default_page() -> u32 {
@@ -248,6 +252,7 @@ pub struct SeriesResponse {
     source_url: String,
     authors: Vec<String>,
     last_updated: String,
+    processing_status: String,
 }
 
 #[derive(Serialize)]
@@ -269,7 +274,7 @@ pub async fn get_all_manga_series_handler(
 
     match state
         .db_service
-        .get_paginated_series_with_authors(pagination.page, pagination.page_size)
+        .get_admin_paginated_series(pagination.page, pagination.page_size, pagination.search.as_deref())
         .await
     {
         Ok(paginated_result) => {
@@ -285,6 +290,7 @@ pub async fn get_all_manga_series_handler(
                     source_url: s.current_source_url,
                     authors: serde_json::from_value(s.authors).unwrap_or_else(|_| vec![]),
                     last_updated: s.updated_at.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    processing_status: s.processing_status,
                 })
                 .collect();
 
@@ -411,15 +417,13 @@ pub async fn create_category_tag_handler(
             // Check for unique violation error from PostgreSQL (code 23505)
             if let Some(sqlx::Error::Database(db_error)) =
                 e.root_cause().downcast_ref::<sqlx::Error>()
-            {
-                if db_error.code() == Some(std::borrow::Cow::from("23505")) {
+                && db_error.code() == Some(std::borrow::Cow::from("23505")) {
                     return (
                             StatusCode::CONFLICT,
                             Json(serde_json::json!({"status": "error", "message": "Category tag already exists."})),
                         )
                             .into_response();
                 }
-            }
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"status": "error", "message": e.to_string()})),

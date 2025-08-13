@@ -27,7 +27,7 @@ pub async fn run_series_check_scheduler(
         match db_service.find_and_lock_series_for_check().await {
             Ok(Some(series)) => {
                 println!(
-                    "[SERIES-SCHEDULER] Found series for deletion {}, id {}",
+                    "[SERIES-SCHEDULER] Found series for check {}, id {}",
                     series.title, series.id
                 );
                 let job = SeriesCheckJob { series };
@@ -87,12 +87,12 @@ pub async fn run_series_check_worker(
             );
             // If failed, retry again after 1 hour
             (
-                "error_check",
+                "error-check",
                 Some(chrono::Utc::now() + chrono::Duration::hours(1)),
             )
         } else {
             // If successful, let DB calculate the next schedule
-            ("available", None)
+            ("Ongoing", None)
         };
 
         if let Err(e) = db_service
