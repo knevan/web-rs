@@ -28,7 +28,7 @@ impl DatabaseService {
 }
 
 // Struct represents a manga series stored in the database.
-#[derive(Debug, Clone, FromRow)]
+#[derive(Debug, Clone, FromRow, Serialize)]
 pub struct Series {
     pub id: i32,
     pub title: String,
@@ -49,7 +49,7 @@ pub struct Series {
 }
 
 /// Struct represent chapter
-#[derive(Debug, FromRow)]
+#[derive(Debug, FromRow, Serialize)]
 pub struct SeriesChapter {
     pub id: i32,
     pub series_id: i32,
@@ -74,6 +74,7 @@ pub struct NewSeriesData<'a> {
     pub title: &'a str,
     pub original_title: Option<&'a str>,
     pub authors: Option<&'a Vec<String>>,
+    pub category_ids: Option<&'a Vec<i32>>,
     pub description: &'a str,
     pub cover_image_url: &'a str,
     pub source_url: &'a str,
@@ -91,7 +92,7 @@ pub struct UpdateSeriesData<'a> {
     pub check_interval_minutes: Option<i32>,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug, FromRow, Serialize)]
 pub struct SeriesWithAuthors {
     pub id: i32,
     pub title: String,
@@ -99,6 +100,7 @@ pub struct SeriesWithAuthors {
     pub description: String,
     pub cover_image_url: String,
     pub current_source_url: String,
+    pub processing_status: String,
     pub updated_at: DateTime<Utc>,
     #[sqlx(json)]
     pub authors: serde_json::Value,
@@ -121,6 +123,7 @@ impl SeriesDeletionImagekeys {
     }
 }
 
+// Pagination parameters for fetching series list.
 #[derive(Debug)]
 pub struct PaginatedResult<T> {
     pub items: Vec<T>,
@@ -133,12 +136,31 @@ pub struct CategoryTag {
     pub name: String,
 }
 
+// Public series data for the public API.
+#[derive(Debug, FromRow, Serialize)]
+pub struct PublicSeries {
+    pub id: i32,
+    pub title: String,
+    pub cover_image_url: String,
+    // Use serde_json::Value for authors to match SeriesWithAuthors, then map it in the handler
+    #[sqlx(json)]
+    pub authors: serde_json::Value,
+}
+
+// Most viewed series data for the public API.
 #[derive(Debug, FromRow, Serialize)]
 pub struct MostViewedSeries {
     pub id: i32,
     pub title: String,
     pub cover_image_url: String,
     pub view_count: Option<i64>,
+}
+
+// Order by field for fetching series list.
+#[derive(Debug, Clone)]
+pub enum SeriesOrderBy {
+    CreatedAt,
+    UpdatedAt,
 }
 
 // A helper function to extract a hostname from an optional URL string.

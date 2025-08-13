@@ -5,9 +5,9 @@ use crate::common::hashing::{hash_password, verify_password};
 use crate::common::jwt::{
     Claims, RefreshClaims, create_access_jwt, create_refresh_jwt,
 };
-use crate::database::DatabaseService;
+use crate::database::{DatabaseService, Series, SeriesChapter, SeriesOrderBy};
 use axum::Json;
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use axum_core::__private::tracing::error;
 use axum_core::response::{IntoResponse, Response};
 use axum_extra::extract::CookieJar;
@@ -535,6 +535,97 @@ pub async fn fetch_most_viewed_series_handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"status": "error", "message": "Could not retrieve most viewed series."})),
+            ).into_response()
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct SeriesDataResponse {
+    series: Series,
+    chapters: Vec<SeriesChapter>,
+    authors: Vec<String>,
+    categories_tag: Vec<String>,
+}
+
+// Fetch all details for a single series
+pub async fn fetch_series_details_by_id_handler(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+) -> Response {
+    let db = &state.db_service;
+
+    let series = match db.get_manga_series_by_id(id).await {
+        Ok(Some(s)) => s,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"status": "error", "message": "Series not found."})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            error!("Error fetching series details: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": "Could not retrieve series details."})),
+            )
+            .into_response();
+        }
+    };
+
+    let series_id = series.id;
+
+    // Fetch authors, chapters, and categories tag in parallel
+    let (authors_result, chapters_result, categories_result) = tokio::join!(
+        db.get_authors_by_series_id(series_id),
+        db.get_chapters_by_series_id(series_id),
+        db.get_category_tag_by_series_id(series_id),
+    );
+
+    let response_data = SeriesDataResponse {
+        series,
+        authors: authors_result.unwrap_or_default(),
+        chapters: chapters_result.unwrap_or_default(),
+        categories_tag: categories_result.unwrap_or_default(),
+    };
+
+    (StatusCode::OK, Json(response_data)).into_response()
+}
+
+pub async fn fetch_new_series_handler(
+    State(state): State<AppState>,
+) -> Response {
+    match state
+        .db_service
+        .get_public_series_paginated(1, 20, SeriesOrderBy::CreatedAt)
+        .await
+    {
+        Ok(series) => (StatusCode::OK, Json(series)).into_response(),
+        Err(e) => {
+            eprintln!("Error fetching new series: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": "Could not retrieve new series."})),
+            ).into_response()
+        }
+    }
+}
+
+pub async fn fetch_updated_series_handler(
+    State(state): State<AppState>,
+) -> Response {
+    match state
+        .db_service
+        .get_public_series_paginated(1, 20, SeriesOrderBy::UpdatedAt)
+        .await
+    {
+        Ok(series) => (StatusCode::OK, Json(series)).into_response(),
+        Err(e) => {
+            eprintln!("Error fetching updated series: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": "Could not retrieve updated series."})),
             ).into_response()
         }
     }

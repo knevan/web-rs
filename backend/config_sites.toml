@@ -1,12 +1,29 @@
 # config.toml
-[[sites]]
-host_name = "www.mgeko.cc"
-chapter_link_selector = "div#chpagedlist ul.chapter-list li a"
-chapter_number_from_url_regex = "-chapter-([\\d]+(?:-[\\d]+)?)-"
-chapter_number_from_text_regex = "^Chapter\\s*([\\d]+(?:-[\\d]+)?)"
-
+[sites."www.mgeko.cc"]
+chapter_link_selector = "#chpagedlist ul.chapter-list li a"
+chapter_number_from_url_regex = "chapter-([\\d]+(?:[.-][\\d]+)?)"
+chapter_number_from_text_regex = "([\\d]+(?:[.-][\\d]+)?)"
 chapter_number_data_attribute_on_parent = ""
-
 image_selector_on_chapter_page = "div#chapter-reader img"
 image_url_attribute = "src"
 image_url_fallback_attributes = ["data-src", "data-lazy-src"]
+chapter_order = "desc"
+
+#[sites."harimanga.me"]
+#chapter_link_selecctor = ""
+#chapter_number_from_url_regex = "chapter-([\\d]+(?:[.-][\\d]+)?)"
+#chapter_number_from_text_regex = "([\\d]+(?:[.-][\\d]+)?)"
+#chapter_number_data_attribute_on_parent = ""
+#image_selector_on_chapter_page = "div#reading-content img"
+#image_url_attribute = "src"
+#image_url_fallback_attributes = ["data-src", "data-lazy-src"]
+
+#[sites."demonicscans.org"]
+#image_selector_on_chapter_page = "div.main-width.center-m img"
+#image_url_attribute = "src"
+#image_url_fallback_attributes = ["data-src", "data-lazy-src"]
+
+
+
+
+

@@ -1,7 +1,8 @@
 use crate::builder::startup::AppState;
 use crate::common::jwt::Claims;
-use crate::database::{NewSeriesData, UpdateSeriesData};
+use crate::database::{NewSeriesData, Series, UpdateSeriesData};
 use crate::task_workers::repair_chapter_worker;
+use crate::task_workers::series_check_worker::SeriesCheckJob;
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
@@ -19,9 +20,10 @@ pub struct CreateSeriesRequest {
     description: String,
     cover_image_url: String,
     source_url: String,
+    category_ids: Vec<i32>,
 }
 
-// This route is protected and can only be accessed by a logged-in admin-dashboard.
+// Admin endpoint to create new series
 pub async fn create_new_series_handler(
     claims: Claims,
     State(state): State<AppState>,
@@ -34,32 +36,69 @@ pub async fn create_new_series_handler(
         "Handler", claims.sub
     );
 
-    let check_interval_minutes = rand::rng().random_range(60..=100);
+    // Random time to check target website
+    let check_interval_minutes = rand::rng().random_range(90..=120);
 
     let new_series_data = NewSeriesData {
         title: &payload.title,
         original_title: payload.original_title.as_deref(),
         authors: payload.authors.as_ref(),
+        category_ids: Some(&payload.category_ids),
         description: &payload.description,
         cover_image_url: &payload.cover_image_url,
         source_url: &payload.source_url,
         check_interval_minutes,
     };
 
-    match db_service.add_new_series(&new_series_data)
+    // Create new series in DB
+    let new_series_id = match db_service.add_new_series(&new_series_data).await
+    {
+        Ok(id) => id,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": e.to_string()}))
+            )
+                .into_response();
+        }
+    };
+
+    let fetch_new_series: Series = match db_service
+        .get_manga_series_by_id(new_series_id)
         .await
     {
-        Ok(new_id) => (
-            StatusCode::CREATED,
-            Json(serde_json::json!({"status": "success", "id": new_id})),
-        )
-            .into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"status": "error", "message": e.to_string()})),
-        )
-            .into_response(),
+        Ok(Some(series)) => series,
+        _ => {
+            eprintln!("Error fetching new series from DB: {}", new_series_id);
+            return (
+                StatusCode::CREATED,
+                Json(serde_json::json!({"status": "success", "id": new_series_id, "warning": "Could not schedule immediate check."}))
+            )
+                .into_response();
+        }
+    };
+
+    // Crate and send job to worker via priority queue
+    let job = SeriesCheckJob {
+        series: fetch_new_series,
+    };
+    if let Err(e) = state.worker_channels.series_check_tx.send(job).await {
+        eprintln!(
+            "Failed to send job to worker for series: {} {}",
+            new_series_id, e
+        );
+    } else {
+        println!(
+            "Successfully scheduled immediate check for series: {}",
+            new_series_id
+        );
     }
+
+    (
+        StatusCode::CREATED,
+        Json(serde_json::json!({"status": "success", "id": new_series_id, "message": "Series created and scheduled for immediate scraping"})),
+    )
+        .into_response()
 }
 
 #[derive(Deserialize)]
@@ -192,6 +231,8 @@ pub struct PaginationParams {
     page: u32,
     #[serde(default = "default_page_size")]
     page_size: u32,
+    #[serde(default)]
+    search: Option<String>,
 }
 
 fn default_page() -> u32 {
@@ -211,6 +252,7 @@ pub struct SeriesResponse {
     source_url: String,
     authors: Vec<String>,
     last_updated: String,
+    processing_status: String,
 }
 
 #[derive(Serialize)]
@@ -232,7 +274,7 @@ pub async fn get_all_manga_series_handler(
 
     match state
         .db_service
-        .get_paginated_series_with_authors(pagination.page, pagination.page_size)
+        .get_admin_paginated_series(pagination.page, pagination.page_size, pagination.search.as_deref())
         .await
     {
         Ok(paginated_result) => {
@@ -248,6 +290,7 @@ pub async fn get_all_manga_series_handler(
                     source_url: s.current_source_url,
                     authors: serde_json::from_value(s.authors).unwrap_or_else(|_| vec![]),
                     last_updated: s.updated_at.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    processing_status: s.processing_status,
                 })
                 .collect();
 
@@ -374,15 +417,13 @@ pub async fn create_category_tag_handler(
             // Check for unique violation error from PostgreSQL (code 23505)
             if let Some(sqlx::Error::Database(db_error)) =
                 e.root_cause().downcast_ref::<sqlx::Error>()
-            {
-                if db_error.code() == Some(std::borrow::Cow::from("23505")) {
+                && db_error.code() == Some(std::borrow::Cow::from("23505")) {
                     return (
                             StatusCode::CONFLICT,
                             Json(serde_json::json!({"status": "error", "message": "Category tag already exists."})),
                         )
                             .into_response();
                 }
-            }
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"status": "error", "message": e.to_string()})),

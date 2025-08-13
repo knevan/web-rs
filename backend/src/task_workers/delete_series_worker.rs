@@ -7,7 +7,7 @@ use tokio::sync::mpsc;
 use tokio_retry2::Retry;
 use tokio_retry2::strategy::{FixedInterval, jitter};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DeletionJob {
     series: Series,
 }

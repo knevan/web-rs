@@ -195,7 +195,7 @@ impl StorageClient {
             .await
             .map_err(|e| anyhow!("Failed to upload file: {:?}", e))?;
 
-        let public_url = format!("{}/cover/{}", self.domain_cdn_url, file_name);
+        let public_url = format!("{}/{}", self.domain_cdn_url, file_name);
 
         Ok(public_url)
     }
