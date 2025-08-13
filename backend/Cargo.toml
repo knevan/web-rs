@@ -9,7 +9,7 @@ rust-version = "1.88.0"
 [dependencies]
 anyhow = "1.0.98"
 axum = { version = "0.8.4", features = ["macros"] }
-chrono = "0.4.41"
+chrono = { version = "0.4.41", features = ["serde"] }
 image = "0.25.6"
 jsonwebtoken = "9.3.1"
 rand = "0.9.1"
