@@ -82,6 +82,22 @@ impl DatabaseService {
                 ).execute(&mut *tx).await.context(format!("Failed to link author {} to manga", name))?;
             }
         }
+
+        if let Some(category_ids) = data.category_ids {
+            if !category_ids.is_empty() {
+                for category_id in category_ids {
+                    // Insert the relationship into the series_categories junction table.
+                    sqlx::query!(
+                        "INSERT INTO series_categories (series_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                        new_series_id,
+                        category_id
+                    )
+                        .execute(&mut *tx)
+                        .await
+                        .context(format!("Failed to link category {} to manga", category_id))?;
+                }
+            }
+        }
         tx.commit().await.context("Failed to commit transaction")?;
 
         Ok(new_series_id)
@@ -207,15 +223,72 @@ impl DatabaseService {
         Ok(series)
     }
 
-    pub async fn get_paginated_series_with_authors(
+    // Get authors for a sepecific series
+    pub async fn get_authors_by_series_id(
+        &self,
+        series_id: i32,
+    ) -> AnyhowResult<Vec<String>> {
+        let authors_name = sqlx::query_scalar!(
+            r#"SELECT a.name FROM authors a
+            JOIN series_authors sa ON a.id = sa.author_id
+            WHERE sa.series_id = $1"#,
+            series_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to query authors by series ID with sqlx")?;
+
+        Ok(authors_name)
+    }
+
+    // Get chapters for a sepecific series
+    pub async fn get_chapters_by_series_id(
+        &self,
+        series_id: i32,
+    ) -> AnyhowResult<Vec<SeriesChapter>> {
+        let chapters = sqlx::query_as!(
+            SeriesChapter,
+            "SELECT id, series_id, chapter_number, title, source_url, created_at FROM series_chapters WHERE series_id = $1 ORDER BY chapter_number DESC",
+            series_id
+        )
+            .fetch_all(&self.pool)
+            .await
+            .context("Failed to query chapters by series ID with sqlx")?;
+
+        Ok(chapters)
+    }
+
+    pub async fn get_category_tag_by_series_id(
+        &self,
+        series_id: i32,
+    ) -> AnyhowResult<Vec<String>> {
+        let category_tag_name = sqlx::query_scalar!(
+            r#"SELECT c.name FROM categories c
+            JOIN series_categories sc ON c.id = sc.category_id
+            WHERE sc.series_id = $1"#,
+            series_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to query category tag by series ID with sqlx")?;
+
+        Ok(category_tag_name)
+    }
+
+    // Get paginated series list for admin
+    pub async fn get_admin_paginated_series(
         &self,
         page: u32,
         page_size: u32,
+        search_query: Option<&str>,
     ) -> AnyhowResult<PaginatedResult<SeriesWithAuthors>> {
         let page = page.max(1);
 
         let limit = page_size as i64;
         let offset = (page as i64 - 1) * limit;
+
+        // Format search query, wraps the query in '%' to allow match substrings
+        let formatted_search_query = search_query.map(|s| format!("%{}%", s));
 
         #[derive(Debug, FromRow)]
         struct QueryResult {
@@ -226,6 +299,7 @@ impl DatabaseService {
             cover_image_url: String,
             current_source_url: String,
             updated_at: DateTime<Utc>,
+            processing_status: String,
             #[sqlx(json)]
             authors: serde_json::Value,
             total_items: Option<i64>,
@@ -242,13 +316,14 @@ impl DatabaseService {
                 sr.cover_image_url,
                 sr.current_source_url,
                 sr.updated_at,
+                sr.processing_status,
                 -- Use a LEFT JOIN to include all authors, even if they are not linked to the series.
                 -- Aggregate author names into a JSON array. If no authors, return an empty array.
+                -- The '!' asserts the value is not null, matching COALESCE
                 COALESCE(
                     json_agg(a.name) FILTER (WHERE a.id IS NOT NULL),
                     '[]'::json
                 ) as "authors!",
-                -- The '!' asserts the value is not null, matching COALESCE
                 -- Use a window function to get the total count of series without a separate query.
                 COUNT(*) OVER () as total_items
             FROM
@@ -257,6 +332,9 @@ impl DatabaseService {
                 series_authors sa ON sr.id = sa.series_id
             LEFT JOIN
                 authors a ON sa.author_id = a.id
+            WHERE
+                -- Filter by search query if provided
+                ($3::TEXT IS NULL OR sr.title ILIKE $3)
             GROUP BY
                 sr.id
             ORDER BY
@@ -265,7 +343,8 @@ impl DatabaseService {
             OFFSET $2
             "#,
             limit,
-            offset
+            offset,
+            formatted_search_query
         )
             .fetch_all(&self.pool)
             .await
@@ -284,6 +363,7 @@ impl DatabaseService {
                 description: r.description,
                 cover_image_url: r.cover_image_url,
                 current_source_url: r.current_source_url,
+                processing_status: r.processing_status,
                 updated_at: r.updated_at,
                 authors: serde_json::from_value(r.authors).unwrap_or_default(),
             })
@@ -293,6 +373,64 @@ impl DatabaseService {
             items: series_list,
             total_items,
         })
+    }
+
+    pub async fn get_public_series_paginated(
+        &self,
+        page: u32,
+        page_size: u32,
+        order_by: SeriesOrderBy,
+    ) -> AnyhowResult<Vec<SeriesWithAuthors>> {
+        let limit = page_size as i64;
+        let offset = (page.max(1) as i64 - 1) * limit;
+
+        // Ordering column
+        let order_by_clause = match order_by {
+            SeriesOrderBy::CreatedAt => "sr.created_at",
+            SeriesOrderBy::UpdatedAt => "sr.updated_at",
+        };
+
+        let query_string = format!(
+            r#"
+            SELECT
+                sr.id,
+                sr.title,
+                sr.original_title,
+                sr.description,
+                sr.cover_image_url,
+                sr.current_source_url,
+                sr.updated_at,
+                sr.processing_status,
+                COALESCE(
+                    json_agg(a.name) FILTER (WHERE a.id IS NOT NULL),
+                    '[]'::json
+                ) as authors
+            FROM
+                series sr
+            LEFT JOIN
+                series_authors sa ON sr.id = sa.series_id
+            LEFT JOIN
+                authors a ON sa.author_id = a.id
+            WHERE
+                sr.processing_status = 'On-going'
+            GROUP BY
+                sr.id
+            ORDER BY
+                {} DESC
+            LIMIT $1
+            OFFSET $2
+            "#,
+            order_by_clause
+        );
+
+        let series_list = sqlx::query_as::<_, SeriesWithAuthors>(&query_string)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(&self.pool)
+            .await
+            .context("Failed to query public series")?;
+
+        Ok(series_list)
     }
 
     /// Updates only the processing status of a series.

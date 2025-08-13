@@ -3,9 +3,11 @@ use axum::routing::{get, post};
 
 use crate::auth::admin_routes::admin_routes;
 use crate::auth::handlers::{
-    fetch_most_viewed_series_handler, forgot_password_handler, login_handler,
-    logout_handler, protected_handler, realtime_check_username_handler,
-    refresh_token_handler, register_new_user_handler, reset_password_handler,
+    fetch_most_viewed_series_handler, fetch_new_series_handler,
+    fetch_series_details_by_id_handler, fetch_updated_series_handler,
+    forgot_password_handler, login_handler, logout_handler, protected_handler,
+    realtime_check_username_handler, refresh_token_handler,
+    register_new_user_handler, reset_password_handler,
 };
 use crate::builder::startup::AppState;
 
@@ -23,10 +25,15 @@ pub fn routes() -> Router<AppState> {
 
     // Router for most view updates
     let public_series_api_routes = Router::new()
-        .route("/series/most-viewed", get(fetch_most_viewed_series_handler));
+        .route("/series/most-viewed", get(fetch_most_viewed_series_handler))
+        .route("/series/new-series", get(fetch_new_series_handler))
+        .route("/series/updated-series", get(fetch_updated_series_handler))
+        .route(
+            "/series/details/{id}",
+            get(fetch_series_details_by_id_handler),
+        );
 
-    // Combine both routers under prefix "/api"
-    // The structure is flat, avoiding double nesting.
+    // Combine routers under prefix "/api"
     Router::new()
         .nest("/api/auth", auth_api_routes)
         .nest("/api/admin", admin_routes())
