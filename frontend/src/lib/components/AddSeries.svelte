@@ -7,6 +7,12 @@
     import {X, Plus, Minus} from "@lucide/svelte";
     import {apiFetch} from "$lib/store/auth";
     import {toast} from "svelte-sonner";
+    import {Badge} from "$lib/components/ui/badge";
+
+    type CategoryTag = {
+        id: number;
+        name: string;
+    };
 
     let title = $state('');
     let originalTitle = $state('');
@@ -22,6 +28,8 @@
         message: string;
         type: 'success' | 'error'
     } | null>(null);
+    let availableTags = $state<CategoryTag[]>([]);
+    let selectedTagIds = $state<Set<number>>(new Set());
 
     let {children} = $props();
 
@@ -34,6 +42,7 @@
         authors = [{id: Date.now(), name: ''}];
         sourceUrl = '';
         coverImageFile = null;
+        selectedTagIds = new Set();
         if (fileInput) {
             fileInput.value = '';
         }
@@ -82,6 +91,39 @@
         authors = authors.filter(author => author.id !== id);
     }
 
+    // Fetch available category tags from API
+    async function fetchTags() {
+        try {
+            const response = await apiFetch('/api/admin/category/tag/list');
+            if (!response.ok) {
+                throw new Error('Failed to fetch category tags');
+            }
+            const data = await response.json();
+            availableTags = data.categories || [];
+        } catch (error: any) {
+            toast.error("Could not load category tags. Please try again.", {description: error.message});
+            console.error(error);
+        }
+    }
+
+    $effect(() => {
+        if (open) {
+            if (availableTags.length === 0) {
+                fetchTags();
+            }
+        }
+    });
+
+    function toggleTagSelection(tagId: number) {
+        const newSelectedTagIds = new Set(selectedTagIds);
+        if (newSelectedTagIds.has(tagId)) {
+            newSelectedTagIds.delete(tagId);
+        } else {
+            newSelectedTagIds.add(tagId);
+        }
+        selectedTagIds = newSelectedTagIds
+    }
+
     $effect(() => {
         return () => {
             if (coverPreviewUrl) {
@@ -123,6 +165,7 @@
             description,
             cover_image_url: uploadedCoverUrl,
             source_url: sourceUrl,
+            category_ids: Array.from(selectedTagIds),
         };
         const response = await apiFetch('/api/admin/series/add', {
             method: 'POST',
@@ -234,6 +277,31 @@
                         <Label for="sourceUrl">Source Url <span
                                 class="text-red-500">*</span> </Label>
                         <Input id="sourceUrl" type="url" bind:value={sourceUrl}/>
+                    </div>
+                    <div class="grid w-full items-center gap-1.5">
+                        <Label>Tags</Label>
+                        {#if availableTags.length > 0}
+                            <div class="flex flex-wrap gap-2 pt-2">
+                                {#each availableTags as tag (tag.id)}
+                                    <Badge variant={selectedTagIds.has(tag.id) ? 'default' : 'secondary'}
+                                           class="cursor-pointer"
+                                           role="button"
+                                           onclick={() => toggleTagSelection(tag.id)}
+                                           onkeydown={(e) => {
+                                               if (e.key === 'Enter' || e.key === '') {
+                                                   e.preventDefault();
+                                                   toggleTagSelection(tag.id);
+                                               }
+                                           }}
+                                    >
+                                        {tag.name}
+                                    </Badge>
+                                {/each}
+                            </div>
+                        {:else}
+                            <p class="text-sm text-muted-foreground pt-2">No category tags available. Add them in
+                                'Manage Tags'.</p>
+                        {/if}
                     </div>
                 </div>
 

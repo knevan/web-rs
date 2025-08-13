@@ -1,11 +1,10 @@
 <script lang="ts">
-    import image_test from "$lib/images/image_image.webp"
-    import {page} from "$app/state";
     import {goto} from "$app/navigation";
 
     interface MangaSeries {
         id: number;
         title: string;
+        original_title: string;
         description: string;
         cover_image_url: string;
         views_count: number;
@@ -22,18 +21,19 @@
 
     interface MangaData {
         series: MangaSeries;
-        chapters: MangaChapter[];
         authors: string[];
-        categories: string[];
+        categoryTags: string[];
+        chapters: MangaChapter[];
     }
 
     // MOCK DATA
-    const userMockData = true;
+    const userMockData = false;
 
     const mockMangaData = {
         series: {
             id: 99,
             title: "Test Manga",
+            original_title: "テストマンガ",
             description: "This is a detailed placeholder description for testing the component's layout. It can be long to see how text wrapping works and to ensure the overall design remains consistent even with a large amount of text content.",
             cover_image_url: "image_test",
             views_count: 1234567,
@@ -42,6 +42,26 @@
             updated_at: "2025-07-01T10:00:00Z",
         },
         chapters: [
+            {chapter_number: 25.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
+            {chapter_number: 24.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
+            {chapter_number: 23.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
+            {chapter_number: 22.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
+            {chapter_number: 21.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
+            {chapter_number: 20.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
+            {chapter_number: 19.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
+            {chapter_number: 18.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
+            {chapter_number: 17.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
+            {chapter_number: 16.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
+            {chapter_number: 15.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
+            {chapter_number: 14.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
+            {chapter_number: 13.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
+            {chapter_number: 12.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
+            {chapter_number: 11.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
+            {chapter_number: 10.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
+            {chapter_number: 9.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
+            {chapter_number: 8.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
+            {chapter_number: 7.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
+            {chapter_number: 6.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
             {chapter_number: 5.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
             {chapter_number: 4.0, title: "A New State", created_at: "2025-06-25T10:00:00Z"},
             {chapter_number: 3.0, title: "The Effect Awakens", created_at: "2025-06-18T10:00:00Z"},
@@ -49,7 +69,7 @@
             {chapter_number: 1.0, title: "The Journey Begins", created_at: "2025-06-04T10:00:00Z"},
         ],
         authors: ["Joe Blow", "Blow Jobs"],
-        categories: ["Action", "Fantasy", "Adventure", "Isekai", "Magic"]
+        categoryTags: ["Action", "Fantasy", "Adventure", "Isekai", "Magic"]
     };
 
     // Props manga ID accepted from routing or parent component
@@ -63,8 +83,8 @@
     // Base URL for Manga API
     const API_BASE_URL = 'http://localhost:8000';
 
-    const currentMangaId = $derived(mangaId || page?.params['manga_name']);
-    const status = $derived(mangaData?.series?.processing_status === 'monitoring' ? 'Ongoing' : 'Completed');
+    const currentMangaId = $derived(mangaId);
+    const status = $derived(mangaData?.series?.processing_status?.toLowerCase() === 'on-going' ? 'Ongoing' : 'Completed');
     const statusClass = $derived(status === 'Ongoing' ? 'text-green-400' : 'text-gray-400');
     const chaptersCount = $derived(mangaData?.chapters?.length || 0);
     const sortedChapters = $derived(mangaData?.chapters ? [...mangaData.chapters].sort((a, b) => b.chapter_number - a.chapter_number) : []);
@@ -77,7 +97,7 @@
             error = null;
             mangaData = null;
 
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 300));
 
             if (userMockData) {
                 // Mode Mock
@@ -85,36 +105,34 @@
                 mangaData = mockMangaData;
                 isLoading = false;
                 return;
-            } else {
-                if (!currentMangaId) {
-                    error = "No manga ID provided";
-                    isLoading = false;
+            }
+
+            if (!currentMangaId) {
+                error = "No manga ID provided";
+                isLoading = false;
+                return;
+            }
+
+            try {
+                console.log(`Fetching REAL data for ID: ${currentMangaId}`);
+                const response = await fetch(`${API_BASE_URL}/api/series/details/${currentMangaId}`);
+
+                if (!response.ok) {
+                    error = `Failed to fetch manga: ${response.status} ${response.statusText}`;
                     return;
                 }
-
-                try {
-                    console.log(`Fetching REAL data for ID: ${currentMangaId}`);
-                    const response = await fetch(`${API_BASE_URL}/api/manga/${currentMangaId}`);
-
-                    if (!response.ok) {
-                        error = `Failed to fetch manga: ${response.status} ${response.statusText}`;
-                        return;
-                    }
-                    mangaData = await response.json();
-
-                } catch (err) {
-                    console.error('Error fetching manga data:', err);
-                    error = `Gagal memuat data manga: ${err instanceof Error ? err.message : 'Unknown Error'}`;
-                } finally {
-                    isLoading = false;
-                }
+                mangaData = await response.json();
+            } catch (err) {
+                console.error('Error fetching manga data:', err);
+                error = `Failed to load: ${err instanceof Error ? err.message : 'Unknown Error'}`;
+            } finally {
+                isLoading = false;
             }
         }
 
         loadData();
     });
 
-    // --- Utility dan Navigation Handlers (Tidak perlu diubah) ---
     // Fungsi-fungsi ini adalah JavaScript biasa dan tidak terpengaruh oleh Runes.
     function formatCount(num: number): string {
         if (!num) return '0';
@@ -178,7 +196,7 @@
         <!-- Loading State -->
         {#if isLoading}
             <div class="flex flex-col justify-center items-center h-96">
-                <div class="loader mb-4"></div>
+                <div class="w-12 h-12 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
                 <p class="text-gray-400">Loading manga data...</p>
             </div>
         {:else if error}
@@ -200,71 +218,69 @@
         {:else if mangaData}
             <!-- Main Content -->
             <div class="space-y-8">
-                <!-- Manga Info Section -->
-                <div class="main-container p-6 md:p-8">
+                <div class="bg-[#16213e] shadow-2xl rounded-none md:rounded-2xl p-6 md:p-8 flex flex-col gap-8">
                     <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-8">
-                        <!-- Cover Image -->
-                        <div class="md:col-span-1">
-                            <div class="sticky top-24">
-                                <img src={mangaData.series.cover_image_url} alt={mangaData.series.title}
-                                     class="w-full h-auto object-cover rounded-lg shadow-lg" loading="lazy"/>
-                            </div>
+
+                        <div class="md:col-span-1 flex justify-center">
+                            <img src={mangaData.series.cover_image_url} alt={mangaData.series.title}
+                                 class="w-full h-auto object-cover rounded-lg shadow-lg max-w-[200px] md:max-w-full"
+                                 style="max-height: 300px;"
+                                 loading="lazy"/>
                         </div>
 
-                        <!-- Manga Details -->
-                        <div class="md:col-span-2 lg:col-span-3 space-y-6">
-                            <!-- Title dan Author -->
+                        <div class="md:col-span-2 lg:col-span-3 flex flex-col space-y-4">
+
                             <div class="space-y-2">
-                                <h1 class="text-3xl md:text-4xl font-bold text-white leading-tight">
+                                <h1 class="text-2xl md:text-3xl font-bold text-white leading-tight">
                                     {mangaData.series.title}
                                 </h1>
-                                <p class="text-gray-400">
+                                <p class="text-sm text-gray-400 -mt-1">
+                                    {mangaData.series.original_title}
+                                </p>
+                                <p class="text-gray-400 text-sm">
                                     Author:
-                                    <span class="text-blue-300">
+                                    <span class="text-blue-300 text-sm">
                                         {mangaData.authors?.join(', ') || 'Unknown'}
                                     </span>
                                 </p>
                             </div>
 
-                            <!-- Stats Grid -->
-                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-dark-secondary rounded-lg">
-                                <div class="text-center">
-                                    <div class="text-2xl font-bold text-white flex items-center justify-center gap-2">
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-1 p-2 bg-dark-secondary rounded-lg">
+                                <div class="text-center flex flex-col items-center gap-x-1">
+                                    <p class="text-md text-gray-400">Chapters</p>
+                                    <div class="text-xl font-bold text-white flex items-center justify-center gap-2">
                                         <i class="fas fa-book-open text-blue-400"></i>
                                         {chaptersCount}
                                     </div>
-                                    <p class="text-sm text-gray-400">Chapters</p>
                                 </div>
-                                <div class="text-center">
-                                    <div class="text-2xl font-bold text-white flex items-center justify-center gap-2">
+                                <div class="text-center flex flex-col items-center gap-x-1">
+                                    <p class="text-md text-gray-400">Views</p>
+                                    <div class="text-xl font-bold text-white flex items-center justify-center gap-2">
                                         <i class="fas fa-eye text-green-400"></i>
                                         {formatCount(mangaData.series.views_count)}
                                     </div>
-                                    <p class="text-sm text-gray-400">Views</p>
                                 </div>
-                                <div class="text-center">
-                                    <div class="text-2xl font-bold text-white flex items-center justify-center gap-2">
+                                <div class="text-center flex flex-col items-center gap-x-1">
+                                    <p class="text-md text-gray-400">Bookmarked</p>
+                                    <div class="text-xl font-bold text-white flex items-center justify-center gap-2">
                                         <i class="fas fa-bookmark text-yellow-400"></i>
                                         {formatCount(mangaData.series.bookmarks_count)}
                                     </div>
-                                    <p class="text-sm text-gray-400">Bookmarked</p>
                                 </div>
-                                <div class="text-center">
-                                    <div class="text-2xl font-bold {statusClass}">
+                                <div class="text-center flex flex-col items-center gap-x-1">
+                                    <p class="text-md text-gray-400">Status</p>
+                                    <div class="text-sm font-bold {statusClass}">
                                         {status}
                                     </div>
-                                    <p class="text-sm text-gray-400">Status</p>
                                 </div>
                             </div>
 
-                            <!-- Categories -->
-                            {#if mangaData.categories?.length > 0}
+                            {#if mangaData.categoryTags?.length > 0}
                                 <div class="space-y-3">
-                                    <h3 class="text-lg font-semibold text-white">Categories</h3>
                                     <div class="flex flex-wrap gap-2">
-                                        {#each mangaData.categories as category}
+                                        {#each mangaData.categoryTags as category}
                                             <button onclick={() => handleCategoryClick(category)}
-                                                    class="category-badge px-3 py-1 text-sm font-medium rounded-full">
+                                                    class="px-3 py-1 text-sm font-medium rounded-full bg-[#0f3460] text-[#c0c0ff] transition-all duration-300 ease-in-out hover:bg-blue-600 hover:text-white hover:-translate-y-0.5">
                                                 {category}
                                             </button>
                                         {/each}
@@ -272,30 +288,28 @@
                                 </div>
                             {/if}
 
-                            <!-- Last Update -->
                             <div class="text-gray-400 text-sm">
                                 Last Update:
                                 <span class="text-gray-300">
                                     {timeAgo(mangaData.series.updated_at)}
                                 </span>
                             </div>
-
-                            <!-- Description -->
-                            {#if mangaData.series.description}
-                                <div class="space-y-3">
-                                    <h3 class="text-lg font-semibold text-white">Description</h3>
-                                    <p class="text-gray-300 leading-relaxed">
-                                        {mangaData.series.description}
-                                    </p>
-                                </div>
-                            {/if}
                         </div>
                     </div>
+
+                    {#if mangaData.series.description}
+                        <div class="space-y-3 pt-5 border-t border-gray-700/50">
+                            <h3 class="text-md font-semibold text-white">Description</h3>
+                            <p class="text-gray-300 leading-relaxed">
+                                {mangaData.series.description}
+                            </p>
+                        </div>
+                    {/if}
                 </div>
 
                 <!-- Chapter List Section -->
                 {#if sortedChapters.length > 0}
-                    <div class="main-container p-6">
+                    <div class="bg-[#16213e] shadow-2xl rounded-none md:rounded-2xl p-6 md:p-8">
                         <div class="flex justify-between items-center mb-6">
                             <h2 class="text-2xl font-bold text-white">
                                 Chapters ({chaptersCount})
@@ -305,16 +319,17 @@
                             </div>
                         </div>
 
-                        <div class="grid gap-3">
-                            {#each sortedChapters as chapter}
-                                <button onclick={() => handleChapterClick(chapter.chapter_number)}
-                                        class="chapter-item p-4 rounded-lg text-left">
+                        <div class="chapter-list-container max-h-[42rem] overflow-y-auto pr-2">
+                            <div class="grid gap-3 grid-cols-1 md:grid-cols-2">
+                                {#each sortedChapters as chapter}
+                                    <button onclick={() => handleChapterClick(chapter.chapter_number)}
+                                            class="p-4 rounded-lg text-left bg-[#1e293b] border-l-4 border-gray-600 transition-all duration-300 ease-in-out hover:bg-gray-700 hover:border-blue-500 hover:translate-x-2">
                                     <span class="flex justify-between items-center">
                                         <span class="flex-1">
                                             <span class="font-semibold text-white mb-1">
-                                                Chapter {chapter.chapter_number}
+                                                <!--{chapter.chapter_number}-->
                                                 {#if chapter.title}
-                                                    <span class="text-gray-300">- {chapter.title}</span>
+                                                    <span class="text-gray-300">{chapter.title}</span>
                                                 {/if}
                                             </span>
                                             <span class="text-sm text-gray-400">
@@ -329,8 +344,9 @@
                                             <i class="fas fa-chevron-right"></i>
                                         </span>
                                     </span>
-                                </button>
-                            {/each}
+                                    </button>
+                                {/each}
+                            </div>
                         </div>
                     </div>
                 {:else}
@@ -345,74 +361,22 @@
 </div>
 
 <style>
-    :global(body) {
-        --dark-primary: #1a1a2e;
-        --dark-secondary: #16213e;
-        background-color: var(--dark-primary);
-        color: #e0e0e0;
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    /* Add these styles for the custom scrollbar */
+    .chapter-list-container::-webkit-scrollbar {
+        width: 8px;
     }
 
-    .bg-dark-primary {
-        background-color: var(--dark-primary);
+    .chapter-list-container::-webkit-scrollbar-track {
+        background-color: transparent;
     }
 
-    .bg-dark-secondary {
-        background-color: var(--dark-secondary);
+    .chapter-list-container::-webkit-scrollbar-thumb {
+        background-color: #4a5568; /* gray-600 */
+        border-radius: 10px;
+        border: 2px solid #16213e; /* your bg color */
     }
 
-    .main-container {
-        background-color: var(--dark-secondary);
-        border-radius: 1rem;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-    }
-
-    .category-badge {
-        background-color: #0f3460;
-        color: #c0c0ff;
-        transition: all 0.3s ease;
-    }
-
-    .category-badge:hover {
-        background-color: #5372f0;
-        color: white;
-        transform: translateY(-2px);
-    }
-
-    .chapter-item {
-        background-color: #1e293b;
-        border-left: 4px solid #4a5568;
-        transition: all 0.3s ease;
-    }
-
-    .chapter-item:hover {
-        background-color: #334155;
-        border-left-color: #5372f0;
-        transform: translateX(8px);
-    }
-
-    .loader {
-        border: 4px solid #f3f3f3;
-        border-top: 4px solid #5372f0;
-        border-radius: 50%;
-        width: 50px;
-        height: 50px;
-        animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-        0% {
-            transform: rotate(0deg);
-        }
-        100% {
-            transform: rotate(360deg);
-        }
-    }
-
-    @media (max-width: 768px) {
-        .main-container {
-            margin: 0 -1rem;
-            border-radius: 0;
-        }
+    .chapter-list-container::-webkit-scrollbar-thumb:hover {
+        background-color: #718096; /* gray-500 */
     }
 </style>

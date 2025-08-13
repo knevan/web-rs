@@ -4,56 +4,137 @@
 </svelte:head>
 
 <script lang="ts">
-    // Import komponen yang diperlukan
-    import MangaCarousel from '$lib/components/MangaCarousel.svelte';
+    import SeriesCarousel from '$lib/components/SeriesCarousel.svelte';
 
-    const placeholderManga = Array(16).fill(null).map((_, index) => ({
-        id: index + 1,
-        title: `Manga Title ${index + 1}`,
-    }));
+    type Manga = {
+        id: number;
+        title: string;
+        cover_image_url: string;
+        view_count?: number;
+        authors?: string[];
+    };
 
-    const mostViewedToday = placeholderManga.slice(0, 12);
-    const newManga = placeholderManga.slice(6);
+    let selectedPeriod = $state<'hour' | 'day' | 'week' | 'month'>('day');
+    let mostViewed = $state<Manga[]>([]);
+    let isLoadingMostViewed = $state(true);
+    let newSeries = $state<Manga[]>([]);
+    let isLoadingNewSeries = $state(true);
+
+    const mostViewedTitleSeries = $derived(
+        selectedPeriod === 'hour' ? 'Most Viewed This Hour' :
+            selectedPeriod === 'day' ? 'Most Viewed Today' :
+                selectedPeriod == 'week' ? 'Most Viewed This Week' :
+                    'Most Viewed This Month'
+    )
+
+    /**
+     * @param url The API endpoint to fetch from.
+     * @param setData A callback function to set the data state.
+     * @param setLoading A callback function to set the loading state.
+     */
+    async function loadData(
+        url: string,
+        setData: (data: Manga[]) => void,
+        setLoading: (loading: boolean) => void
+    ) {
+        setLoading(true);
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch data from ${url}`);
+            }
+            setData(await response.json());
+        } catch (error) {
+            console.error('Error fetching data:', error);
+            setData([]);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    // Effect for most viewed
+    $effect(() => {
+        const url = `/api/series/most-viewed?period=${selectedPeriod}&limit=20`;
+        loadData(
+            url,
+            (data) => (mostViewed = data),
+            (loading) => (isLoadingMostViewed = loading)
+        );
+    });
+
+    $effect(() => {
+        loadData(
+            `/api/series/new-series`,
+            (data) => (newSeries = data),
+            (loading) => (isLoadingNewSeries = loading)
+        )
+    });
+
 </script>
 
-<div class="manga-updates">
-    <h1>Recenly Updated Manga Chapters</h1>
+<div class="w-full space-y-12">
+    <header>
+        <h1 class="text-2xl sm:text-4xl font-bold mb-2">Recenly Updated Manga Chapters</h1>
+        <p class="text-lg text-gray-500">
+            New chapters are immediately updated on our website as soon as they are translated.
+        </p>
+    </header>
 
-    <p>New chapters are immediately updated on our website as soon as they are translated.</p>
-
-    <section>
-        <h2>Most Viewed Today</h2>
-        <MangaCarousel manga="{mostViewedToday}" itemsPerPage={1}/>
+    <section class="flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+            <h2 class="text-xl font-bold">{mostViewedTitleSeries}</h2>
+            <div class="flex items-center gap-2 rounded-lg bg-gray-200 dark:bg-gray-700 p-1">
+                <button
+                        onclick={() => (selectedPeriod = 'hour')}
+                        class="px-3 py-1 text-sm font-semibold rounded-md transition-colors {selectedPeriod === 'hour'
+						? 'bg-blue-600 text-white shadow'
+						: 'text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}"
+                >
+                    Hour
+                </button>
+                <button
+                        onclick={() => (selectedPeriod = 'day')}
+                        class="px-3 py-1 text-sm font-semibold rounded-md transition-colors {selectedPeriod === 'day'
+						? 'bg-blue-600 text-white shadow'
+						: 'text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}"
+                >
+                    Today
+                </button>
+                <button
+                        onclick={() => (selectedPeriod = 'week')}
+                        class="px-3 py-1 text-sm font-semibold rounded-md transition-colors {selectedPeriod === 'week'
+						? 'bg-blue-600 text-white shadow'
+						: 'text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}"
+                >
+                    Week
+                </button>
+                <button
+                        onclick={() => (selectedPeriod = 'month')}
+                        class="px-3 py-1 text-sm font-semibold rounded-md transition-colors {selectedPeriod === 'month'
+						? 'bg-blue-600 text-white shadow'
+						: 'text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}"
+                >
+                    Month
+                </button>
+            </div>
+        </div>
+        {#if isLoadingMostViewed}
+            <p>Loading most viewed manga...</p> {:else}
+            <SeriesCarousel manga={mostViewed}/>
+        {/if}
     </section>
 
-    <section>
-        <h2>New</h2>
-        <MangaCarousel manga="{newManga}" itemsPerPage={1}/>
+    <section class="flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+            <h2 class="text-xl font-bold">New</h2>
+            <a href="/manga/new"
+               class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg shadow transition-colors hover:bg-blue-700">
+                View More
+            </a>
+        </div>
+        {#if isLoadingNewSeries}
+            <p>Loading new series...</p> {:else}
+            <SeriesCarousel manga={newSeries}/>
+        {/if}
     </section>
 </div>
-
-<style>
-    .manga-updates {
-        max-width: 1000px;
-        margin: 0 auto;
-        padding: 10px;
-        left: auto;
-    }
-
-    h1 {
-        margin-bottom: 10px;
-    }
-
-    p {
-        margin-bottom: 30px;
-    }
-
-    section {
-        margin-bottom: 20px;
-    }
-
-    h2 {
-        margin-bottom: 15px;
-        font-size: 1.5rem;
-    }
-</style>

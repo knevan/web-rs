@@ -1,87 +1,76 @@
 <script>
     import image_image1 from '../images/image_image.webp'
     import {auth, logout} from "$lib/store/auth.js";
-    import {page} from "$app/state";
+    // import {page} from "$app/state";
     import {Sun, Moon} from "@lucide/svelte";
     import {toggleMode, mode} from "mode-watcher";
-
+    import {UserPlus} from "@lucide/svelte";
+    import {UserCog} from "@lucide/svelte";
 </script>
 
-<header class="header-container">
-    <div class="corner">
-        <a href="/">
-            <img src={image_image1} alt="SvelteKit"/>
-        </a>
-    </div>
+<header class="flex h-20 w-full items-center justify-between border-b-[3px] border-[--border] bg-[--background] px-4">
+    <div class="mx-auto flex w-full max-w-6xl items-center justify-between">
+        <div class="flex items-center gap-6">
+            <a href="/" aria-label="Home">
+                <img src={image_image1} alt="Home" class="h-10 w-10 object-contain"/>
+            </a>
+            <nav>
+                <ul class="flex items-center gap-6 list-none m-0 p-0">
+                    <li>
+                        <a
+                                href="/manga-updates"
+                                class="font-semibold text-[--color-text] no-underline transition-colors hover:text-[--color-theme-1]"
+                        >Manga Updates</a
+                        >
+                    </li>
+                    {#if $auth.isAuthenticated && $auth.user?.role === 'admin'}
+                        <li>
+                            <a
+                                    href="/admin-dashboard"
+                                    class="font-semibold text-[--color-text] no-underline transition-colors hover:text-[--color-theme-1]"
+                            >Admin Dashboard</a
+                            >
+                        </li>
+                    {/if}
+                </ul>
+            </nav>
+        </div>
 
-    <nav>
-        <svg viewBox="0 0 2 3" aria-hidden="true">
-            <path d="M0,0 L1,2 C1.5,3 1.5,3 2,3 L2,0 Z"/>
-        </svg>
-        <ul>
-            <li aria-current={page.url.pathname === '/' ? 'page' : undefined}>
-                <a href="/" class="Home">Home</a>
-            </li>
-            <li>
-                <a href="/manga-updates" class="manga-updates">Manga Updates</a>
-            </li>
-
-            <!-- Conditionally render Admin Dashboard link -->
-            {#if $auth.isAuthenticated && $auth.user?.role === 'admin'}
-                <li>
-                    <a href="/admin-dashboard" class="admin-dashboard">Admin Dashboard</a>
-                </li>
-            {/if}
+        <div class="flex items-center gap-6">
+            <button onclick={toggleMode}
+                    aria-label="Toggle Theme"
+                    class="transition-colors hover:text-[--color-theme-1] cursor-pointer"
+            >
+                {#if mode.current === 'dark'}
+                    <Sun/>
+                {:else}
+                    <Moon/>
+                {/if}
+            </button>
             <!-- Conditionally render Sign In or Sign Out -->
             {#if $auth.isAuthenticated}
-                <li>
-                    <button onclick={() => logout()} class="logout-button">Sign Out
+                <li class="relative h-full flex items-center">
+                    <button onclick={() => logout()}
+                            class="font-semibold text-[--color-text] transition-colors hover:text-[--color-theme-1] hover:underline"
+                    >
+                        Sign Out
                     </button>
                 </li>
             {:else}
-                <li>
-                    <a href="/login" class="login">Sign In</a>
-                </li>
+                <a
+                        href="/login"
+                        class="flex items-center gap-2 font-semibold text-[--color-text] no-underline transition-colors hover:text-[--color-theme-1] hover:underline"
+                >
+                    <UserPlus size={20}/>
+                    <span>SIGN IN</span>
+                </a>
             {/if}
-        </ul>
-        <svg viewBox="0 0 2 3" aria-hidden="true">
-            <path d="M0,0 L0,3 C0.5,3 0.5,3 1,2 L2,0 Z"/>
-        </svg>
-    </nav>
-
-    <div class="theme-toggle">
-        <button onclick={toggleMode} aria-label="Toggle Theme">
-            {#if mode.current === 'light'}
-                <Moon/>
-            {:else}
-                <Sun/>
-            {/if}
-        </button>
+        </div>
     </div>
+
 </header>
 
 <style>
-    .logout-button {
-        background: none;
-        border: none;
-        cursor: pointer;
-        color: var(--color-text);
-        text-decoration: none;
-        font-size: inherit;
-        font-family: inherit;
-        padding: 0;
-        margin: 0;
-        display: block;
-        line-height: 1;
-        height: 100%;
-        width: 100%;
-        text-align: center;
-    }
-
-    .logout-button:hover {
-        text-decoration: underline;
-    }
-
     header {
         display: flex;
         justify-content: space-between; /* Ubah dari center ke space-between */
@@ -92,48 +81,9 @@
         height: 5rem;
     }
 
-    .header-container {
-        width: 100%;
-        border-bottom: 3px solid var(--border, #f17106);
-        background-color: var(--background, white);
-    }
-
-    .corner {
-        position: relative;
-        left: auto;
-        top: auto;
-        width: 3em;
-        height: 3em;
-    }
-
-    .corner a {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        height: 100%;
-    }
-
-    .corner img {
-        width: 2em;
-        height: 2em;
-        object-fit: contain;
-    }
-
     nav {
         display: flex;
         justify-content: center;
-        --background: rgba(255, 255, 255, 0.7);
-    }
-
-    svg {
-        width: 2em;
-        height: 3em;
-        display: block;
-    }
-
-    path {
-        fill: var(--background);
     }
 
     ul {
@@ -145,25 +95,12 @@
         justify-content: center;
         align-items: center;
         list-style: none;
-        background: var(--background);
         background-size: contain;
     }
 
     li {
         position: relative;
         height: 100%;
-    }
-
-    li[aria-current='page']::before {
-        --size: 6px;
-        content: '';
-        width: 0;
-        height: 0;
-        position: absolute;
-        top: 0;
-        left: calc(50% - var(--size));
-        border: var(--size) solid transparent;
-        border-top: var(--size) solid var(--color-theme-1);
     }
 
     nav a {

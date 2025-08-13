@@ -1,6 +1,4 @@
 <script lang="ts">
-    import {node} from "globals";
-
     let {
         currentPage = $bindable(),
         totalPages,

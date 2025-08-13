@@ -5,6 +5,7 @@
     import {Input} from "$lib/components/ui/input/index.js";
     import {X} from "@lucide/svelte"
     import {toast} from "svelte-sonner";
+    import {apiFetch} from "$lib/store/auth";
 
     type CategoryTag = {
         id: number;
@@ -24,7 +25,7 @@
         isLoading = true;
 
         try {
-            const response = await fetch('/api/admin/category/tag/list');
+            const response = await apiFetch('/api/admin/category/tag/list');
 
             if (!response.ok) {
                 const errorData = await response.json();
