@@ -27,48 +27,44 @@
                     'Most Viewed This Month'
     )
 
-    /**
-     * @param url The API endpoint to fetch from.
-     * @param setData A callback function to set the data state.
-     * @param setLoading A callback function to set the loading state.
-     */
-    async function loadData(
-        url: string,
-        setData: (data: Manga[]) => void,
-        setLoading: (loading: boolean) => void
-    ) {
-        setLoading(true);
-        try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`Failed to fetch data from ${url}`);
+    $effect(() => {
+        const fetchMostViewed = async () => {
+            isLoadingMostViewed = true;
+            try {
+                const response = await fetch(`/api/series/most-viewed?period=${selectedPeriod}&limit=20`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch most viewed manga`);
+                }
+                mostViewed = await response.json();
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                mostViewed = [];
+            } finally {
+                isLoadingMostViewed = false;
             }
-            setData(await response.json());
-        } catch (error) {
-            console.error('Error fetching data:', error);
-            setData([]);
-        } finally {
-            setLoading(false);
+        };
+        fetchMostViewed();
+    });
+
+    $effect(() => {
+        const fetchNewSeries = async () => {
+            isLoadingNewSeries = true;
+            try {
+                const response = await fetch(`/api/series/new-series`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch new manga series`);
+                }
+                newSeries = await response.json();
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                newSeries = [];
+            } finally {
+                isLoadingNewSeries = false;
+            }
         }
-    }
-
-    // Effect for most viewed
-    $effect(() => {
-        const url = `/api/series/most-viewed?period=${selectedPeriod}&limit=20`;
-        loadData(
-            url,
-            (data) => (mostViewed = data),
-            (loading) => (isLoadingMostViewed = loading)
-        );
+        fetchNewSeries();
     });
 
-    $effect(() => {
-        loadData(
-            `/api/series/new-series`,
-            (data) => (newSeries = data),
-            (loading) => (isLoadingNewSeries = loading)
-        )
-    });
 
 </script>
 

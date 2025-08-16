@@ -43,13 +43,6 @@
         }}
 />
 
-<div class="flex min-h-screen flex-col">
-    <Header/>
 
-    <main class="w-full flex-1 max-w-6xl mx-auto p-4">
-        {@render children()}
-    </main>
+{@render children()}
 
-    <Footer/>
-
-</div>

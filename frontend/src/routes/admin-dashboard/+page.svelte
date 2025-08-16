@@ -2,16 +2,41 @@
     <title>Admin Dashboard</title>
 </svelte:head>
 
-<script>
+<script lang="ts">
     import AddSeries from "$lib/components/AddSeries.svelte";
     import AdminSeriesTable from "$lib/components/AdminSeriesTable.svelte";
     import {Button} from "$lib/components/ui/button/index.js";
+    import * as Select from "$lib/components/ui/select/index.js";
     import {FilePlus2Icon} from "@lucide/svelte";
+    import {Search} from "@lucide/svelte";
     import SeriesCategoryTag from "$lib/components/SeriesCategoryTag.svelte";
+    import {Input} from "$lib/components/ui/input/index.js";
 
     // Example data that would typically come from an API
     let activeTab = $state('series');
     let rowsPerPage = $state(20);
+    // The custom Select Layout works with string values.
+    // We create a string version of rowsPerPage for the Layout.
+    let rowsPerPageString = $derived(rowsPerPage.toString());
+    let searchQuery = $state('');
+    let debounceQuery = $state('');
+    let debounceTimer: number;
+
+    // This effect syncs the string value from the Select Layout
+    // back to the original numeric rowsPerPage state.
+    $effect(() => {
+        const parsedValue = parseInt(rowsPerPageString, 10);
+        if (!isNaN(parsedValue)) {
+            rowsPerPage = parsedValue;
+        }
+    });
+
+    $effect(() => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            debounceQuery = searchQuery;
+        }, 300);
+    })
 </script>
 
 <div class="min-w-full p-1 md:p-0">
@@ -62,21 +87,31 @@
                     </div>
                 </div>
 
-                <div class="flex justify-end -mb-3">
+                <div class="flex justify-between -mb-3">
+                    <div class="relative text-gray-800 dark:text-gray-200">
+                        <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
+                        <Input
+                                type="search"
+                                bind:value={searchQuery}
+                                class="h-10 w-full max-w-xs pl-8"
+                        />
+                    </div>
                     <div class="flex items-center space-x-1">
-                        <select id="rows-per-page"
-                                bind:value={rowsPerPage}
-                                class="h-10 w-[65px] rounded-md border border-border bg-background px-3 py-2 text-sm cursor-pointer
-                                text-foreground ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring focus:ring-offset-1"
-                        >
-                            <option value={20}>20</option>
-                            <option value={50}>50</option>
-                            <option value={75}>75</option>
-                        </select>
+                        <Select.Root type="single" bind:value={rowsPerPageString}>
+                            <Select.Trigger
+                                    class="h-10 w-[60px] rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring focus:ring-offset-1">
+                                {rowsPerPage}
+                            </Select.Trigger>
+                            <Select.Content class="w-[60px mt-1">
+                                <Select.Item value="20">20</Select.Item>
+                                <Select.Item value="50">50</Select.Item>
+                                <Select.Item value="75">75</Select.Item>
+                            </Select.Content>
+                        </Select.Root>
                     </div>
                 </div>
 
-                <AdminSeriesTable {rowsPerPage}/>
+                <AdminSeriesTable {rowsPerPage} searchQuery={debounceQuery}/>
             </div>
         {:else if activeTab === 'users'}
             <div class="space-y-4">
