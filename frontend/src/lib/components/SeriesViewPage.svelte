@@ -1,0 +1,374 @@
+<script lang="ts">
+    import {goto} from "$app/navigation";
+    import slugify from "slugify";
+    import {auth} from "$lib/store/auth";
+    import {page} from "$app/state";
+
+    interface MangaSeries {
+        id: number;
+        title: string;
+        original_title: string;
+        description: string;
+        cover_image_url: string;
+        views_count: number;
+        bookmarks_count: number;
+        processing_status: string;
+        updated_at: string;
+    }
+
+    interface MangaChapter {
+        chapter_number: number;
+        title: string;
+        created_at: string;
+    }
+
+    interface MangaData {
+        series: MangaSeries;
+        authors: string[];
+        categoryTags: string[];
+        chapters: MangaChapter[];
+    }
+
+    // Props manga ID accepted from routing or parent Layout
+    let {mangaId = null}: { mangaId: string | null } = $props();
+
+    // State Management
+    let isLoading = $state(true);
+    let error = $state<string | null>(null);
+    let mangaData = $state<MangaData | null>(null);
+    let isBookmarked = $state(false);
+
+    const authState = $derived($auth);
+
+    // Base URL for Manga API
+    const API_BASE_URL = 'http://localhost:8000';
+
+    const currentMangaId = $derived(mangaId);
+    const seriesSlug = $derived(slugify(mangaData?.series?.title || '', {lower: true}));
+    const status = $derived(mangaData?.series?.processing_status?.toLowerCase() === 'ongoing' ? 'Ongoing' : 'Completed');
+    const statusClass = $derived(status === 'Ongoing' ? 'text-green-400' : 'text-gray-400');
+    const chaptersCount = $derived(mangaData?.chapters?.length || 0);
+    const sortedChapters = $derived(mangaData?.chapters ? [...mangaData.chapters].sort((a, b) => b.chapter_number - a.chapter_number) : []);
+    const firstChapter = $derived(mangaData?.chapters && mangaData.chapters.length > 0 ? [...mangaData.chapters].sort(
+        (a, b) => a.chapter_number - b.chapter_number)[0] : null);
+
+    // use $effect hook to fetch manga data
+    // $effect running first time when Layout mounts
+    $effect(() => {
+        async function loadData() {
+            isLoading = true;
+            error = null;
+            mangaData = null;
+
+            //await new Promise(resolve => setTimeout(resolve, 100));
+
+            if (!currentMangaId) {
+                error = "No manga ID provided";
+                isLoading = false;
+                return;
+            }
+
+            try {
+                console.log(`Fetching REAL data for ID: ${currentMangaId}`);
+                const response = await fetch(`${API_BASE_URL}/api/series/details/${currentMangaId}`);
+
+                if (!response.ok) {
+                    error = `Failed to fetch manga: ${response.status} ${response.statusText}`;
+                    return;
+                }
+                mangaData = await response.json();
+            } catch (err) {
+                console.error('Error fetching manga data:', err);
+                error = `Failed to load: ${err instanceof Error ? err.message : 'Unknown Error'}`;
+            } finally {
+                isLoading = false;
+            }
+        }
+
+        loadData();
+    });
+
+    // Fungsi-fungsi ini adalah JavaScript biasa dan tidak terpengaruh oleh Runes.
+    function formatCount(num: number): string {
+        if (!num) return '0';
+        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+        return num.toString();
+    }
+
+    function timeAgo(dateString: string): string {
+        if (!dateString) return 'Unknown';
+        const date = new Date(dateString);
+        const now = new Date();
+        const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+        let interval = seconds / 31536000;
+        if (interval > 1) return Math.floor(interval) + " years ago";
+        interval = seconds / 2592000;
+        if (interval > 1) return Math.floor(interval) + " months ago";
+        interval = seconds / 86400;
+        if (interval > 1) return Math.floor(interval) + " days ago";
+        interval = seconds / 3600;
+        if (interval > 1) return Math.floor(interval) + " hours ago";
+        interval = seconds / 60;
+        if (interval > 1) return Math.floor(interval) + " minutes ago";
+        return Math.floor(seconds) + " seconds ago";
+    }
+
+    function handleChapterClick(chapterNumber: number) {
+        if (currentMangaId && chapterNumber) {
+            goto(`/manga/${currentMangaId}/${seriesSlug}/read-chapter/${chapterNumber}`);
+        }
+    }
+
+    function handleCategoryClick(category: string) {
+        goto(`/browse?category=${encodeURIComponent(category)}`);
+    }
+
+    function handleBookmarkClick() {
+        isBookmarked = !isBookmarked;
+        console.log(`Bookmark status: ${isBookmarked}`);
+    }
+
+    function handleLoginClick() {
+        const redirectTo = page.url.pathname;
+        goto(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
+    }
+
+    /*function handleBackToList() {
+        goto('/manga');
+    }*/
+</script>
+
+<svelte:head>
+    <title>{mangaData?.series?.title || 'Loading...'} - Manga Reader</title>
+    <meta name="description" content={mangaData?.series?.description || 'Manga details'}/>
+</svelte:head>
+
+<div class="min-h-screen bg-dark-primary text-gray-100">
+    <!-- Header
+    <div class="sticky top-0 z-10 bg-dark-primary/90 backdrop-blur-sm border-b border-gray-800">
+        <div class="max-w-6xl mx-auto px-4 py-3">
+            <button onclick={handleBackToList}
+                    class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-arrow-left"></i>
+                Back to Manga List
+            </button>
+        </div>
+    </div> -->
+
+    <div class="max-w-6xl mx-auto p-4 md:p-5">
+        <!-- Loading State -->
+        {#if isLoading}
+            <div class="flex flex-col justify-center items-center h-96">
+                <div class="w-12 h-12 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+                <p class="text-gray-400">Loading manga data...</p>
+            </div>
+        {:else if error}
+            <!-- Error State -->
+            <div class="text-center py-12">
+                <div class="text-red-400 mb-4">
+                    <i class="fas fa-exclamation-triangle text-4xl mb-2"></i>
+                    <h2 class="text-2xl font-bold">Error Loading Manga</h2>
+                </div>
+                <p class="text-gray-400 mb-4">{error}</p>
+                <button onclick={() => {
+                    isLoading = true;
+                    error = null;
+                }}
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors">
+                    Try Again
+                </button>
+            </div>
+        {:else if mangaData}
+            <!-- Main Content -->
+            <div class="space-y-1">
+                <div class="bg-[#16213e] shadow-2xl rounded-none md:rounded-2xl p-6 md:p-8 flex flex-col gap-8">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-7">
+
+                        <div class="md:col-span-1 flex justify-center">
+                            <img src={mangaData.series.cover_image_url} alt={mangaData.series.title}
+                                 class="w-full h-auto object-cover rounded-lg shadow-lg max-w-[200px] md:max-w-full"
+                                 style="max-height: 300px;"
+                                 loading="lazy"/>
+                        </div>
+
+                        <div class="md:col-span-2 flex flex-col space-y-4">
+                            <div class="space-y-2">
+                                <h1 class="text-xl md:text-xl font-medium text-white leading-tight">
+                                    {mangaData.series.title}
+                                </h1>
+                                <p class="text-sm md:text-sm text-gray-400 -mt-1">
+                                    {mangaData.series.original_title}
+                                </p>
+                                <p class="text-gray-400 text-sm">
+                                    Author:
+                                    <span class="text-blue-300 text-sm">
+                                        {mangaData.authors?.join(', ') || 'Unknown'}
+                                    </span>
+                                </p>
+                            </div>
+
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-1 p-2 bg-dark-secondary rounded-lg">
+                                <div class="text-center flex flex-col items-center gap-x-1">
+                                    <p class="text-md text-gray-400">Chapters</p>
+                                    <div class="text-xl font-bold text-white flex items-center justify-center gap-2">
+                                        <i class="fas fa-book-open text-blue-400"></i>
+                                        {chaptersCount}
+                                    </div>
+                                </div>
+                                <div class="text-center flex flex-col items-center gap-x-1">
+                                    <p class="text-md text-gray-400">Views</p>
+                                    <div class="text-xl font-bold text-white flex items-center justify-center gap-2">
+                                        <i class="fas fa-eye text-green-400"></i>
+                                        {formatCount(mangaData.series.views_count)}
+                                    </div>
+                                </div>
+                                <div class="text-center flex flex-col items-center gap-x-1">
+                                    <p class="text-md text-gray-400">Bookmarked</p>
+                                    <div class="text-xl font-bold text-white flex items-center justify-center gap-2">
+                                        <i class="fas fa-bookmark text-yellow-400"></i>
+                                        {formatCount(mangaData.series.bookmarks_count)}
+                                    </div>
+                                </div>
+                                <div class="text-center flex flex-col items-center gap-x-1">
+                                    <p class="text-md text-gray-400">Status</p>
+                                    <div class="text-sm font-bold {statusClass}">
+                                        {status}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {#if mangaData.categoryTags?.length > 0}
+                                <div class="space-y-3">
+                                    <div class="flex flex-wrap gap-2">
+                                        {#each mangaData.categoryTags as category}
+                                            <button onclick={() => handleCategoryClick(category)}
+                                                    class="px-3 py-1 text-sm font-medium rounded-full bg-[#0f3460] text-[#c0c0ff] transition-all duration-300 ease-in-out hover:bg-blue-600 hover:text-white hover:-translate-y-0.5">
+                                                {category}
+                                            </button>
+                                        {/each}
+                                    </div>
+                                </div>
+                            {/if}
+
+                            <div class="text-gray-400 text-sm">
+                                Last Update:
+                                <span class="text-gray-300">
+                                    {timeAgo(mangaData.series.updated_at)}
+                                </span>
+                            </div>
+
+                            <div class="flex items-center gap-3 pt-2">
+                                {#if firstChapter}
+                                    <button onclick={() => handleChapterClick(firstChapter.chapter_number)}
+                                            class="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-5 rounded-lg transition-colors duration-300 shadow-md"
+                                    >
+                                        Read Chapter {firstChapter.chapter_number}
+                                    </button>
+                                {/if}
+
+                                {#if authState.isAuthenticated}
+                                    <button onclick={handleBookmarkClick}
+                                            class={[
+                                    'flex-1 text-center border border-gray-400 text-gray-200 hover:bg-gray-700 hover:border-gray-500 font-semibold py-2.5 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2',
+                                    isBookmarked && '!bg-yellow-500 hover:!bg-yellow-600 !border-yellow-500'
+                                ]}
+                                    >
+                                        <i class="fas fa-bookmark"></i>
+                                        <span>{isBookmarked ? 'Bookmarked' : 'Bookmark'}</span>
+                                    </button>
+                                {:else}
+                                    <button onclick={handleLoginClick}
+                                            class="flex-1 text-center border border-gray-400 bg-white/10 backdrop-blur-sm text-gray-200 hover:bg-white/20 font-semibold py-2.5 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2">
+                                        <i class="fas fa-user-circle"></i>
+                                        <span>LOGIN</span>
+                                    </button>
+                                {/if}
+                            </div>
+                        </div>
+                    </div>
+
+
+                    {#if mangaData.series.description}
+                        <div class="space-y-3 pt-5 border-t border-gray-700/50">
+                            <h3 class="text-md font-semibold text-white">Description</h3>
+                            <p class="text-gray-300 leading-relaxed">
+                                {mangaData.series.description}
+                            </p>
+                        </div>
+                    {/if}
+                </div>
+
+                <!-- Chapter List Section -->
+                {#if sortedChapters.length > 0}
+                    <div class="bg-[#16213e] shadow-2xl rounded-none md:rounded-2xl p-6 md:p-8">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-2xl font-bold text-white">
+                                Chapters ({chaptersCount})
+                            </h2>
+                            <div class="text-sm text-gray-400">
+                                Latest: Chapter {sortedChapters[0]?.chapter_number}
+                            </div>
+                        </div>
+
+                        <div class="chapter-list-container max-h-[42rem] overflow-y-auto pr-2">
+                            <div class="grid gap-3 grid-cols-1 md:grid-cols-2">
+                                {#each sortedChapters as chapter}
+                                    <button onclick={() => handleChapterClick(chapter.chapter_number)}
+                                            class="p-4 rounded-lg text-left bg-[#1e293b] border-l-4 border-gray-600 transition-all duration-300 ease-in-out hover:bg-gray-700 hover:border-blue-500 hover:translate-x-2">
+                                    <span class="flex justify-between items-center">
+                                        <span class="flex-1">
+                                            <span class="font-semibold text-white mb-1">
+                                                <!--{chapter.chapter_number}-->
+                                                {#if chapter.title}
+                                                    <span class="text-gray-300">{chapter.title}</span>
+                                                {/if}
+                                            </span>
+                                            <span class="text-sm text-gray-400">
+                                                {new Date(chapter.created_at).toLocaleDateString('id-ID', {
+                                                    year: 'numeric',
+                                                    month: 'long',
+                                                    day: 'numeric'
+                                                })}
+                                            </span>
+                                        </span>
+                                        <span class="text-blue-400">
+                                            <i class="fas fa-chevron-right"></i>
+                                        </span>
+                                    </span>
+                                    </button>
+                                {/each}
+                            </div>
+                        </div>
+                    </div>
+                {:else}
+                    <div class="text-center py-12">
+                        <i class="fas fa-book-open text-4xl text-gray-600 mb-4"></i>
+                        <p class="text-gray-400">No chapters available</p>
+                    </div>
+                {/if}
+            </div>
+        {/if}
+    </div>
+</div>
+
+<style>
+    .chapter-list-container::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .chapter-list-container::-webkit-scrollbar-track {
+        background-color: transparent;
+    }
+
+    .chapter-list-container::-webkit-scrollbar-thumb {
+        background-color: #4a5568;
+        border-radius: 10px;
+        border: 2px solid #16213e;
+    }
+
+    .chapter-list-container::-webkit-scrollbar-thumb:hover {
+        background-color: #718096;
+    }
+</style>

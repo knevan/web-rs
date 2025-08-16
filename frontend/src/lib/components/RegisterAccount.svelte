@@ -5,6 +5,9 @@
     import {Label} from "$lib/components/ui/label/index.js";
     import {checkUsernameAvailability, register} from "$lib/store/auth";
     import {goto} from "$app/navigation";
+    import {Eye} from "@lucide/svelte";
+    import {EyeOff} from "@lucide/svelte";
+    import {LoaderCircle} from "@lucide/svelte";
 
     const id = $props.id();
 
@@ -17,6 +20,7 @@
     let successMessage = $state<string | null>(null);
     let isLoading = $state(false);
     let showPassword = $state(false);
+    let showConfirmPassword = $state(false);
 
     // Username validation state
     let isCheckingUsername = $state(false);
@@ -132,40 +136,42 @@
     <Card.Content>
         <!-- User form element to handle submission -->
         <form onsubmit={handleSubmit} class="flex flex-col">
-            <div class="grid gap-2 mb-1">
+            <div class="grid gap-2">
                 <Label for="username-{id}">Username</Label>
-                <!-- Bind input value to the state variable -->
-                <Input bind:value={username} oninput={handleUsernameInput}
-                       id="username-{id}" type="text"
-                       placeholder="username" required/>
-                <!-- Username requirement and availability check -->
-                <div class="mt-1 grid gap-1 text-sm">
-                    <!-- Length requirement -->
-                    {#each usernameRequirementsList as req}
-                        <p
-                                class:text-green-500={usernameRequirement[req.key]}
-                                class:text-red-500={!usernameRequirement[req.key]}
-                                class="transition-colors"
-                        >
-                            {usernameRequirement[req.key] ? '✅' : '❌'}
-                            {req.text}
-                        </p>
-                    {/each}
-                </div>
-                <!-- Dynamic availability message -->
-                <div class="mt-0 text-sm transition-opacity grid duration-300">
-                    {#if usernameCheckMessage}
-                        <p
-                                class:text-green-500={usernameAvailable}
-                                class:text-red-500={!usernameAvailable}
-                        >
-                            {#if isCheckingUsername}
-                                {usernameCheckMessage}
-                            {:else}
-                                {usernameAvailable ? '✅' : '❌'} {usernameCheckMessage}
-                            {/if}
-                        </p>
-                    {/if}
+                <div class="relative">
+                    <!-- Bind input value to the state variable -->
+                    <Input bind:value={username} oninput={handleUsernameInput}
+                           id="username-{id}" type="text"
+                           placeholder="username" required/>
+                    <!-- Username requirement and availability check -->
+                    <div class="mt-1 grid gap-2 text-sm">
+                        <!-- Length requirement -->
+                        {#each usernameRequirementsList as req}
+                            <p
+                                    class:text-green-500={usernameRequirement[req.key]}
+                                    class:text-red-500={!usernameRequirement[req.key]}
+                                    class="transition-colors"
+                            >
+                                {usernameRequirement[req.key] ? '✅' : '❌'}
+                                {req.text}
+                            </p>
+                        {/each}
+                    </div>
+                    <!-- Dynamic availability message -->
+                    <div class="mt-0 text-sm transition-opacity grid duration-300">
+                        {#if usernameCheckMessage}
+                            <p
+                                    class:text-green-500={usernameAvailable}
+                                    class:text-red-500={!usernameAvailable}
+                            >
+                                {#if isCheckingUsername}
+                                    {usernameCheckMessage}
+                                {:else}
+                                    {usernameAvailable ? '✅' : '❌'} {usernameCheckMessage}
+                                {/if}
+                            </p>
+                        {/if}
+                    </div>
                 </div>
             </div>
             <div class="grid gap-2 mb-2">
@@ -173,8 +179,8 @@
                 <Input bind:value={email} id="email-{id}" type="email"
                        placeholder="example@gmail.com" required/>
             </div>
-            <div class="grid gap-2 mb-2">
-                <Label for="password-{id}">Password</Label>
+            <div class="grid mb-2">
+                <Label for="password-{id}" class="pb-2">Password</Label>
                 <div class="relative">
                     <Input bind:value={password} id="password-{id}"
                            type={showPassword ? 'text' : 'password'}
@@ -189,45 +195,15 @@
                     >
                         {#if showPassword}
                             <!-- Eye Icon -->
-                            <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                            >
-                                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
-                                <circle
-                                        cx="12"
-                                        cy="12"
-                                        r="3"
-                                />
-                            </svg>
+                            <Eye/>
                         {:else}
                             <!-- Eye Off Icon -->
-                            <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                            >
-                                <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/>
-                                <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/>
-                                <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/>
-                                <line x1="2" x2="22" y1="2" y2="22"/>
-                            </svg>
+                            <EyeOff/>
                         {/if}
                     </button>
                 </div>
                 <!-- Password requirement UI -->
-                <div class="mt-2 grid gap-1 text-sm">
+                <div class="mt-1 grid gap-1 text-sm">
                     {#each requirementList as req}
                         <p
                                 class:text-green-500={passwordRequirement[req.key]}
@@ -240,59 +216,29 @@
                     {/each}
                 </div>
             </div>
-            <div class="grid gap-2 mb-2">
+            <div class="grid gap-2 -mb-1">
                 <Label for="confirm-password-{id}">Confirm Password</Label>
                 <div class="relative">
                     <Input bind:value={confirmPassword} id="confirm-password-{id}"
-                           type={showPassword ? 'text' : 'password'} required
+                           type={showConfirmPassword ? 'text' : 'password'} required
                            class="pr-10"/>
                     <!-- Toggle button for password visibility -->
                     <button
                             type="button"
-                            onclick={() => (showPassword = !showPassword)}
+                            onclick={() => (showConfirmPassword = !showConfirmPassword)}
                             class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-300 hover:text-gray-400"
                             aria-label="Toggle password visibility"
                     >
-                        {#if showPassword}
+                        {#if showConfirmPassword}
                             <!-- Eye Icon -->
-                            <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                            >
-                                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
-                                <circle
-                                        cx="12"
-                                        cy="12"
-                                        r="3"
-                                />
-                            </svg>
+                            <Eye/>
                         {:else}
                             <!-- Eye Off Icon -->
-                            <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                            >
-                                <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/>
-                                <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/>
-                                <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/>
-                                <line x1="2" x2="22" y1="2" y2="22"/>
-                            </svg>
+                            <EyeOff/>
                         {/if}
                     </button>
                 </div>
-                <div class="mt-2 text-sm">
+                <div class="-mt-1 text-sm transition-opacity grid duration-300">
                     {#if confirmPassword.length > 0}
                         <p
                                 class:text-green-500={passwordMatch}
@@ -308,15 +254,7 @@
             <!-- Disable button while loading -->
             <Button type="submit" class="w-full mt-2" disabled={isLoading}>
                 {#if isLoading}
-                    <svg class="mr-2 h-4 w-4 animate-spin"
-                         xmlns="http://www.w3.org/2000/svg"
-                         viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10"
-                                stroke="currentColor"
-                                stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <LoaderCircle class="animate-spin"/>
                     Registering...
                 {:else}
                     Register
