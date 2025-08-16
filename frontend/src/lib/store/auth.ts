@@ -27,7 +27,11 @@ export const auth = writable<AuthStore>(initialState);
 // Store Actions
 
 // Login function to authenticate user with credentials
-export async function login(identifier: string, password: string) {
+export async function login(
+	identifier: string,
+	password: string,
+	redirectTo: string | null = null
+) {
 	try {
 		// Clear any previous errors
 		auth.update((store) => ({
@@ -57,7 +61,7 @@ export async function login(identifier: string, password: string) {
 			}));
 
 			// Redirect to dashboard or home page after successful
-			await goto('/');
+			await goto(redirectTo || '/');
 
 			return { succeess: true };
 		} else {
