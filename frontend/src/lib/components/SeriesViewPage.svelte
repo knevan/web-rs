@@ -1,5 +1,8 @@
 <script lang="ts">
     import {goto} from "$app/navigation";
+    import slugify from "slugify";
+    import {auth} from "$lib/store/auth";
+    import {page} from "$app/state";
 
     interface MangaSeries {
         id: number;
@@ -26,86 +29,38 @@
         chapters: MangaChapter[];
     }
 
-    // MOCK DATA
-    const userMockData = false;
-
-    const mockMangaData = {
-        series: {
-            id: 99,
-            title: "Test Manga",
-            original_title: "テストマンガ",
-            description: "This is a detailed placeholder description for testing the component's layout. It can be long to see how text wrapping works and to ensure the overall design remains consistent even with a large amount of text content.",
-            cover_image_url: "image_test",
-            views_count: 1234567,
-            bookmarks_count: 89000,
-            processing_status: "monitoring",
-            updated_at: "2025-07-01T10:00:00Z",
-        },
-        chapters: [
-            {chapter_number: 25.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 24.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 23.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 22.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 21.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 20.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 19.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 18.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 17.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 16.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 15.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 14.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 13.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 12.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 11.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 10.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 9.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 8.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 7.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 6.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 5.0, title: "The Rune of Reactivity", created_at: "2025-07-01T10:00:00Z"},
-            {chapter_number: 4.0, title: "A New State", created_at: "2025-06-25T10:00:00Z"},
-            {chapter_number: 3.0, title: "The Effect Awakens", created_at: "2025-06-18T10:00:00Z"},
-            {chapter_number: 2.0, title: "Deriving a Conclusion", created_at: "2025-06-11T10:00:00Z"},
-            {chapter_number: 1.0, title: "The Journey Begins", created_at: "2025-06-04T10:00:00Z"},
-        ],
-        authors: ["Joe Blow", "Blow Jobs"],
-        categoryTags: ["Action", "Fantasy", "Adventure", "Isekai", "Magic"]
-    };
-
-    // Props manga ID accepted from routing or parent component
+    // Props manga ID accepted from routing or parent Layout
     let {mangaId = null}: { mangaId: string | null } = $props();
 
     // State Management
     let isLoading = $state(true);
     let error = $state<string | null>(null);
     let mangaData = $state<MangaData | null>(null);
+    let isBookmarked = $state(false);
+
+    const authState = $derived($auth);
 
     // Base URL for Manga API
     const API_BASE_URL = 'http://localhost:8000';
 
     const currentMangaId = $derived(mangaId);
-    const status = $derived(mangaData?.series?.processing_status?.toLowerCase() === 'on-going' ? 'Ongoing' : 'Completed');
+    const seriesSlug = $derived(slugify(mangaData?.series?.title || '', {lower: true}));
+    const status = $derived(mangaData?.series?.processing_status?.toLowerCase() === 'ongoing' ? 'Ongoing' : 'Completed');
     const statusClass = $derived(status === 'Ongoing' ? 'text-green-400' : 'text-gray-400');
     const chaptersCount = $derived(mangaData?.chapters?.length || 0);
     const sortedChapters = $derived(mangaData?.chapters ? [...mangaData.chapters].sort((a, b) => b.chapter_number - a.chapter_number) : []);
+    const firstChapter = $derived(mangaData?.chapters && mangaData.chapters.length > 0 ? [...mangaData.chapters].sort(
+        (a, b) => a.chapter_number - b.chapter_number)[0] : null);
 
     // use $effect hook to fetch manga data
-    // $effect running first time when component mounts
+    // $effect running first time when Layout mounts
     $effect(() => {
         async function loadData() {
             isLoading = true;
             error = null;
             mangaData = null;
 
-            await new Promise(resolve => setTimeout(resolve, 300));
-
-            if (userMockData) {
-                // Mode Mock
-                console.log('Using Mock Data');
-                mangaData = mockMangaData;
-                isLoading = false;
-                return;
-            }
+            //await new Promise(resolve => setTimeout(resolve, 100));
 
             if (!currentMangaId) {
                 error = "No manga ID provided";
@@ -162,7 +117,7 @@
 
     function handleChapterClick(chapterNumber: number) {
         if (currentMangaId && chapterNumber) {
-            goto(`/manga/${currentMangaId}/chapter/${chapterNumber}`);
+            goto(`/manga/${currentMangaId}/${seriesSlug}/read-chapter/${chapterNumber}`);
         }
     }
 
@@ -170,9 +125,19 @@
         goto(`/browse?category=${encodeURIComponent(category)}`);
     }
 
-    function handleBackToList() {
-        goto('/manga');
+    function handleBookmarkClick() {
+        isBookmarked = !isBookmarked;
+        console.log(`Bookmark status: ${isBookmarked}`);
     }
+
+    function handleLoginClick() {
+        const redirectTo = page.url.pathname;
+        goto(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
+    }
+
+    /*function handleBackToList() {
+        goto('/manga');
+    }*/
 </script>
 
 <svelte:head>
@@ -181,7 +146,7 @@
 </svelte:head>
 
 <div class="min-h-screen bg-dark-primary text-gray-100">
-    <!-- Header dengan back button -->
+    <!-- Header
     <div class="sticky top-0 z-10 bg-dark-primary/90 backdrop-blur-sm border-b border-gray-800">
         <div class="max-w-6xl mx-auto px-4 py-3">
             <button onclick={handleBackToList}
@@ -190,9 +155,9 @@
                 Back to Manga List
             </button>
         </div>
-    </div>
+    </div> -->
 
-    <div class="max-w-6xl mx-auto p-4 md:p-8">
+    <div class="max-w-6xl mx-auto p-4 md:p-5">
         <!-- Loading State -->
         {#if isLoading}
             <div class="flex flex-col justify-center items-center h-96">
@@ -217,9 +182,9 @@
             </div>
         {:else if mangaData}
             <!-- Main Content -->
-            <div class="space-y-8">
+            <div class="space-y-1">
                 <div class="bg-[#16213e] shadow-2xl rounded-none md:rounded-2xl p-6 md:p-8 flex flex-col gap-8">
-                    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-8">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-7">
 
                         <div class="md:col-span-1 flex justify-center">
                             <img src={mangaData.series.cover_image_url} alt={mangaData.series.title}
@@ -228,13 +193,12 @@
                                  loading="lazy"/>
                         </div>
 
-                        <div class="md:col-span-2 lg:col-span-3 flex flex-col space-y-4">
-
+                        <div class="md:col-span-2 flex flex-col space-y-4">
                             <div class="space-y-2">
-                                <h1 class="text-2xl md:text-3xl font-bold text-white leading-tight">
+                                <h1 class="text-xl md:text-xl font-medium text-white leading-tight">
                                     {mangaData.series.title}
                                 </h1>
-                                <p class="text-sm text-gray-400 -mt-1">
+                                <p class="text-sm md:text-sm text-gray-400 -mt-1">
                                     {mangaData.series.original_title}
                                 </p>
                                 <p class="text-gray-400 text-sm">
@@ -294,8 +258,37 @@
                                     {timeAgo(mangaData.series.updated_at)}
                                 </span>
                             </div>
+
+                            <div class="flex items-center gap-3 pt-2">
+                                {#if firstChapter}
+                                    <button onclick={() => handleChapterClick(firstChapter.chapter_number)}
+                                            class="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-5 rounded-lg transition-colors duration-300 shadow-md"
+                                    >
+                                        Read Chapter {firstChapter.chapter_number}
+                                    </button>
+                                {/if}
+
+                                {#if authState.isAuthenticated}
+                                    <button onclick={handleBookmarkClick}
+                                            class={[
+                                    'flex-1 text-center border border-gray-400 text-gray-200 hover:bg-gray-700 hover:border-gray-500 font-semibold py-2.5 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2',
+                                    isBookmarked && '!bg-yellow-500 hover:!bg-yellow-600 !border-yellow-500'
+                                ]}
+                                    >
+                                        <i class="fas fa-bookmark"></i>
+                                        <span>{isBookmarked ? 'Bookmarked' : 'Bookmark'}</span>
+                                    </button>
+                                {:else}
+                                    <button onclick={handleLoginClick}
+                                            class="flex-1 text-center border border-gray-400 bg-white/10 backdrop-blur-sm text-gray-200 hover:bg-white/20 font-semibold py-2.5 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2">
+                                        <i class="fas fa-user-circle"></i>
+                                        <span>LOGIN</span>
+                                    </button>
+                                {/if}
+                            </div>
                         </div>
                     </div>
+
 
                     {#if mangaData.series.description}
                         <div class="space-y-3 pt-5 border-t border-gray-700/50">
@@ -361,7 +354,6 @@
 </div>
 
 <style>
-    /* Add these styles for the custom scrollbar */
     .chapter-list-container::-webkit-scrollbar {
         width: 8px;
     }
@@ -371,12 +363,12 @@
     }
 
     .chapter-list-container::-webkit-scrollbar-thumb {
-        background-color: #4a5568; /* gray-600 */
+        background-color: #4a5568;
         border-radius: 10px;
-        border: 2px solid #16213e; /* your bg color */
+        border: 2px solid #16213e;
     }
 
     .chapter-list-container::-webkit-scrollbar-thumb:hover {
-        background-color: #718096; /* gray-500 */
+        background-color: #718096;
     }
 </style>

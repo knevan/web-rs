@@ -4,16 +4,6 @@
     import {Button} from "$lib/components/ui/button";
     import * as Select from '$lib/components/ui/select/index.js';
 
-
-    interface ChapterPageData {
-        pages: string[];
-    }
-
-    interface SeriesDetailsData {
-        series: { title: string; };
-        chapters: { chapter_number: number; title: string | null }[];
-    }
-
     interface ChapterViewData {
         seriesTitle: string;
         chapterTitle: string;
@@ -30,8 +20,6 @@
     let error = $state<string | null>(null);
     let chapterView = $state<ChapterViewData | null>(null);
     let selectedChapterString = $state(chapterNumber);
-
-    const parsedChapterNumber = $derived(parseInt(chapterNumber, 10));
 
     $effect(() => {
         async function loadChapterData() {
@@ -74,35 +62,20 @@
         goto(`/manga/${mangaId}`);
     }
 
-    function handleKeydown(event: KeyboardEvent) {
+    function handleKeydown(_event: KeyboardEvent) {
         if (!isLoading && chapterView && selectedChapterString !== chapterNumber) {
             navigateToChapter(selectedChapterString);
         }
     }
 
-    let currentChapterString = $derived(
-        chapterView ? chapterView.chapterNumber.toString() : ''
-    );
-
+    // This effect runs whenever the user selects a new chapter from the dropdown.
+    // It navigates to the new chapter.
     $effect(() => {
         if (!isLoading && chapterView && selectedChapterString !== chapterNumber) {
             navigateToChapter(selectedChapterString);
         }
     })
 
-    // This effect runs whenever the user selects a new chapter from the dropdown.
-    // It navigates to the new chapter.
-    $effect(() => {
-        // We check if chapterView exists to avoid running on initial load
-        // before data is ready. We also parse the string back to a number.
-        if (chapterView && currentChapterString) {
-            const newChapterNum = parseInt(currentChapterString, 10);
-            // Navigate only if the selected chapter is different from the current one.
-            if (newChapterNum !== chapterView.chapterNumber) {
-                navigateToChapter(newChapterNum);
-            }
-        }
-    });
 </script>
 
 <svelte:head>
@@ -111,7 +84,7 @@
     </title>
 </svelte:head>
 
-<svelte:window on:keydown={handleKeydown}/>
+<svelte:window onkeydown={handleKeydown}/>
 
 <header class="top-0 z-20 backdrop-blur-md border border-gray-700 shadow-lg mt-2">
     <div class="max-w-7xl mx-auto px-4 pt-2">
@@ -124,7 +97,7 @@
             </div>
 
             {#if chapterView}
-                <div class="flex justify-between items-center gap-2 pt-3 px-4">
+                <div class="flex justify-between items-center gap-2 pt-3 px-[100px]">
                     <Button size="lg"
                             onclick={() => navigateToChapter(chapterView?.prevChapterNumber)}
                             disabled={!chapterView.prevChapterNumber}
@@ -133,16 +106,6 @@
                         <ChevronLeft class="h-5 w-5"/>
                         PREV
                     </Button>
-
-                    <!--<select onchange={(e) => navigateToChapter(e.currentTarget.value)}
-                            class=" border border-gray-600 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                            bind:value={chapterView.chapterNumber}>
-                        {#each chapterView.allChapters as chap}
-                            <option value={chap.chapter_number}>
-                                Chapter {chap.chapter_number}
-                            </option>
-                        {/each}
-                    </select>-->
 
                     <Select.Root type="single" bind:value={selectedChapterString}>
                         <Select.Trigger class="w-[140px] text-md rounded-md border border-border bg-background">
@@ -203,7 +166,7 @@
             {/each}
         </div>
 
-        <div class="flex justify-between items-center my-4">
+        <div class="flex justify-between items-center my-4 px-[100px]">
             <Button size="lg"
                     onclick={() => navigateToChapter(chapterView?.prevChapterNumber)}
                     disabled={!chapterView.prevChapterNumber}
@@ -211,15 +174,21 @@
                 <ChevronLeft/>
                 PREV
             </Button>
-            <select onchange={(e) => navigateToChapter(e.currentTarget.value)}
-                    class=" border border-gray-600 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                    bind:value={chapterView.chapterNumber}>
-                {#each chapterView.allChapters as chap}
-                    <option value={chap.chapter_number}>
-                        Chapter {chap.chapter_number}
-                    </option>
-                {/each}
-            </select>
+
+            <Select.Root type="single" bind:value={selectedChapterString}>
+                <Select.Trigger class="w-[140px] text-md rounded-md border border-border bg-background">
+                    Chapter {selectedChapterString}
+                </Select.Trigger>
+                <Select.Content>
+                    {#each chapterView.allChapters as chap}
+                        <Select.Item value={chap.chapter_number.toString()}
+                                     class="text-md">
+                            Chapter {chap.chapter_number}
+                        </Select.Item>
+                    {/each}
+                </Select.Content>
+            </Select.Root>
+
             <Button size="lg"
                     onclick={() => navigateToChapter(chapterView?.nextChapterNumber)}
                     disabled={!chapterView.nextChapterNumber}
