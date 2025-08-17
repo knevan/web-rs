@@ -3,10 +3,13 @@ use axum::routing::{get, post};
 
 use crate::auth::admin_routes::admin_routes;
 use crate::auth::handlers::{
+    add_bookmark_series_handler, delete_bookmark_series_handler,
     fetch_chapter_details_handler, fetch_most_viewed_series_handler,
     fetch_new_series_handler, fetch_series_details_by_id_handler,
-    fetch_updated_series_handler, forgot_password_handler, login_handler,
-    logout_handler, protected_handler, realtime_check_username_handler,
+    fetch_updated_series_handler, forgot_password_handler,
+    get_bookmark_status_current_user_handler,
+    get_user_bookmark_library_handler, login_handler, logout_handler,
+    protected_handler, realtime_check_username_handler,
     record_series_view_handler, refresh_token_handler,
     register_new_user_handler, reset_password_handler,
 };
@@ -37,10 +40,17 @@ pub fn routes() -> Router<AppState> {
             "/series/{id}/chapter/{chapter_number}",
             get(fetch_chapter_details_handler),
         )
+        .route("/series/{id}/viewscount", post(record_series_view_handler))
         .route(
-            "/api/series/{id}/viewcount",
-            post(record_series_view_handler),
-        );
+            "/series/{id}/bookmark",
+            post(add_bookmark_series_handler)
+                .delete(delete_bookmark_series_handler),
+        )
+        .route(
+            "/series/{id}/bookmark/status",
+            get(get_bookmark_status_current_user_handler),
+        )
+        .route("/user/bookmark", get(get_user_bookmark_library_handler));
 
     // Combine routers under prefix "/api"
     Router::new()

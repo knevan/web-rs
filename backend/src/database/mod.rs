@@ -163,6 +163,15 @@ pub enum SeriesOrderBy {
     UpdatedAt,
 }
 
+#[derive(Debug, FromRow, Serialize)]
+pub struct BookmarkedSeries {
+    pub id: i32,
+    pub title: String,
+    pub cover_image_url: String,
+    pub last_chapter_found_in_storage: Option<f32>,
+    pub updated_at: DateTime<Utc>,
+}
+
 // A helper function to extract a hostname from an optional URL string.
 // This is created to avoid code duplication, following the DRY principle.
 fn get_host_from_url(url_option: Option<&str>) -> Option<String> {

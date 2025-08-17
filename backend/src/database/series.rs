@@ -412,7 +412,7 @@ impl DatabaseService {
             LEFT JOIN
                 authors a ON sa.author_id = a.id
             WHERE
-                sr.processing_status = 'On-going'
+                sr.processing_status = 'Ongoing'
             GROUP BY
                 sr.id
             ORDER BY
@@ -627,7 +627,7 @@ impl DatabaseService {
     ) -> AnyhowResult<u64> {
         let result = sqlx::query!(
             "UPDATE series SET processing_status = 'pending_deletion',
-                  updated_at = NOW() WHERE id = $1 AND processing_status = 'available'",
+                  updated_at = NOW() WHERE id = $1 AND processing_status NOT IN ('pending_deletion', 'deleting')",
             series_id
         )
             .execute(&self.pool)
@@ -646,7 +646,7 @@ impl DatabaseService {
             WITH candidate AS (
                 SELECT id FROM series
                 WHERE
-                    processing_status = 'available'
+                    processing_status = 'Ongoing'
                     AND next_checked_at <= NOW()
                 ORDER BY next_checked_at ASC
                 LIMIT 1
@@ -846,5 +846,126 @@ impl DatabaseService {
             .context("Failed to cleanup old view logs with sqlx")?;
 
         Ok(result.rows_affected())
+    }
+
+    pub async fn add_bookmarked_series(
+        &self,
+        user_id: i32,
+        series_id: i32,
+    ) -> AnyhowResult<()> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to begin transaction.")?;
+
+        // Insert new bookmark record
+        sqlx::query!(
+            "INSERT INTO user_bookmarks (user_id, series_id) VALUES ($1, $2) ON CONFLICT (user_id, series_id) DO NOTHING",
+            user_id,
+            series_id
+        )
+            .execute(&mut *tx)
+        .await
+        .context("Failed to add bookmarked series view with sqlx")?;
+
+        // Increment bookmark count on the series table
+        sqlx::query!(
+            "UPDATE series SET bookmarks_count = bookmarks_count + 1 WHERE id = $1",
+            series_id
+        )
+        .execute(&mut *tx)
+        .await
+        .context("Failed to update bookmarked series view with sqlx")?;
+
+        tx.commit().await.context("Failed to commit transaction.")?;
+
+        Ok(())
+    }
+
+    pub async fn delete_bookmarked_series(
+        &self,
+        user_id: i32,
+        series_id: i32,
+    ) -> AnyhowResult<()> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to begin transaction.")?;
+
+        // Delete the bookmark record.
+        let delete_result = sqlx::query!(
+            "DELETE FROM user_bookmarks WHERE user_id = $1 AND series_id = $2",
+            user_id,
+            series_id
+        )
+        .execute(&mut *tx)
+        .await
+        .context("Failed to deleted bookmark")?;
+
+        // Only decrement counter if row actually deleted to prevent counts from going negative
+        if delete_result.rows_affected() > 0 {
+            sqlx::query!(
+                "UPDATE series SET bookmarks_count = GREATEST (0, bookmarks_count - 1) WHERE id = $1",
+                series_id
+            )
+            .execute(&mut *tx)
+            .await
+            .context("Failed to decrement serues bookmark count with sqlx")?;
+        }
+
+        tx.commit().await.context("Failed to commit transaction.")?;
+
+        Ok(())
+    }
+
+    pub async fn is_series_bookmarked(
+        &self,
+        user_id: i32,
+        series_id: i32,
+    ) -> AnyhowResult<bool> {
+        // Query to check for existence of a bookmark entry
+        let exist = sqlx::query_scalar!(
+            "SELECT EXISTS(SELECT 1 FROM user_bookmarks WHERE user_id = $1 AND series_id = $2)",
+            user_id,
+            series_id
+        )
+            .fetch_one(&self.pool)
+            .await
+            .context("Failed to check bookmarked series view with sqlx")?;
+
+        Ok(exist.unwrap_or(false))
+    }
+
+    pub async fn get_bookmarked_series_for_user(
+        &self,
+        user_id: i32,
+    ) -> AnyhowResult<Vec<BookmarkedSeries>> {
+        let series_list = sqlx::query_as!(
+            BookmarkedSeries,
+            r#"
+            SELECT
+                s.id,
+                s.title,
+                s.cover_image_url,
+                s.updated_at,
+                s.last_chapter_found_in_storage
+            FROM
+                series s
+            JOIN
+                user_bookmarks ub ON s.id = ub.series_id
+            WHERE
+                ub.user_id = $1
+            ORDER BY
+                s.updated_at DESC
+            "#,
+            user_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to fetch bookmarked series list")?;
+
+        Ok(series_list)
     }
 }

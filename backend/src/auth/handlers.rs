@@ -769,3 +769,122 @@ pub async fn record_series_view_handler(
         }
     }
 }
+
+#[derive(Serialize)]
+pub struct BookmarkStatusResponse {
+    is_bookmarked: bool,
+}
+
+// Add bookmark for the current user
+pub async fn add_bookmark_series_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Path(series_id): Path<i32>,
+) -> Response {
+    match state.db_service.get_user_by_identifier(&claims.sub).await {
+        Ok(Some(user)) => {
+            match state.db_service.add_bookmarked_series(user.id, series_id).await {
+                Ok(_) => (
+                    StatusCode::OK,
+                    Json(serde_json::json!({"status": "success", "message": "Add Bookmark"})),
+                    )
+                    .into_response(),
+                Err(e) => {
+                    error!("DB error adding bookmark: {}", e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({"status": "error", "message": "Could not add bookmark"})),
+                        )
+                        .into_response()
+                }
+            }
+        }
+        _ => (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"status": "error", "message": "User not found or invalid token"}))).into_response(),
+    }
+}
+
+// Remove bookmark for the current user
+pub async fn delete_bookmark_series_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Path(series_id): Path<i32>,
+) -> Response {
+    match state.db_service.get_user_by_identifier(&claims.sub).await {
+        Ok(Some(user)) => {
+            match state.db_service.delete_bookmarked_series(user.id, series_id).await {
+                Ok(_) => (
+                    StatusCode::OK,
+                    Json(serde_json::json!({"status": "success", "message": "Remove Bookmark"})),
+                    )
+                    .into_response(),
+                Err(e) => {
+                    error!("DB error fetching user bookmarks: {}", e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({"status": "error", "message": "Could not remove bookmark"})),
+                        )
+                        .into_response()
+                }
+            }
+        }
+        _ => (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"status": "error", "message": "User not found or invalid token"}))).into_response(),
+    }
+}
+
+// Check if a series is bookmarked by current user
+pub async fn get_bookmark_status_current_user_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Path(series_id): Path<i32>,
+) -> Response {
+    match state.db_service.get_user_by_identifier(&claims.sub).await {
+        Ok(Some(user)) => {
+            match state
+                .db_service
+                .is_series_bookmarked(user.id, series_id)
+                .await
+            {
+                Ok(is_bookmarked) => (
+                    StatusCode::OK,
+                    Json(BookmarkStatusResponse { is_bookmarked }),
+                )
+                    .into_response(),
+                Err(e) => {
+                    error!("DB error fetching user bookmarks: {}", e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({"status": "error", "message": "Could not fetch bookmarks"})),
+                    )
+                        .into_response()
+                }
+            }
+        }
+        _ => (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"status": "error", "message": "User not found or invalid token"}))).into_response(),
+    }
+}
+
+// Fetch all bookmarked series for user
+pub async fn get_user_bookmark_library_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+) -> Response {
+    match state.db_service.get_user_by_identifier(&claims.sub).await {
+        Ok(Some(user)) => {
+            match state
+                .db_service
+                .get_bookmarked_series_for_user(user.id)
+                .await
+            {
+                Ok(series) => (StatusCode::OK, Json(series)).into_response(),
+                Err(e) => {
+                    error!("DB error fetching user bookmarks: {}", e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"status": "error", "message": "Could not fetch user bookmarks"}))
+                    )
+                    .into_response()
+                }
+            }
+        }
+        _ => (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"status": "error", "message": "User not found or invalid token"}))).into_response(),
+    }
+}
