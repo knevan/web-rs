@@ -630,3 +630,114 @@ pub async fn fetch_updated_series_handler(
         }
     }
 }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChapterDetailsResponse {
+    series_title: String,
+    chapter_title: Option<String>,
+    chapter_number: f32,
+    pages: Vec<String>,
+    all_chapters: Vec<SeriesChapter>,
+    prev_chapter_number: Option<f32>,
+    next_chapter_number: Option<f32>,
+}
+
+pub async fn fetch_chapter_details_handler(
+    State(state): State<AppState>,
+    Path((series_id, chapter_number)): Path<(i32, f32)>,
+) -> Response {
+    println!(
+        "->> {:<12} - fetch_chapter_images - series_id: {}, chapter: {}",
+        "HANDLER", series_id, chapter_number
+    );
+
+    let db = &state.db_service;
+
+    let (series_result, all_chapters_result, images_result) = tokio::join!(
+        db.get_manga_series_by_id(series_id),
+        db.get_chapters_by_series_id(series_id),
+        db.get_images_urls_for_chapter_series(series_id, chapter_number),
+    );
+
+    // Get series title
+    let series = match series_result{
+        Ok(Some(s)) => s,
+        _ => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"status": "error", "message": "Series not found."})),
+        ).into_response(),
+    };
+
+    // Get chapter images list
+    let object_keys = match images_result {
+        Ok(img_chap) => img_chap,
+        Err(e) => {
+            error!("Error fetching chapter images: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": "Could not retrieve chapter images."})),
+            ).into_response();
+        }
+    };
+
+    let pages = object_keys
+        .into_iter()
+        .map(|key| format!("{}{}", &state.cdn_base_url, key))
+        .collect();
+
+    // Get all chapters for the series and find current, next and previous chapters
+    let all_chapters = match all_chapters_result {
+        Ok(mut chaps) => {
+            chaps.sort_by(|a, b| {
+                a.chapter_number.partial_cmp(&b.chapter_number).unwrap()
+            });
+            chaps
+        }
+        Err(e) => {
+            error!("Error fetching chapter list: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": "Could not retrieve chapter list."})),
+            ).into_response();
+        }
+    };
+
+    let current_chapter_idx = all_chapters
+        .iter()
+        .position(|c| c.chapter_number == chapter_number);
+
+    let current_chapter_index = match current_chapter_idx {
+        Some(index) => index,
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"status": "error", "message": "Chapter not found in this series."})),
+            ).into_response();
+        }
+    };
+
+    let current_chapter = &all_chapters[current_chapter_index];
+
+    let prev_chapter_number = if current_chapter_index > 0 {
+        all_chapters
+            .get(current_chapter_index - 1)
+            .map(|c| c.chapter_number)
+    } else {
+        None
+    };
+
+    let next_chapter_number = all_chapters
+        .get(current_chapter_index + 1)
+        .map(|c| c.chapter_number);
+
+    let response_data = ChapterDetailsResponse {
+        series_title: series.title,
+        chapter_title: current_chapter.title.clone(),
+        chapter_number,
+        pages,
+        all_chapters,
+        prev_chapter_number,
+        next_chapter_number,
+    };
+
+    (StatusCode::OK, Json(response_data)).into_response()
+}

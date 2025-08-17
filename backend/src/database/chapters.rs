@@ -123,6 +123,7 @@ impl DatabaseService {
             FROM chapter_images ci
             JOIN series_chapters mc ON ci.chapter_id = mc.id
             WHERE mc.series_id = $1 AND mc.chapter_number = $2
+            ORDER BY ci.image_order ASC
             "#,
             series_id,
             chapter_number,
