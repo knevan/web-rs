@@ -35,6 +35,15 @@
                 }
 
                 chapterView = await response.json();
+
+                try {
+                    // Record the views using a fire-and-forget approach
+                    void fetch(`/api/series/${mangaId}/views-count`, {method: 'POST'});
+                    console.log(`View recorded for series ID: ${mangaId}`);
+                } catch (viewError) {
+                    console.error(viewError);
+                }
+
                 if (chapterView) {
                     selectedChapterString = chapterView.chapterNumber.toString();
                 }

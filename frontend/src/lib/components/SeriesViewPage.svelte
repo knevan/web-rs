@@ -41,7 +41,7 @@
     const authState = $derived($auth);
 
     // Base URL for Manga API
-    const API_BASE_URL = 'http://localhost:8000';
+    //const API_BASE_URL = 'http://localhost:8000';
 
     const currentMangaId = $derived(mangaId);
     const seriesSlug = $derived(slugify(mangaData?.series?.title || '', {lower: true}));
@@ -70,7 +70,7 @@
 
             try {
                 console.log(`Fetching REAL data for ID: ${currentMangaId}`);
-                const response = await fetch(`${API_BASE_URL}/api/series/details/${currentMangaId}`);
+                const response = await fetch(`/api/series/details/${currentMangaId}`);
 
                 if (!response.ok) {
                     error = `Failed to fetch manga: ${response.status} ${response.statusText}`;
@@ -96,23 +96,44 @@
         return num.toString();
     }
 
-    function timeAgo(dateString: string): string {
-        if (!dateString) return 'Unknown';
-        const date = new Date(dateString);
-        const now = new Date();
-        const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    function formatRelativeTime(datestring: string): string {
+        if (!datestring) return 'Unknown';
 
-        let interval = seconds / 31536000;
-        if (interval > 1) return Math.floor(interval) + " years ago";
-        interval = seconds / 2592000;
-        if (interval > 1) return Math.floor(interval) + " months ago";
-        interval = seconds / 86400;
-        if (interval > 1) return Math.floor(interval) + " days ago";
-        interval = seconds / 3600;
-        if (interval > 1) return Math.floor(interval) + " hours ago";
-        interval = seconds / 60;
-        if (interval > 1) return Math.floor(interval) + " minutes ago";
-        return Math.floor(seconds) + " seconds ago";
+        const date = new Date(datestring);
+        const now = new Date();
+        // Calculate the difference in seconds between now and the provided date
+        let seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+        // If the difference is less than a minute, return "Just now"
+        if (seconds < 60) return "Just Now";
+
+        const intervals = {
+            year: 31536000,
+            month: 2592000,
+            week: 604800,
+            day: 86400,
+            hour: 3600,
+            minute: 60
+        };
+
+        const result = [];
+
+        for (const [unit, unitSeconds] of Object.entries(intervals)) {
+            // Show two most significant units
+            if (result.length >= 2) {
+                break;
+            }
+
+            const count = Math.floor(seconds / unitSeconds);
+            if (count > 0) {
+                // Add unit and its count to result array
+                result.push(`${count} ${unit}${count > 1 ? 's' : ''}`);
+                seconds %= unitSeconds;
+            }
+        }
+        if (result.length === 0) return "Just Now";
+
+        return result.join(', ');
     }
 
     function handleChapterClick(chapterNumber: number) {
@@ -255,7 +276,7 @@
                             <div class="text-gray-400 text-sm">
                                 Last Update:
                                 <span class="text-gray-300">
-                                    {timeAgo(mangaData.series.updated_at)}
+                                    {formatRelativeTime(mangaData.series.updated_at)}
                                 </span>
                             </div>
 
@@ -326,11 +347,7 @@
                                                 {/if}
                                             </span>
                                             <span class="text-sm text-gray-400">
-                                                {new Date(chapter.created_at).toLocaleDateString('id-ID', {
-                                                    year: 'numeric',
-                                                    month: 'long',
-                                                    day: 'numeric'
-                                                })}
+                                                {formatRelativeTime(chapter.created_at)}
                                             </span>
                                         </span>
                                         <span class="text-blue-400">
