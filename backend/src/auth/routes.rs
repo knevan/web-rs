@@ -7,7 +7,8 @@ use crate::auth::handlers::{
     fetch_new_series_handler, fetch_series_details_by_id_handler,
     fetch_updated_series_handler, forgot_password_handler, login_handler,
     logout_handler, protected_handler, realtime_check_username_handler,
-    refresh_token_handler, register_new_user_handler, reset_password_handler,
+    record_series_view_handler, refresh_token_handler,
+    register_new_user_handler, reset_password_handler,
 };
 use crate::builder::startup::AppState;
 
@@ -35,6 +36,10 @@ pub fn routes() -> Router<AppState> {
         .route(
             "/series/{id}/chapter/{chapter_number}",
             get(fetch_chapter_details_handler),
+        )
+        .route(
+            "/api/series/{id}/viewcount",
+            post(record_series_view_handler),
         );
 
     // Combine routers under prefix "/api"

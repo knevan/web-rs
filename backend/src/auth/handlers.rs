@@ -741,3 +741,31 @@ pub async fn fetch_chapter_details_handler(
 
     (StatusCode::OK, Json(response_data)).into_response()
 }
+
+pub async fn record_series_view_handler(
+    State(state): State<AppState>,
+    Path(series_id): Path<i32>,
+) -> Response {
+    println!(
+        "->> {:<12} - record_series_view - series_id: {}",
+        "HANDLER", series_id
+    );
+
+    let db = &state.db_service;
+
+    match db.record_series_view(series_id).await {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(serde_json::json!({"status": "success", "message": "View Recorded."})),
+        )
+            .into_response(),
+        Err(e) => {
+            error!("Error recording series view for id {}: {}", series_id, e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": "Could not record series view."})),
+            )
+                .into_response()
+        }
+    }
+}
