@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            WITH candidate AS (\n                SELECT id FROM series\n                WHERE\n                    processing_status = 'available'\n                    AND next_checked_at <= NOW()\n                ORDER BY next_checked_at ASC\n                LIMIT 1\n                FOR UPDATE SKIP LOCKED\n            )\n            UPDATE series\n            SET processing_status = 'processing'\n            WHERE id = (SELECT id FROM candidate)\n            RETURNING\n                id, title, original_title, description, cover_image_url, current_source_url,\n                source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage,\n                'processing' as \"processing_status!\", check_interval_minutes, last_checked_at,\n                next_checked_at, created_at, updated_at\n            ",
+  "query": "\n            WITH candidate AS (\n                SELECT id FROM series\n                WHERE\n                    processing_status = 'Ongoing'\n                    AND next_checked_at <= NOW()\n                ORDER BY next_checked_at ASC\n                LIMIT 1\n                FOR UPDATE SKIP LOCKED\n            )\n            UPDATE series\n            SET processing_status = 'processing'\n            WHERE id = (SELECT id FROM candidate)\n            RETURNING\n                id, title, original_title, description, cover_image_url, current_source_url,\n                source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage,\n                'processing' as \"processing_status!\", check_interval_minutes, last_checked_at,\n                next_checked_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -106,5 +106,5 @@
       false
     ]
   },
-  "hash": "cd478b439a80a5a299fb406cb38535fb8b2015477437e5e59c8e380cbf8b9e88"
+  "hash": "70381364355d526ea203783194aa18f2c2f58309874bdad5bdb0c2a7bac8af2e"
 }
