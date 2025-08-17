@@ -90,7 +90,7 @@ pub async fn run_deletion_worker(
                     .await
                     .map_err(|e| {
                         eprintln!(
-                            "[WORKER] Attempt for series {} failed: {}. Retrying again.",
+                            "[DELETION-WORKER] Attempt for series {} failed: {}. Retrying again.",
                             series_id, e
                         );
                         tokio_retry2::RetryError::transient(e)
@@ -100,7 +100,7 @@ pub async fn run_deletion_worker(
 
         if let Err(e) = result {
             eprintln!(
-                "[DELETION_WORKER] Job for series {} failed after all retry attempts: {}. Moving to 'deletion_failed'",
+                "[DELETION-WORKER] Job for series {} failed after all retry attempts: {}. Moving to 'deletion_failed'",
                 series_id, e
             );
 
