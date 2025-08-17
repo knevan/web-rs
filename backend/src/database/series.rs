@@ -452,6 +452,22 @@ impl DatabaseService {
         Ok(result.rows_affected())
     }
 
+    // Called only if there new content (new chapter)
+    pub async fn update_series_new_content_timestamp(
+        &self,
+        series_id: i32,
+    ) -> AnyhowResult<u64> {
+        let result = sqlx::query!(
+            "UPDATE series SET updated_at = NOW() WHERE id = $1",
+            series_id,
+        )
+        .execute(&self.pool)
+        .await
+        .context("Failed to update `updated_at` timestamp")?;
+
+        Ok(result.rows_affected())
+    }
+
     // Called after a series has been processed
     pub async fn update_series_check_schedule(
         &self,
@@ -484,7 +500,7 @@ impl DatabaseService {
         let final_status = new_status.unwrap_or(&series.processing_status);
 
         let result = sqlx::query!(
-            "UPDATE series SET processing_status = $1, last_checked_at = NOW(), next_checked_at = $2, updated_at = NOW() WHERE id = $3",
+            "UPDATE series SET processing_status = $1, last_checked_at = NOW(), next_checked_at = $2 WHERE id = $3",
             final_status,
             final_next_checked_at,
             series_id,

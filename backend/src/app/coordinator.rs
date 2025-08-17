@@ -199,6 +199,16 @@ pub async fn process_single_chapter(
     );
 
     if image_saved_count > 0 {
+        // If images were saved, it means new content was added.
+        if let Err(e) = db_service
+            .update_series_new_content_timestamp(series.id)
+            .await
+        {
+            eprintln!(
+                "Failed to update series content timestamp for series_id {}: {}",
+                series.id, e
+            );
+        }
         Ok(Some(chapter_info.number))
     } else {
         Ok(None)
