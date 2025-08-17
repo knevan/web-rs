@@ -24,30 +24,34 @@ pub async fn run_series_check_scheduler(
     interval.tick().await;
 
     loop {
-        match db_service.find_and_lock_series_for_check().await {
-            Ok(Some(series)) => {
-                println!(
-                    "[SERIES-SCHEDULER] Found series for check {}, id {}",
-                    series.title, series.id
-                );
-                let job = SeriesCheckJob { series };
-                if job_sender.send(job).await.is_err() {
-                    eprintln!(
-                        "[SERIES-SCHEDULER] CRITICAL: Receiver channel closed. Shutting down."
+        interval.tick().await;
+
+        loop {
+            match db_service.find_and_lock_series_for_check().await {
+                Ok(Some(series)) => {
+                    println!(
+                        "[SERIES-SCHEDULER] Found series for check {}, id {}",
+                        series.title, series.id
                     );
-                    return;
+                    let job = SeriesCheckJob { series };
+                    if job_sender.send(job).await.is_err() {
+                        eprintln!(
+                            "[SERIES-SCHEDULER] CRITICAL: Receiver channel closed. Shutting down."
+                        );
+                        return;
+                    }
                 }
-            }
-            Ok(None) => {
-                // No job found, wait for next tick
-                break;
-            }
-            Err(e) => {
-                eprintln!(
-                    "[SERIES-SCHEDULER] Error finding {}. Retrying later",
-                    e
-                );
-                break;
+                Ok(None) => {
+                    // No job found, wait for next tick
+                    break;
+                }
+                Err(e) => {
+                    eprintln!(
+                        "[SERIES-SCHEDULER] Error finding {}. Retrying later",
+                        e
+                    );
+                    break;
+                }
             }
         }
     }
