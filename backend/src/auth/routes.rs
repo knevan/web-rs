@@ -40,7 +40,7 @@ pub fn routes() -> Router<AppState> {
             "/series/{id}/chapter/{chapter_number}",
             get(fetch_chapter_details_handler),
         )
-        .route("/series/{id}/viewscount", post(record_series_view_handler))
+        .route("/series/{id}/views-count", post(record_series_view_handler))
         .route(
             "/series/{id}/bookmark",
             post(add_bookmark_series_handler)
