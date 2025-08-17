@@ -119,7 +119,7 @@ pub async fn process_single_chapter(
         random_sleep_time(2, 4).await;
 
         // store image to R2 object storage
-        let final_cdn_url = match fetcher::fetch_image_bytes(
+        let image_store_result = match fetcher::fetch_image_bytes(
             http_client,
             img_url,
         )
@@ -136,8 +136,10 @@ pub async fn process_single_chapter(
                         // Define the key for the object in R2
                         // domain/{series-name}/{chapter-number}/{image-number}.avif
                         let object_key = format!(
-                            "series/{}/chapter-{}/{:03}.avif",
-                            series_slug, chapter_info.number, index
+                            "series/{}/ch-{}/{:03}.avif",
+                            series_slug,
+                            chapter_info.number.to_string().replace('.', "-"),
+                            index
                         );
 
                         // Upload to R2
@@ -149,7 +151,7 @@ pub async fn process_single_chapter(
                             )
                             .await
                         {
-                            Ok(cdn_url) => Some(cdn_url),
+                            Ok(_) => Some(object_key),
                             Err(e) => {
                                 eprintln!(
                                     "[COORDINATOR] Failed to upload to R2: {e}"
@@ -174,10 +176,14 @@ pub async fn process_single_chapter(
             }
         };
 
-        // Save CDN Url to the database if successful
-        if let Some(cdn_url) = final_cdn_url
+        // Save CDN object key to the database if successful
+        if let Some(key_to_save) = image_store_result
             && db_service
-                .add_chapter_images(chapter_id, (index + 1) as i32, &cdn_url)
+                .add_chapter_images(
+                    chapter_id,
+                    (index + 1) as i32,
+                    &key_to_save,
+                )
                 .await
                 .is_ok()
         {
