@@ -115,33 +115,32 @@ impl ChapterParser {
 
         if let Some(attr_name) =
             &self.config.chapter_number_data_attribute_on_parent
+            && !attr_name.is_empty()
         {
-            if !attr_name.is_empty() {
-                // Simple loop on `parent_element`
-                let mut current_element = Some(element);
-                while let Some(el) = current_element {
-                    if let Some(num_str) = el.value().attr(attr_name) {
-                        if let Some(num) = parse_match(num_str) {
-                            return Some(num);
-                        }
-                    }
-                    current_element = el.parent_element();
+            // Simple loop on `parent_element`
+            let mut current_element = Some(element);
+            while let Some(el) = current_element {
+                if let Some(num_str) = el.value().attr(attr_name)
+                    && let Some(num) = parse_match(num_str)
+                {
+                    return Some(num);
                 }
+                current_element = el.parent_element();
             }
         }
 
         // Try URL regex strategy
-        if let Some(re) = &self.url_re {
-            if let Some(num) = self.extract_number_from_regex(re, url) {
-                return Some(num);
-            }
+        if let Some(re) = &self.url_re
+            && let Some(num) = self.extract_number_from_regex(re, url)
+        {
+            return Some(num);
         }
 
         // Try text regex strategy
-        if let Some(regex) = &self.text_re {
-            if let Some(number) = self.extract_number_from_regex(regex, title) {
-                return Some(number);
-            }
+        if let Some(regex) = &self.text_re
+            && let Some(number) = self.extract_number_from_regex(regex, title)
+        {
+            return Some(number);
         }
 
         None

@@ -83,11 +83,12 @@ impl DatabaseService {
             }
         }
 
-        if let Some(category_ids) = data.category_ids {
-            if !category_ids.is_empty() {
-                for category_id in category_ids {
-                    // Insert the relationship into the series_categories junction table.
-                    sqlx::query!(
+        if let Some(category_ids) = data.category_ids
+            && !category_ids.is_empty()
+        {
+            for category_id in category_ids {
+                // Insert the relationship into the series_categories junction table.
+                sqlx::query!(
                         "INSERT INTO series_categories (series_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
                         new_series_id,
                         category_id
@@ -95,9 +96,9 @@ impl DatabaseService {
                         .execute(&mut *tx)
                         .await
                         .context(format!("Failed to link category {} to manga", category_id))?;
-                }
             }
         }
+
         tx.commit().await.context("Failed to commit transaction")?;
 
         Ok(new_series_id)

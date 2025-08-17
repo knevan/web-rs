@@ -85,17 +85,14 @@ pub async fn download_and_convert_to_avif(
             .with_context(|| "The image conversion failed.")?;
 
     // Save the resulting AVIF bytes to the file system
-    if let Some(parent_dir) = save_path.parent() {
-        if !parent_dir.exists() {
-            tokio::fs::create_dir_all(parent_dir)
-                .await
-                .with_context(|| {
-                    format!(
-                        "Failed to create parent directory: {:?}",
-                        parent_dir
-                    )
-                })?;
-        }
+    if let Some(parent_dir) = save_path.parent()
+        && !parent_dir.exists()
+    {
+        tokio::fs::create_dir_all(parent_dir)
+            .await
+            .with_context(|| {
+                format!("Failed to create parent directory: {:?}", parent_dir)
+            })?;
     }
 
     tokio::fs::write(save_path, &avif_bytes)
