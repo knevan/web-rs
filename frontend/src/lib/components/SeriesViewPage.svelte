@@ -77,6 +77,20 @@
                     return;
                 }
                 mangaData = await response.json();
+
+                if (authState.isAuthenticated) {
+                    try {
+                        const bookmarkStatusResponse = await fetch(`/api/series/${currentMangaId}/bookmark/status`);
+                        if (bookmarkStatusResponse.ok) {
+                            const data = await bookmarkStatusResponse.json();
+                            isBookmarked = data.isBookmarked;
+                        } else {
+                            console.warn("Could not fetch bookmark status");
+                        }
+                    } catch (bookmarkError) {
+                        console.error("Error fetch bookmark status", bookmarkError);
+                    }
+                }
             } catch (err) {
                 console.error('Error fetching manga data:', err);
                 error = `Failed to load: ${err instanceof Error ? err.message : 'Unknown Error'}`;
