@@ -1,7 +1,7 @@
 <script>
     import image_image1 from '../images/image_image.webp'
     import {auth, logout} from "$lib/store/auth.js";
-    // import {page} from "$app/state";
+    import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
     import {Sun, Moon} from "@lucide/svelte";
     import {toggleMode, mode} from "mode-watcher";
     import {UserPlus} from "@lucide/svelte";
@@ -49,13 +49,23 @@
             </button>
             <!-- Conditionally render Sign In or Sign Out -->
             {#if $auth.isAuthenticated}
-                <li class="relative h-full flex items-center">
-                    <button onclick={() => logout()}
-                            class="font-semibold text-[--color-text] transition-colors hover:text-[--color-theme-1] hover:underline"
-                    >
-                        Sign Out
-                    </button>
-                </li>
+                <DropdownMenu.Root>
+                    <DropdownMenu.Trigger class="cursor-pointer transition-colors hover:text-[--color-theme-1]">
+                        <UserCog/>
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Content>
+                        <DropdownMenu.Label>My Account</DropdownMenu.Label>
+                        <DropdownMenu.Separator/>
+                        <DropdownMenu.Item>
+                            <a href="/user/setting" class="">User Setting</a>
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item>
+                            <a href="/user/bookmark">Bookmark Library</a>
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Separator/>
+                        <DropdownMenu.Item class="cursor-pointer" onclick={() => logout()}>Logout</DropdownMenu.Item>
+                    </DropdownMenu.Content>
+                </DropdownMenu.Root>
             {:else}
                 <a
                         href="/login"
