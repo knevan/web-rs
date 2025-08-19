@@ -12,7 +12,7 @@ use axum_core::__private::tracing::error;
 use axum_core::response::{IntoResponse, Response};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -355,6 +355,7 @@ pub struct ProtectedResponse {
     user_id: String,
     session_expires_at: i64,
 }
+
 #[derive(Serialize)]
 pub struct UserResponse {
     user: UserData,
@@ -570,7 +571,7 @@ pub async fn fetch_series_details_by_id_handler(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"status": "error", "message": "Could not retrieve series details."})),
             )
-            .into_response();
+                .into_response();
         }
     };
 
@@ -661,7 +662,7 @@ pub async fn fetch_chapter_details_handler(
     );
 
     // Get series title
-    let series = match series_result{
+    let series = match series_result {
         Ok(Some(s)) => s,
         _ => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"status": "error", "message": "Series not found."})),
         ).into_response(),
@@ -771,8 +772,26 @@ pub async fn record_series_view_handler(
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LatestChapterInfo {
+    chapter_number: f32,
+    title: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BookmarkStatusResponse {
     is_bookmarked: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookmarkSeriesResponse {
+    id: i32,
+    title: String,
+    cover_image_url: String,
+    updated_at: DateTime<Utc>,
+    latest_chapter: Option<LatestChapterInfo>,
 }
 
 // Add bookmark for the current user
@@ -787,14 +806,14 @@ pub async fn add_bookmark_series_handler(
                 Ok(_) => (
                     StatusCode::OK,
                     Json(serde_json::json!({"status": "success", "message": "Add Bookmark"})),
-                    )
+                )
                     .into_response(),
                 Err(e) => {
                     error!("DB error adding bookmark: {}", e);
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(serde_json::json!({"status": "error", "message": "Could not add bookmark"})),
-                        )
+                    )
                         .into_response()
                 }
             }
@@ -815,14 +834,14 @@ pub async fn delete_bookmark_series_handler(
                 Ok(_) => (
                     StatusCode::OK,
                     Json(serde_json::json!({"status": "success", "message": "Remove Bookmark"})),
-                    )
+                )
                     .into_response(),
                 Err(e) => {
                     error!("DB error fetching user bookmarks: {}", e);
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(serde_json::json!({"status": "error", "message": "Could not remove bookmark"})),
-                        )
+                    )
                         .into_response()
                 }
             }
@@ -875,13 +894,35 @@ pub async fn get_user_bookmark_library_handler(
                 .get_bookmarked_series_for_user(user.id)
                 .await
             {
-                Ok(series) => (StatusCode::OK, Json(series)).into_response(),
+                Ok(bookmarked_series_list) => {
+                    let response_list = bookmarked_series_list
+                        .into_iter()
+                        .map(|series| {
+                            let latest_chapter_info = series.last_chapter_found_in_storage.map(|chapter_num| {
+                                LatestChapterInfo {
+                                    chapter_number: chapter_num,
+                                    title: series.chapter_title,
+                                }
+                            });
+
+                            BookmarkSeriesResponse {
+                                id: series.id,
+                                title: series.title,
+                                cover_image_url: series.cover_image_url,
+                                updated_at: series.updated_at,
+                                latest_chapter: latest_chapter_info,
+                            }
+                        })
+                        .collect::<Vec<_>>();
+
+                    (StatusCode::OK, Json(response_list)).into_response()
+                }
                 Err(e) => {
                     error!("DB error fetching user bookmarks: {}", e);
                     (
                         StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"status": "error", "message": "Could not fetch user bookmarks"}))
                     )
-                    .into_response()
+                        .into_response()
                 }
             }
         }

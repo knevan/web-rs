@@ -453,7 +453,7 @@ impl DatabaseService {
         Ok(result.rows_affected())
     }
 
-    // Called only if there new content (new chapter)
+    // Called only if there's new valid content (new chapter)
     pub async fn update_series_new_content_timestamp(
         &self,
         series_id: i32,
@@ -967,11 +967,15 @@ impl DatabaseService {
                 s.title,
                 s.cover_image_url,
                 s.updated_at,
-                s.last_chapter_found_in_storage
+                s.last_chapter_found_in_storage,
+                sc.title as chapter_title
             FROM
-                series s
+                user_bookmarks ub
             JOIN
-                user_bookmarks ub ON s.id = ub.series_id
+                series s ON ub.series_id = s.id
+            LEFT JOIN
+                series_chapters sc ON s.id = sc.series_id
+                AND s.last_chapter_found_in_storage = sc.chapter_number
             WHERE
                 ub.user_id = $1
             ORDER BY
