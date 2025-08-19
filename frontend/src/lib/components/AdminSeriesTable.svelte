@@ -88,7 +88,7 @@
         toast.promise(deleteRequest(), {
             position: "top-center",
             richColors: true,
-            duration: 3000,
+            duration: 2000,
             loading: `Scheduling "${seriesToDelete.title}" for deletion...`,
             success: (title) => {
                 loadSeries(currentPage, searchQuery);

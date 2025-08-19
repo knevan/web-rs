@@ -3,6 +3,8 @@
     import slugify from "slugify";
     import {auth} from "$lib/store/auth";
     import {page} from "$app/state";
+    import {Button} from "$lib/components/ui/button";
+    import {toast} from "svelte-sonner";
 
     interface MangaSeries {
         id: number;
@@ -160,9 +162,49 @@
         goto(`/browse?category=${encodeURIComponent(category)}`);
     }
 
-    function handleBookmarkClick() {
-        isBookmarked = !isBookmarked;
-        console.log(`Bookmark status: ${isBookmarked}`);
+    async function handleBookmarkSaveClick() {
+        if (!mangaData) return;
+
+        const newBookmarkStatus = !isBookmarked;
+        const originalBookmarkStatus = isBookmarked;
+        const originalCount = mangaData.series.bookmarks_count;
+
+        isBookmarked = newBookmarkStatus;
+        mangaData.series.bookmarks_count += newBookmarkStatus ? 1 : -1;
+
+        const updateBookmarkStatus = async () => {
+            const method = newBookmarkStatus ? "POST" : "DELETE";
+            const response = await fetch(`/api/series/${currentMangaId}/bookmark`, {
+                method: method,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({message: 'Server error'}));
+                throw new Error(errorData.message || `Failed to update bookmark.`);
+            }
+            return newBookmarkStatus;
+        };
+
+        isBookmarked = originalBookmarkStatus;
+        mangaData.series.bookmarks_count = originalCount;
+
+        toast.promise(updateBookmarkStatus(), {
+            position: "top-center",
+            richColors: true,
+            closeButton: false,
+            duration: 1500,
+            loading: `Add series to Bookmark Library...`,
+            success: (isNowBookmarked) => {
+                isBookmarked = isNowBookmarked;
+                if (mangaData) {
+                    mangaData.series.bookmarks_count += isNowBookmarked ? 1 : -1;
+                }
+                return isNowBookmarked ? 'Series added to your library' : 'Series removed from your library';
+            },
+            error: (err) => {
+                return err instanceof Error ? err.message : `Failed to update bookmark.`;
+            }
+        });
     }
 
     function handleLoginClick() {
@@ -294,31 +336,29 @@
                                 </span>
                             </div>
 
-                            <div class="flex items-center gap-3 pt-2">
+                            <div class="flex items-center gap-4 pt-2">
                                 {#if firstChapter}
-                                    <button onclick={() => handleChapterClick(firstChapter.chapter_number)}
-                                            class="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-5 rounded-lg transition-colors duration-300 shadow-md"
+                                    <Button onclick={() => handleChapterClick(firstChapter.chapter_number)} size="lg"
+                                            class="flex-1 text-center cursor-pointer text-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold py-6 px-5 rounded-lg transition-colors duration-300 shadow-md"
                                     >
                                         Read Chapter {firstChapter.chapter_number}
-                                    </button>
+                                    </Button>
                                 {/if}
 
                                 {#if authState.isAuthenticated}
-                                    <button onclick={handleBookmarkClick}
+                                    <Button onclick={handleBookmarkSaveClick} size="lg"
                                             class={[
-                                    'flex-1 text-center border border-gray-400 text-gray-200 hover:bg-gray-700 hover:border-gray-500 font-semibold py-2.5 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2',
+                                    'flex-1 text-center cursor-pointer border border-gray-400 bg-white/10 backdrop-blur-sm text-gray-200 hover:bg-white/20 font-semibold py-6 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2',
                                     isBookmarked && '!bg-yellow-500 hover:!bg-yellow-600 !border-yellow-500'
                                 ]}
                                     >
-                                        <i class="fas fa-bookmark"></i>
                                         <span>{isBookmarked ? 'Bookmarked' : 'Bookmark'}</span>
-                                    </button>
+                                    </Button>
                                 {:else}
-                                    <button onclick={handleLoginClick}
-                                            class="flex-1 text-center border border-gray-400 bg-white/10 backdrop-blur-sm text-gray-200 hover:bg-white/20 font-semibold py-2.5 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2">
-                                        <i class="fas fa-user-circle"></i>
-                                        <span>LOGIN</span>
-                                    </button>
+                                    <Button onclick={handleLoginClick} size="lg"
+                                            class="flex-1 text-center cursor-pointer border border-gray-400 bg-white/10 backdrop-blur-sm text-gray-200 hover:bg-white/20 font-semibold py-6 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2">
+                                        <span class="text-lg">LOGIN</span>
+                                    </Button>
                                 {/if}
                             </div>
                         </div>
