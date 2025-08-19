@@ -1,5 +1,5 @@
 use axum::Router;
-use axum::routing::{get, post};
+use axum::routing::{get, patch, post};
 
 use crate::auth::admin_routes::admin_routes;
 use crate::auth::handlers::{
@@ -8,10 +8,12 @@ use crate::auth::handlers::{
     fetch_new_series_handler, fetch_series_details_by_id_handler,
     fetch_updated_series_handler, forgot_password_handler,
     get_bookmark_status_current_user_handler,
-    get_user_bookmark_library_handler, login_handler, logout_handler,
-    protected_handler, realtime_check_username_handler,
+    get_user_bookmark_library_handler, get_user_profile_handler, login_handler,
+    logout_handler, protected_handler, realtime_check_username_handler,
     record_series_view_handler, refresh_token_handler,
     register_new_user_handler, reset_password_handler,
+    update_user_avatar_handler, update_user_password_setting_handler,
+    update_user_profile_handler,
 };
 use crate::builder::startup::AppState;
 
@@ -50,7 +52,14 @@ pub fn routes() -> Router<AppState> {
             "/series/{id}/bookmark/status",
             get(get_bookmark_status_current_user_handler),
         )
-        .route("/user/bookmark", get(get_user_bookmark_library_handler));
+        .route("/user/bookmark", get(get_user_bookmark_library_handler))
+        .route("/user/profile", get(get_user_profile_handler))
+        .route("/user/profile", patch(update_user_profile_handler))
+        .route(
+            "/user/profile/password",
+            patch(update_user_password_setting_handler),
+        )
+        .route("/user/profile/avatar", post(update_user_avatar_handler));
 
     // Combine routers under prefix "/api"
     Router::new()

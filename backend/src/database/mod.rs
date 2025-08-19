@@ -69,6 +69,14 @@ pub struct Users {
     pub role_id: i32,
 }
 
+#[derive(Debug, FromRow, Serialize)]
+pub struct UserProfileDetails {
+    pub username: String,
+    pub email: String,
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+}
+
 #[derive(Debug)]
 pub struct NewSeriesData<'a> {
     pub title: &'a str,
@@ -170,6 +178,7 @@ pub struct BookmarkedSeries {
     pub cover_image_url: String,
     pub last_chapter_found_in_storage: Option<f32>,
     pub updated_at: DateTime<Utc>,
+    pub chapter_title: Option<String>,
 }
 
 // A helper function to extract a hostname from an optional URL string.
