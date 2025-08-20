@@ -1,8 +1,8 @@
 use axum::Router;
 use axum::routing::{get, patch, post};
 
-use crate::auth::admin_routes::admin_routes;
-use crate::auth::handlers::{
+use crate::api::admin_routes::admin_routes;
+use crate::api::handlers::{
     add_bookmark_series_handler, delete_bookmark_series_handler,
     fetch_chapter_details_handler, fetch_most_viewed_series_handler,
     fetch_new_series_handler, fetch_series_details_by_id_handler,
@@ -18,7 +18,7 @@ use crate::auth::handlers::{
 use crate::builder::startup::AppState;
 
 pub fn routes() -> Router<AppState> {
-    // Router for public auth
+    // Router for public api
     let auth_api_routes = Router::new()
         .route("/login", post(login_handler))
         .route("/register", post(register_new_user_handler))
@@ -63,7 +63,7 @@ pub fn routes() -> Router<AppState> {
 
     // Combine routers under prefix "/api"
     Router::new()
-        .nest("/api/auth", auth_api_routes)
+        .nest("/api/api", auth_api_routes)
         .nest("/api/admin", admin_routes())
         .nest("/api", public_series_api_routes)
 }

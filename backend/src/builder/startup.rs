@@ -1,4 +1,4 @@
-use crate::auth;
+use crate::api;
 use crate::database::DatabaseService;
 use crate::database::storage::StorageClient;
 use crate::scraping::model::SitesConfig;
@@ -92,7 +92,7 @@ pub async fn run(
     // Setup App router
     // Initialize the router and attach the authentication routes
     let app = Router::new()
-        .merge(auth::routes::routes())
+        .merge(api::routes::routes())
         .with_state(app_state)
         .layer(cors);
 
