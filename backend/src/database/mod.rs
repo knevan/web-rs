@@ -98,6 +98,7 @@ pub struct UpdateSeriesData<'a> {
     pub cover_image_url: Option<&'a str>,
     pub source_url: Option<&'a str>,
     pub check_interval_minutes: Option<i32>,
+    pub category_ids: Option<&'a [i32]>,
 }
 
 #[derive(Debug, FromRow, Serialize)]

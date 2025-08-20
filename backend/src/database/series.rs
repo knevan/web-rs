@@ -86,7 +86,7 @@ impl DatabaseService {
         if let Some(category_ids) = data.category_ids
             && !category_ids.is_empty()
         {
-            for category_id in category_ids {
+            for &category_id in category_ids {
                 // Insert the relationship into the series_categories junction table.
                 sqlx::query!(
                         "INSERT INTO series_categories (series_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
@@ -104,7 +104,7 @@ impl DatabaseService {
         Ok(new_series_id)
     }
 
-    pub async fn update_manga_series_metadata(
+    pub async fn update_series_metadata(
         &self,
         series_id: i32,
         data: &UpdateSeriesData<'_>,
@@ -183,6 +183,30 @@ impl DatabaseService {
                     .context(format!("Failed to link author {} to manga", name))?;
             }
         }
+
+        if let Some(category_ids) = data.category_ids {
+            sqlx::query!(
+                "DELETE FROM series_categories WHERE series_id = $1",
+                series_id
+            )
+            .execute(&mut *tx)
+            .await
+            .context("Failed to delete existing categories for manga")?;
+
+            if !category_ids.is_empty() {
+                for category_id in category_ids {
+                    sqlx::query!(
+                        "INSERT INTO series_categories (series_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                        series_id,
+                        category_id
+                    )
+                        .execute(&mut *tx)
+                    .await
+                    .context(format!("Failed to link category {} to manga", category_id))?;
+                }
+            }
+        }
+
         tx.commit().await.context("Failed to commit transaction")?;
 
         Ok(result.rows_affected())
@@ -262,9 +286,11 @@ impl DatabaseService {
     pub async fn get_category_tag_by_series_id(
         &self,
         series_id: i32,
-    ) -> AnyhowResult<Vec<String>> {
-        let category_tag_name = sqlx::query_scalar!(
-            r#"SELECT c.name FROM categories c
+    ) -> AnyhowResult<Vec<CategoryTag>> {
+        let categories = sqlx::query_as!(
+            CategoryTag,
+            r#"
+            SELECT c.id, c.name FROM categories c
             JOIN series_categories sc ON c.id = sc.category_id
             WHERE sc.series_id = $1"#,
             series_id
@@ -273,7 +299,7 @@ impl DatabaseService {
         .await
         .context("Failed to query category tag by series ID with sqlx")?;
 
-        Ok(category_tag_name)
+        Ok(categories)
     }
 
     // Get paginated series list for admin
