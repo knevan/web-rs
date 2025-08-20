@@ -137,7 +137,7 @@
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await apiFetch('/api/admin/upload/image', {
+        const response = await apiFetch('/api/admin/series/cover/upload/image', {
             method: 'POST',
             body: formData,
         });

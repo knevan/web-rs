@@ -1,7 +1,7 @@
 <script lang="ts">
     import EditSeries from "$lib/components/EditSeries.svelte";
     import {Button} from "$lib/components/ui/button";
-    // import {apiFetch} from "$lib/store/auth"; // No longer needed for mocking
+    // import {apiFetch} from "$lib/store/api"; // No longer needed for mocking
     import Pagination from "$lib/components/Pagination.svelte";
     import {FilePen, Wrench, Trash2} from "@lucide/svelte";
     import RepairChapterSeries from "$lib/components/RepairChapterSeries.svelte";

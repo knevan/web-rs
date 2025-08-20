@@ -228,7 +228,6 @@
         <div class="max-w-6xl mx-auto px-4 py-3">
             <button onclick={handleBackToList}
                     class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
-                <i class="fas fa-arrow-left"></i>
                 Back to Manga List
             </button>
         </div>
@@ -245,7 +244,7 @@
             <!-- Error State -->
             <div class="text-center py-12">
                 <div class="text-red-400 mb-4">
-                    <i class="fas fa-exclamation-triangle text-4xl mb-2"></i>
+
                     <h2 class="text-2xl font-bold">Error Loading Manga</h2>
                 </div>
                 <p class="text-gray-400 mb-4">{error}</p>
@@ -290,21 +289,21 @@
                                 <div class="text-center flex flex-col items-center gap-x-1">
                                     <p class="text-md text-gray-400">Chapters</p>
                                     <div class="text-xl font-bold text-white flex items-center justify-center gap-2">
-                                        <i class="fas fa-book-open text-blue-400"></i>
+
                                         {chaptersCount}
                                     </div>
                                 </div>
                                 <div class="text-center flex flex-col items-center gap-x-1">
                                     <p class="text-md text-gray-400">Views</p>
                                     <div class="text-xl font-bold text-white flex items-center justify-center gap-2">
-                                        <i class="fas fa-eye text-green-400"></i>
+
                                         {formatCount(mangaData.series.views_count)}
                                     </div>
                                 </div>
                                 <div class="text-center flex flex-col items-center gap-x-1">
                                     <p class="text-md text-gray-400">Bookmarked</p>
                                     <div class="text-xl font-bold text-white flex items-center justify-center gap-2">
-                                        <i class="fas fa-bookmark text-yellow-400"></i>
+
                                         {formatCount(mangaData.series.bookmarks_count)}
                                     </div>
                                 </div>
@@ -391,7 +390,7 @@
                             <div class="grid gap-3 grid-cols-1 md:grid-cols-2">
                                 {#each sortedChapters as chapter}
                                     <button onclick={() => handleChapterClick(chapter.chapter_number)}
-                                            class="p-4 rounded-lg text-left bg-[#1e293b] border-l-4 border-gray-600 transition-all duration-300 ease-in-out hover:bg-gray-700 hover:border-blue-500 hover:translate-x-2">
+                                            class="p-4 rounded-lg text-left cursor-pointer bg-[#1e293b] border-l-4 border-gray-600 transition-all duration-300 ease-in-out hover:bg-gray-700 hover:border-blue-500 hover:translate-x-2">
                                     <span class="flex justify-between items-center">
                                         <span class="flex-1">
                                             <span class="font-semibold text-white mb-1">
@@ -405,7 +404,7 @@
                                             </span>
                                         </span>
                                         <span class="text-blue-400">
-                                            <i class="fas fa-chevron-right"></i>
+
                                         </span>
                                     </span>
                                     </button>
@@ -415,7 +414,6 @@
                     </div>
                 {:else}
                     <div class="text-center py-12">
-                        <i class="fas fa-book-open text-4xl text-gray-600 mb-4"></i>
                         <p class="text-gray-400">No chapters available</p>
                     </div>
                 {/if}

@@ -16,7 +16,7 @@
     let isLoading = $state(false);
     let showPassword = $state(false);
 
-    // Subscribe to the auth store to get the latest state, including errors
+    // Subscribe to the api store to get the latest state, including errors
     const authState = $derived($auth);
 
     const redirectTo = $derived(page.url.searchParams.get('redirectTo'));

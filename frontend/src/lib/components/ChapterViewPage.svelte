@@ -156,7 +156,6 @@
     {:else if error}
         <div class="text-center py-12 px-4 h-[calc(100vh-10rem)] flex flex-col justify-center items-center">
             <div class="text-red-400 mb-4">
-                <i class="fas fa-exclamation-triangle text-5xl"></i>
             </div>
             <h2 class="text-2xl font-bold text-white mb-2">Failed to Load Chapter</h2>
             <p class="text-gray-400 mb-6">{error}</p>
