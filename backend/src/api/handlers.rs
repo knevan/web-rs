@@ -6,7 +6,9 @@ use crate::common::hashing::{hash_password, verify_password};
 use crate::common::jwt::{
     RefreshClaims, create_access_jwt, create_refresh_jwt,
 };
-use crate::database::{DatabaseService, Series, SeriesChapter, SeriesOrderBy};
+use crate::database::{
+    CategoryTag, DatabaseService, Series, SeriesChapter, SeriesOrderBy,
+};
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum_core::__private::tracing::error;
@@ -547,7 +549,7 @@ pub struct SeriesDataResponse {
     series: Series,
     chapters: Vec<SeriesChapter>,
     authors: Vec<String>,
-    categories_tag: Vec<String>,
+    categories_tag: Vec<CategoryTag>,
 }
 
 // Fetch all details for a single series

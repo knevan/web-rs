@@ -110,6 +110,7 @@ pub struct UpdateSeriesRequest {
     description: Option<String>,
     cover_image_url: Option<String>,
     source_url: Option<String>,
+    category_ids: Option<Vec<i32>>,
 }
 
 pub async fn update_existing_series_handler(
@@ -133,11 +134,12 @@ pub async fn update_existing_series_handler(
         cover_image_url: payload.cover_image_url.as_deref(),
         source_url: payload.source_url.as_deref(),
         check_interval_minutes: None,
+        category_ids: payload.category_ids.as_deref(),
     };
 
     // Call the async method on the DatabaseService instance
     match db_service
-        .update_manga_series_metadata(series_id, &update_series_data)
+        .update_series_metadata(series_id, &update_series_data)
         .await
     {
         Ok(rows_affected) if rows_affected > 0 => {
@@ -482,5 +484,27 @@ pub async fn get_list_category_tags_handler(
                 Json(serde_json::json!({"status": "error", "message": e.to_string()})),
         )
             .into_response(),
+    }
+}
+
+pub async fn get_series_category_tags_handler(
+    admin: AdminUser,
+    State(state): State<AppState>,
+    Path(series_id): Path<i32>,
+) -> Response {
+    println!(
+        "->> {:<12} - get_series_category_tags_handler - user: {}, series_id: {}",
+        "HANDLER", admin.0.username, series_id
+    );
+
+    match state.db_service.get_category_tag_by_series_id(series_id).await {
+        Ok(tags) => (
+            StatusCode::OK,
+            Json(serde_json::json!({"status": "success", "tags": tags})),
+        ).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"status": "error", "message": e.to_string()}))
+        ).into_response(),
     }
 }

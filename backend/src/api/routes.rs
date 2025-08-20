@@ -63,7 +63,7 @@ pub fn routes() -> Router<AppState> {
 
     // Combine routers under prefix "/api"
     Router::new()
-        .nest("/api/api", auth_api_routes)
+        .nest("/api/auth", auth_api_routes)
         .nest("/api/admin", admin_routes())
         .nest("/api", public_series_api_routes)
 }
