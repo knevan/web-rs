@@ -1,5 +1,5 @@
+use crate::api::extractor::AdminUser;
 use crate::builder::startup::AppState;
-use crate::common::jwt::Claims;
 use crate::database::{NewSeriesData, Series, UpdateSeriesData};
 use crate::task_workers::repair_chapter_worker;
 use crate::task_workers::series_check_worker::SeriesCheckJob;
@@ -25,7 +25,7 @@ pub struct CreateSeriesRequest {
 
 // Admin endpoint to create new series
 pub async fn create_new_series_handler(
-    claims: Claims,
+    admin: AdminUser,
     State(state): State<AppState>,
     Json(payload): Json<CreateSeriesRequest>,
 ) -> Response {
@@ -33,7 +33,7 @@ pub async fn create_new_series_handler(
 
     println!(
         "->> {:<12} - create_series_handler - user: {}",
-        "Handler", claims.sub
+        "Handler", admin.0.username
     );
 
     // Random time to check target website
@@ -114,7 +114,7 @@ pub struct UpdateSeriesRequest {
 
 pub async fn update_existing_series_handler(
     Path(series_id): Path<i32>,
-    claims: Claims,
+    admin: AdminUser,
     State(state): State<AppState>,
     Json(payload): Json<UpdateSeriesRequest>,
 ) -> Response {
@@ -122,7 +122,7 @@ pub async fn update_existing_series_handler(
 
     println!(
         "->> {:<12} - update_series_handler - user: {}, series_id: {}",
-        "HANDLER", claims.sub, series_id
+        "HANDLER", admin.0.username, series_id
     );
 
     let update_series_data = UpdateSeriesData {
@@ -263,13 +263,13 @@ pub struct PaginatedSeriesResponse {
 }
 
 pub async fn get_all_manga_series_handler(
-    claims: Claims,
+    admin: AdminUser,
     State(state): State<AppState>,
     Query(pagination): Query<PaginationParams>,
 ) -> Response {
     println!(
         "->> {:<12} - get_all_manga_series_handler - user: {}",
-        "HANDLER", claims.sub
+        "HANDLER", admin.0.username
     );
 
     match state
@@ -319,14 +319,14 @@ pub struct RepairChapterRequest {
 }
 
 pub async fn repair_chapter_handler(
-    claims: Claims,
+    admin: AdminUser,
     Path(series_id): Path<i32>,
     State(state): State<AppState>,
     Json(payload): Json<RepairChapterRequest>,
 ) -> Response {
     println!(
         "->> {:<12} - repair_chapter_handler - user: {}, series_id: {}",
-        "HANDLER", claims.sub, series_id
+        "HANDLER", admin.0.username, series_id
     );
 
     let repair_chapter_msg = repair_chapter_worker::RepairChapterMsg {
@@ -356,13 +356,13 @@ pub async fn repair_chapter_handler(
 }
 
 pub async fn delete_series_handler(
-    claims: Claims,
+    admin: AdminUser,
     Path(series_id): Path<i32>,
     State(state): State<AppState>,
 ) -> Response {
     println!(
         "->> {:<12} - SCHEDULE DELETE - user: {}, series_id: {}",
-        "HANDLER", claims.sub, series_id
+        "HANDLER", admin.0.username, series_id
     );
 
     // Send series_id to deletion worker with channel
@@ -398,13 +398,13 @@ pub struct CreateCategoryTagRequest {
 }
 
 pub async fn create_category_tag_handler(
-    claims: Claims,
+    admin: AdminUser,
     State(state): State<AppState>,
     Json(payload): Json<CreateCategoryTagRequest>,
 ) -> Response {
     println!(
         "->> {:<12} - create_category_tag_handler - user: {}",
-        "HANDLER", claims.sub
+        "HANDLER", admin.0.username
     );
 
     match state.db_service.create_category_tag(&payload.name).await {
@@ -434,13 +434,13 @@ pub async fn create_category_tag_handler(
 }
 
 pub async fn delete_category_tag_handler(
-    claims: Claims,
+    admin: AdminUser,
     State(state): State<AppState>,
     Path(category_id): Path<i32>,
 ) -> Response {
     println!(
         "->> {:<12} - delete_category_tag_handler - user: {}, category_id: {}",
-        "HANDLER", claims.sub, category_id
+        "HANDLER", admin.0.username, category_id
     );
 
     match state.db_service.delete_category_tag(category_id).await {
@@ -463,12 +463,12 @@ pub async fn delete_category_tag_handler(
 }
 
 pub async fn get_list_category_tags_handler(
-    claims: Claims,
+    admin: AdminUser,
     State(state): State<AppState>,
 ) -> Response {
     println!(
         "->> {:<12} - get_list_category_tags_handler - user: {}",
-        "HANDLER", claims.sub
+        "HANDLER", admin.0.username
     );
 
     match state.db_service.get_list_all_categories().await {

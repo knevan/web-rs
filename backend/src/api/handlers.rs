@@ -1,9 +1,10 @@
+use crate::api::extractor::AuthenticatedUser;
 use crate::builder::startup::AppState;
 use crate::common::email_service::send_password_reset_email;
 use crate::common::error::AuthError;
 use crate::common::hashing::{hash_password, verify_password};
 use crate::common::jwt::{
-    Claims, RefreshClaims, create_access_jwt, create_refresh_jwt,
+    RefreshClaims, create_access_jwt, create_refresh_jwt,
 };
 use crate::database::{DatabaseService, Series, SeriesChapter, SeriesOrderBy};
 use axum::Json;
@@ -304,8 +305,6 @@ pub async fn refresh_token_handler(
     let new_access_token =
         create_access_jwt(claims.sub.clone(), role_name.clone())?;
 
-    /*let new_access_token = create_access_jwt(claims.sub)?;*/
-
     let new_access_cookie = Cookie::build(("token", new_access_token))
         .path("/")
         .http_only(true)
@@ -363,22 +362,24 @@ pub struct UserResponse {
 
 /// Protected handler. `Claims` acts as a guard.
 pub async fn protected_handler(
-    claims: Claims,
-) -> (StatusCode, Json<UserResponse>) {
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+) -> Result<(StatusCode, Json<UserResponse>), AuthError> {
     println!(
-        "[API] Request received at /api/auth/user for user: {}",
-        claims.sub
+        "[API] Request received at /api/api/user for user: {}",
+        user.username
     );
 
+    let role_name = get_role_name(&state.db_service, user.role_id).await?;
+
     let user_data = UserData {
-        identifier: claims.sub,
-        role: claims.role,
+        identifier: user.username,
+        role: role_name,
     };
 
-    // This handler will only be called if `claims` is extracted successfully (valid token)
     let response = UserResponse { user: user_data };
 
-    (StatusCode::OK, Json(response))
+    Ok((StatusCode::OK, Json(response)))
 }
 
 #[derive(Deserialize)]
@@ -797,12 +798,10 @@ pub struct BookmarkSeriesResponse {
 // Add bookmark for the current user
 pub async fn add_bookmark_series_handler(
     State(state): State<AppState>,
-    claims: Claims,
+    user: AuthenticatedUser,
     Path(series_id): Path<i32>,
 ) -> Response {
-    match state.db_service.get_user_by_identifier(&claims.sub).await {
-        Ok(Some(user)) => {
-            match state.db_service.add_bookmarked_series(user.id, series_id).await {
+    match state.db_service.add_bookmarked_series(user.id, series_id).await {
                 Ok(_) => (
                     StatusCode::OK,
                     Json(serde_json::json!({"status": "success", "message": "Add Bookmark"})),
@@ -817,20 +816,15 @@ pub async fn add_bookmark_series_handler(
                         .into_response()
                 }
             }
-        }
-        _ => (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"status": "error", "message": "User not found or invalid token"}))).into_response(),
-    }
 }
 
 // Remove bookmark for the current user
 pub async fn delete_bookmark_series_handler(
     State(state): State<AppState>,
-    claims: Claims,
+    user: AuthenticatedUser,
     Path(series_id): Path<i32>,
 ) -> Response {
-    match state.db_service.get_user_by_identifier(&claims.sub).await {
-        Ok(Some(user)) => {
-            match state.db_service.delete_bookmarked_series(user.id, series_id).await {
+    match state.db_service.delete_bookmarked_series(user.id, series_id).await {
                 Ok(_) => (
                     StatusCode::OK,
                     Json(serde_json::json!({"status": "success", "message": "Remove Bookmark"})),
@@ -845,88 +839,75 @@ pub async fn delete_bookmark_series_handler(
                         .into_response()
                 }
             }
-        }
-        _ => (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"status": "error", "message": "User not found or invalid token"}))).into_response(),
-    }
 }
 
 // Check if a series is bookmarked by current user
 pub async fn get_bookmark_status_current_user_handler(
     State(state): State<AppState>,
-    claims: Claims,
+    user: AuthenticatedUser,
     Path(series_id): Path<i32>,
 ) -> Response {
-    match state.db_service.get_user_by_identifier(&claims.sub).await {
-        Ok(Some(user)) => {
-            match state
-                .db_service
-                .is_series_bookmarked(user.id, series_id)
-                .await
-            {
-                Ok(is_bookmarked) => (
-                    StatusCode::OK,
-                    Json(BookmarkStatusResponse { is_bookmarked }),
-                )
-                    .into_response(),
-                Err(e) => {
-                    error!("DB error fetching user bookmarks: {}", e);
-                    (
+    match state
+        .db_service
+        .is_series_bookmarked(user.id, series_id)
+        .await
+    {
+        Ok(is_bookmarked) => (
+            StatusCode::OK,
+            Json(BookmarkStatusResponse { is_bookmarked }),
+        )
+            .into_response(),
+        Err(e) => {
+            error!("DB error fetching user bookmarks: {}", e);
+            (
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(serde_json::json!({"status": "error", "message": "Could not fetch bookmarks"})),
                     )
                         .into_response()
-                }
-            }
         }
-        _ => (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"status": "error", "message": "User not found or invalid token"}))).into_response(),
     }
 }
 
 // Fetch all bookmarked series for user
 pub async fn get_user_bookmark_library_handler(
     State(state): State<AppState>,
-    claims: Claims,
+    user: AuthenticatedUser,
 ) -> Response {
-    match state.db_service.get_user_by_identifier(&claims.sub).await {
-        Ok(Some(user)) => {
-            match state
-                .db_service
-                .get_bookmarked_series_for_user(user.id)
-                .await
-            {
-                Ok(bookmarked_series_list) => {
-                    let response_list = bookmarked_series_list
-                        .into_iter()
-                        .map(|series| {
-                            let latest_chapter_info = series.last_chapter_found_in_storage.map(|chapter_num| {
-                                LatestChapterInfo {
-                                    chapter_number: chapter_num,
-                                    title: series.chapter_title,
-                                }
-                            });
+    match state
+        .db_service
+        .get_bookmarked_series_for_user(user.id)
+        .await
+    {
+        Ok(bookmarked_series_list) => {
+            let response_list = bookmarked_series_list
+                .into_iter()
+                .map(|series| {
+                    let latest_chapter_info = series
+                        .last_chapter_found_in_storage
+                        .map(|chapter_num| LatestChapterInfo {
+                            chapter_number: chapter_num,
+                            title: series.chapter_title,
+                        });
 
-                            BookmarkSeriesResponse {
-                                id: series.id,
-                                title: series.title,
-                                cover_image_url: series.cover_image_url,
-                                updated_at: series.updated_at,
-                                latest_chapter: latest_chapter_info,
-                            }
-                        })
-                        .collect::<Vec<_>>();
+                    BookmarkSeriesResponse {
+                        id: series.id,
+                        title: series.title,
+                        cover_image_url: series.cover_image_url,
+                        updated_at: series.updated_at,
+                        latest_chapter: latest_chapter_info,
+                    }
+                })
+                .collect::<Vec<_>>();
 
-                    (StatusCode::OK, Json(response_list)).into_response()
-                }
-                Err(e) => {
-                    error!("DB error fetching user bookmarks: {}", e);
-                    (
+            (StatusCode::OK, Json(response_list)).into_response()
+        }
+        Err(e) => {
+            error!("DB error fetching user bookmarks: {}", e);
+            (
                         StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"status": "error", "message": "Could not fetch user bookmarks"}))
                     )
                         .into_response()
-                }
-            }
         }
-        _ => (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"status": "error", "message": "User not found or invalid token"}))).into_response(),
     }
 }
 
@@ -944,41 +925,28 @@ pub struct UpdatePasswordPayload {
 // fetch current logged-in user profile details
 pub async fn get_user_profile_handler(
     State(state): State<AppState>,
-    claims: Claims,
+    user: AuthenticatedUser,
 ) -> Response {
-    match state.db_service.get_user_by_identifier(&claims.sub).await {
-        Ok(Some(user)) => {
-            match state.db_service.get_user_profile_details(user.id).await {
-                Ok(Some(profile)) => (StatusCode::OK, Json(profile)).into_response(),
-                Ok(None) => (StatusCode::NOT_FOUND, Json(serde_json::json!({ "message": "User profile not found"}))).into_response(),
-                Err(e) => {
-                    error!("DB error fetching user profiles: {}", e);
-                    (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"status": "error", "message": "Could not fetch user profiles"}))).into_response()
-                }
-            }
+    match state.db_service.get_user_profile_details(user.id).await {
+        Ok(Some(profile)) => (StatusCode::OK, Json(profile)).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "message": "User profile not found"})),
+        )
+            .into_response(),
+        Err(e) => {
+            error!("DB error fetching user profiles: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"status": "error", "message": "Could not fetch user profiles"}))).into_response()
         }
-        _ => (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"message": "User not found or invalid token"}))).into_response(),
     }
 }
 
 // Partially update user profile (display_name, email)
 pub async fn update_user_profile_handler(
     State(state): State<AppState>,
-    claims: Claims,
+    user: AuthenticatedUser,
     Json(payload): Json<UpdateProfilePayload>,
 ) -> Response {
-    let user = match state.db_service.get_user_by_identifier(&claims.sub).await
-    {
-        Ok(Some(user)) => user,
-        _ => {
-            return (
-                StatusCode::UNAUTHORIZED,
-                Json(serde_json::json!({"message": "Invalid user session"})),
-            )
-                .into_response();
-        }
-    };
-
     // Validate email uniqueness if its being changed
     if let Some(ref email) = payload.email {
         if let Ok(Some(existing_user)) =
@@ -1024,24 +992,12 @@ pub async fn update_user_profile_handler(
 
 pub async fn update_user_password_setting_handler(
     State(state): State<AppState>,
-    claims: Claims,
+    user: AuthenticatedUser,
     Json(payload): Json<UpdatePasswordPayload>,
 ) -> Response {
     if payload.new_password.len() < 8 {
         return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"message": "Password must be at least 8 characters long."}))).into_response();
     }
-
-    let user = match state.db_service.get_user_by_identifier(&claims.sub).await
-    {
-        Ok(Some(u)) => u,
-        _ => {
-            return (
-                StatusCode::UNAUTHORIZED,
-                Json(serde_json::json!({"message": "Invalid user session."})),
-            )
-                .into_response();
-        }
-    };
 
     let hashed_password = match hash_password(&payload.new_password) {
         Ok(hashed) => hashed,
@@ -1074,21 +1030,9 @@ pub async fn update_user_password_setting_handler(
 // Upload and update user avatar
 pub async fn update_user_avatar_handler(
     State(state): State<AppState>,
-    claims: Claims,
+    user: AuthenticatedUser,
     mut multipart: Multipart,
 ) -> Response {
-    let user = match state.db_service.get_user_by_identifier(&claims.sub).await
-    {
-        Ok(Some(u)) => u,
-        _ => {
-            return (
-                StatusCode::UNAUTHORIZED,
-                Json(serde_json::json!({"message": "Invalid user session."})),
-            )
-                .into_response();
-        }
-    };
-
     if let Ok(Some(field)) = multipart.next_field().await {
         let content_type = field
             .content_type()
