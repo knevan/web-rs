@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            WITH candidate AS (\n                SELECT id FROM series\n                WHERE\n                    processing_status = 'Ongoing'\n                    AND next_checked_at <= NOW()\n                ORDER BY next_checked_at ASC\n                LIMIT 1\n                FOR UPDATE SKIP LOCKED\n            )\n            UPDATE series\n            SET processing_status = 'processing'\n            WHERE id = (SELECT id FROM candidate)\n            RETURNING\n                id, title, original_title, description, cover_image_url, current_source_url,\n                source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage,\n                'processing' as \"processing_status!\", check_interval_minutes, last_checked_at,\n                next_checked_at, created_at, updated_at\n            ",
+  "query": "SELECT id, title, original_title, description, cover_image_url, current_source_url,\n            source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage,\n            processing_status as \"processing_status: SeriesStatus\",\n            check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at\n            FROM series WHERE title = $1",
   "describe": {
     "columns": [
       {
@@ -55,8 +55,27 @@
       },
       {
         "ordinal": 10,
-        "name": "processing_status!",
-        "type_info": "Text"
+        "name": "processing_status: SeriesStatus",
+        "type_info": {
+          "Custom": {
+            "name": "series_status",
+            "kind": {
+              "Enum": [
+                "Pending",
+                "Processing",
+                "Available",
+                "Ongoing",
+                "Completed",
+                "Hiatus",
+                "Discontinued",
+                "Error",
+                "Pending Deletion",
+                "Deleting",
+                "Deletion Failed"
+              ]
+            }
+          }
+        }
       },
       {
         "ordinal": 11,
@@ -85,12 +104,14 @@
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Text"
+      ]
     },
     "nullable": [
       false,
       false,
-      false,
+      true,
       false,
       false,
       false,
@@ -98,7 +119,7 @@
       false,
       false,
       true,
-      null,
+      false,
       false,
       true,
       true,
@@ -106,5 +127,5 @@
       false
     ]
   },
-  "hash": "70381364355d526ea203783194aa18f2c2f58309874bdad5bdb0c2a7bac8af2e"
+  "hash": "875fc84c591b2859beced32217eb3f579a99fbf0eb61ff9526fd99e9dd9bd8f6"
 }

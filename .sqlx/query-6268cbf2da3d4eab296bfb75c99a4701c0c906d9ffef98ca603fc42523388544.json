@@ -5,7 +5,26 @@
     "columns": [],
     "parameters": {
       "Left": [
-        "Text",
+        {
+          "Custom": {
+            "name": "series_status",
+            "kind": {
+              "Enum": [
+                "Pending",
+                "Processing",
+                "Available",
+                "Ongoing",
+                "Completed",
+                "Hiatus",
+                "Discontinued",
+                "Error",
+                "Pending Deletion",
+                "Deleting",
+                "Deletion Failed"
+              ]
+            }
+          }
+        },
         "Timestamptz",
         "Int4"
       ]
