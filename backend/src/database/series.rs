@@ -218,10 +218,11 @@ impl DatabaseService {
     ) -> AnyhowResult<Option<Series>> {
         let series = sqlx::query_as!(
             Series,
-            "SELECT id, title, original_title, description, cover_image_url, current_source_url,
-       source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage, processing_status,
+            r#"SELECT id, title, original_title, description, cover_image_url, current_source_url,
+       source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage,
+       processing_status as "processing_status: SeriesStatus",
        check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at
-       FROM series WHERE id = $1",
+       FROM series WHERE id = $1"#,
             id
         )
             .fetch_optional(&self.pool)
@@ -236,10 +237,11 @@ impl DatabaseService {
     ) -> AnyhowResult<Option<Series>> {
         let series = sqlx::query_as!(
             Series,
-            "SELECT id, title, original_title, description, cover_image_url, current_source_url,
-            source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage, processing_status,
+            r#"SELECT id, title, original_title, description, cover_image_url, current_source_url,
+            source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage,
+            processing_status as "processing_status: SeriesStatus",
             check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at
-            FROM series WHERE title = $1",
+            FROM series WHERE title = $1"#,
             title
         )
             .fetch_optional(&self.pool)
@@ -321,12 +323,12 @@ impl DatabaseService {
         struct QueryResult {
             id: i32,
             title: String,
-            original_title: String,
+            original_title: Option<String>,
             description: String,
             cover_image_url: String,
             current_source_url: String,
             updated_at: DateTime<Utc>,
-            processing_status: String,
+            processing_status: SeriesStatus,
             #[sqlx(json)]
             authors: serde_json::Value,
             total_items: Option<i64>,
@@ -343,7 +345,7 @@ impl DatabaseService {
                 sr.cover_image_url,
                 sr.current_source_url,
                 sr.updated_at,
-                sr.processing_status,
+                sr.processing_status as "processing_status: SeriesStatus",
                 -- Use a LEFT JOIN to include all authors, even if they are not linked to the series.
                 -- Aggregate author names into a JSON array. If no authors, return an empty array.
                 -- The '!' asserts the value is not null, matching COALESCE
@@ -465,11 +467,11 @@ impl DatabaseService {
     pub async fn update_series_processing_status(
         &self,
         series_id: i32,
-        new_status: &str,
+        new_status: SeriesStatus,
     ) -> AnyhowResult<u64> {
         let result = sqlx::query!(
             "UPDATE series SET processing_status = $1, updated_at = NOW() WHERE id = $2",
-            new_status,
+            new_status as _,
             series_id,
         )
             .execute(&self.pool)
@@ -499,7 +501,7 @@ impl DatabaseService {
     pub async fn update_series_check_schedule(
         &self,
         series_id: i32,
-        new_status: Option<&str>,
+        new_status: Option<SeriesStatus>,
         new_next_checked_at: Option<DateTime<Utc>>,
     ) -> AnyhowResult<u64> {
         // First, get the series data asynchronously.
@@ -524,11 +526,11 @@ impl DatabaseService {
                 + chrono::Duration::seconds(actual_interval_secs.max(300))
         });
 
-        let final_status = new_status.unwrap_or(&series.processing_status);
+        let final_status = new_status.unwrap_or(series.processing_status);
 
         let result = sqlx::query!(
             "UPDATE series SET processing_status = $1, last_checked_at = NOW(), next_checked_at = $2 WHERE id = $3",
-            final_status,
+            final_status as _,
             final_next_checked_at,
             series_id,
             )
@@ -669,9 +671,12 @@ impl DatabaseService {
         series_id: i32,
     ) -> AnyhowResult<u64> {
         let result = sqlx::query!(
-            "UPDATE series SET processing_status = 'pending_deletion',
-                  updated_at = NOW() WHERE id = $1 AND processing_status NOT IN ('pending_deletion', 'deleting')",
-            series_id
+            "UPDATE series SET processing_status = $1,
+                  updated_at = NOW() WHERE id = $2 AND processing_status NOT IN ($3, $4)",
+            SeriesStatus::PendingDeletion as _,
+            series_id,
+            SeriesStatus::PendingDeletion as _,
+            SeriesStatus::Deleting as _,
         )
             .execute(&self.pool)
             .await
@@ -689,21 +694,23 @@ impl DatabaseService {
             WITH candidate AS (
                 SELECT id FROM series
                 WHERE
-                    processing_status = 'Ongoing'
+                    processing_status = $1
                     AND next_checked_at <= NOW()
                 ORDER BY next_checked_at ASC
                 LIMIT 1
                 FOR UPDATE SKIP LOCKED
             )
             UPDATE series
-            SET processing_status = 'processing'
+            SET processing_status = $2
             WHERE id = (SELECT id FROM candidate)
             RETURNING
                 id, title, original_title, description, cover_image_url, current_source_url,
                 source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage,
-                'processing' as "processing_status!", check_interval_minutes, last_checked_at,
+                processing_status as "processing_status: SeriesStatus", check_interval_minutes, last_checked_at,
                 next_checked_at, created_at, updated_at
-            "#
+            "#,
+            SeriesStatus::Ongoing as _,
+            SeriesStatus::Processing as _,
         )
             .fetch_optional(&self.pool)
             .await
@@ -722,19 +729,21 @@ impl DatabaseService {
             r#"
             WITH candidate AS (
                 SELECT id FROM series
-                WHERE processing_status = 'pending_deletion'
+                WHERE processing_status = $1
                 LIMIT 1
                 FOR UPDATE SKIP LOCKED
             )
             UPDATE series
-            SET processing_status = 'deleting'
+            SET processing_status = $2
             WHERE id = (SELECT id FROM candidate)
             RETURNING
                 id, title, original_title, description, cover_image_url, current_source_url,
                 source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage,
-                'deleting' as "processing_status!", check_interval_minutes, last_checked_at,
+                processing_status as "processing_status: SeriesStatus", check_interval_minutes, last_checked_at,
                 next_checked_at, created_at, updated_at
-            "#
+            "#,
+            SeriesStatus::PendingDeletion as _,
+            SeriesStatus::Deleting as _
         )
             .fetch_optional(&self.pool)
             .await

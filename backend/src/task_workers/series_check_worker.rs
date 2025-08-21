@@ -1,6 +1,6 @@
 use crate::app::orchestrator;
 use crate::database::storage::StorageClient;
-use crate::database::{DatabaseService, Series};
+use crate::database::{DatabaseService, Series, SeriesStatus};
 use crate::scraping::model::SitesConfig;
 use reqwest::Client;
 use std::sync::Arc;
@@ -91,12 +91,12 @@ pub async fn run_series_check_worker(
             );
             // If failed, retry again after 1 hour
             (
-                "error-check",
+                SeriesStatus::Error,
                 Some(chrono::Utc::now() + chrono::Duration::hours(1)),
             )
         } else {
             // If successful, let DB calculate the next schedule
-            ("Ongoing", None)
+            (SeriesStatus::Ongoing, None)
         };
 
         if let Err(e) = db_service

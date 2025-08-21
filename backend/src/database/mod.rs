@@ -2,7 +2,8 @@ use anyhow::{Context, Result as AnyhowResult};
 use chrono::{DateTime, Utc};
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, PgPool};
+use sqlx::{FromRow, PgPool, Type};
+use std::fmt;
 use url::Url;
 
 pub mod auth;
@@ -27,12 +28,49 @@ impl DatabaseService {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[sqlx(type_name = "series_status", rename_all = "PascalCase")]
+pub enum SeriesStatus {
+    Pending,
+    Processing,
+    Available,
+    Ongoing,
+    Completed,
+    Hiatus,
+    Discontinued,
+    Error,
+    #[sqlx(rename = "Pending Deletion")]
+    PendingDeletion,
+    Deleting,
+    #[sqlx(rename = "Deletion Failed")]
+    DeletionFailed,
+}
+
+impl fmt::Display for SeriesStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let status_str = match self {
+            SeriesStatus::Pending => "Pending",
+            SeriesStatus::Processing => "Processing",
+            SeriesStatus::Available => "Available",
+            SeriesStatus::Ongoing => "Ongoing",
+            SeriesStatus::Completed => "Completed",
+            SeriesStatus::Hiatus => "Hiatus",
+            SeriesStatus::Discontinued => "Discontinued",
+            SeriesStatus::Error => "Error",
+            SeriesStatus::PendingDeletion => "PendingDeletion",
+            SeriesStatus::Deleting => "Deleting",
+            SeriesStatus::DeletionFailed => "DeletionFailed",
+        };
+        write!(f, "{}", status_str)
+    }
+}
+
 // Struct represents a manga series stored in the database.
 #[derive(Debug, Clone, FromRow, Serialize)]
 pub struct Series {
     pub id: i32,
     pub title: String,
-    pub original_title: String,
+    pub original_title: Option<String>,
     pub description: String,
     pub cover_image_url: String,
     pub current_source_url: String,
@@ -40,7 +78,7 @@ pub struct Series {
     pub views_count: i32,
     pub bookmarks_count: i32,
     pub last_chapter_found_in_storage: Option<f32>, // support 10.0, 10.5
-    pub processing_status: String, // "pending", "monitoring", "error", "completed"
+    pub processing_status: SeriesStatus,
     pub check_interval_minutes: i32,
     pub last_checked_at: Option<DateTime<Utc>>,
     pub next_checked_at: Option<DateTime<Utc>>,
@@ -105,11 +143,11 @@ pub struct UpdateSeriesData<'a> {
 pub struct SeriesWithAuthors {
     pub id: i32,
     pub title: String,
-    pub original_title: String,
+    pub original_title: Option<String>,
     pub description: String,
     pub cover_image_url: String,
     pub current_source_url: String,
-    pub processing_status: String,
+    pub processing_status: SeriesStatus,
     pub updated_at: DateTime<Utc>,
     #[sqlx(json)]
     pub authors: serde_json::Value,

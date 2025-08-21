@@ -1,5 +1,5 @@
 use crate::database::storage::StorageClient;
-use crate::database::{DatabaseService, Series};
+use crate::database::{DatabaseService, Series, SeriesStatus};
 use anyhow::Context;
 use std::sync::Arc;
 use std::time::Duration;
@@ -105,7 +105,10 @@ pub async fn run_deletion_worker(
             );
 
             if let Err(e_update) = db_service
-                .update_series_processing_status(series_id, "deletion_failed")
+                .update_series_processing_status(
+                    series_id,
+                    SeriesStatus::DeletionFailed,
+                )
                 .await
             {
                 eprintln!(

@@ -248,7 +248,7 @@ fn default_page_size() -> u32 {
 pub struct SeriesResponse {
     id: i32,
     title: String,
-    original_title: String,
+    original_title: Option<String>,
     description: String,
     cover_image_url: String,
     source_url: String,
@@ -292,7 +292,7 @@ pub async fn get_all_manga_series_handler(
                     source_url: s.current_source_url,
                     authors: serde_json::from_value(s.authors).unwrap_or_else(|_| vec![]),
                     last_updated: s.updated_at.format("%Y-%m-%d %H:%M:%S").to_string(),
-                    processing_status: s.processing_status,
+                    processing_status: s.processing_status.to_string(),
                 })
                 .collect();
 
