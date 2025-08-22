@@ -47,12 +47,32 @@
 
     const currentMangaId = $derived(mangaId);
     const seriesSlug = $derived(slugify(mangaData?.series?.title || '', {lower: true}));
-    const status = $derived(mangaData?.series?.processing_status?.toLowerCase() === 'ongoing' ? 'Ongoing' : 'Completed');
-    const statusClass = $derived(status === 'Ongoing' ? 'text-green-400' : 'text-gray-400');
     const chaptersCount = $derived(mangaData?.chapters?.length || 0);
     const sortedChapters = $derived(mangaData?.chapters ? [...mangaData.chapters].sort((a, b) => b.chapter_number - a.chapter_number) : []);
     const firstChapter = $derived(mangaData?.chapters && mangaData.chapters.length > 0 ? [...mangaData.chapters].sort(
         (a, b) => a.chapter_number - b.chapter_number)[0] : null);
+
+    const displayStatus = $derived(() => {
+        const rawStatus = mangaData?.series?.processing_status?.toLowerCase() || '';
+
+        if (new Set(['pending', 'processing', 'available', 'ongoing']).has(rawStatus)) {
+            return {label: 'Ongoing', className: 'text-green-400'};
+        }
+
+        if (rawStatus === 'completed') {
+            return {label: 'Completed', className: 'text-gray-400'};
+        }
+
+        if (rawStatus === 'hiatus') {
+            return {label: 'Hiatus', className: 'text-yellow-400'};
+        }
+
+        if (rawStatus === 'discontinued') {
+            return {label: 'Discontinued', className: 'text-red-400'};
+        }
+
+        return {label: 'Ongoing', className: 'text-green-400'};
+    });
 
     // use $effect hook to fetch manga data
     // $effect running first time when Layout mounts
@@ -309,8 +329,8 @@
                                 </div>
                                 <div class="text-center flex flex-col items-center gap-x-1">
                                     <p class="text-md text-gray-400">Status</p>
-                                    <div class="text-sm font-bold {statusClass}">
-                                        {status}
+                                    <div class="text-sm font-bold {displayStatus().className}">
+                                        {displayStatus().label}
                                     </div>
                                 </div>
                             </div>
