@@ -1,10 +1,14 @@
+<!--<link rel="stylesheet" href="../../app.css">-->
 <script>
+    import Header from "$lib/components/Header.svelte";
+
     let {children} = $props();
 </script>
 
-<div class="flex flex-col min-h-screen bg-gray-50">
+<div class="flex min-h-screen flex-col">
+    <Header/>
 
-    <main class="flex-grow container mx-auto px-4">
+    <main class="flex-grow container max-w-7xl mx-auto px-1">
         {@render children()}
     </main>
 

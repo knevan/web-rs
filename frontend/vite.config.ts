@@ -6,6 +6,7 @@ import { defineConfig } from 'vite';
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
 	server: {
+		port: 1998,
 		// This proxy configuration is the key to connecting the frontend to the backend.
 		proxy: {
 			'/api': {
