@@ -57,7 +57,7 @@
                         <DropdownMenu.Label>My Account</DropdownMenu.Label>
                         <DropdownMenu.Separator/>
                         <DropdownMenu.Item>
-                            <a href="/user/setting" class="">User Setting</a>
+                            <a href="/user/profiles" class="">User Setting</a>
                         </DropdownMenu.Item>
                         <DropdownMenu.Item>
                             <a href="/user/bookmark">Bookmark Library</a>
