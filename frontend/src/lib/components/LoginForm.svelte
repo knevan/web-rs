@@ -7,6 +7,7 @@
     import {page} from "$app/state";
     import {Eye} from "@lucide/svelte";
     import {EyeOff} from "@lucide/svelte";
+    import {onMount} from "svelte";
 
     // props are now passed via a prop object in Svelte 5
     let {id = 'login-form'} = $props();
@@ -23,13 +24,16 @@
 
     async function handleLogin() {
         isLoading = true;
-        // The login function from the store will handle all logic,
-        // including updating the store with errors or success.
         await login(email, password, redirectTo);
         isLoading = false;
     }
 
-
+    onMount(() => {
+        if (authState.error) {
+            auth.update((store) => ({...store, error: null}));
+        }
+    });
+    
     // const id = $props.id();
 </script>
 
