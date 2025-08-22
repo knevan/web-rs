@@ -18,7 +18,7 @@ use crate::api::handlers::{
 use crate::builder::startup::AppState;
 
 pub fn routes() -> Router<AppState> {
-    // Router for public api
+    // Route for public api
     let auth_api_routes = Router::new()
         .route("/login", post(login_handler))
         .route("/register", post(register_new_user_handler))
@@ -29,7 +29,7 @@ pub fn routes() -> Router<AppState> {
         .route("/forgot-password", post(forgot_password_handler))
         .route("/reset-password", post(reset_password_handler));
 
-    // Router for most view updates
+    // Route for most view updates
     let public_series_api_routes = Router::new()
         .route("/series/most-viewed", get(fetch_most_viewed_series_handler))
         .route("/series/new-series", get(fetch_new_series_handler))
@@ -52,9 +52,12 @@ pub fn routes() -> Router<AppState> {
             "/series/{id}/bookmark/status",
             get(get_bookmark_status_current_user_handler),
         )
+        // Route for user space
         .route("/user/bookmark", get(get_user_bookmark_library_handler))
-        .route("/user/profile", get(get_user_profile_handler))
-        .route("/user/profile", patch(update_user_profile_handler))
+        .route(
+            "/user/profile",
+            get(get_user_profile_handler).patch(update_user_profile_handler),
+        )
         .route(
             "/user/profile/password",
             patch(update_user_password_setting_handler),

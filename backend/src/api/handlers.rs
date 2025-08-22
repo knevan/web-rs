@@ -929,6 +929,11 @@ pub async fn get_user_profile_handler(
     State(state): State<AppState>,
     user: AuthenticatedUser,
 ) -> Response {
+    println!(
+        "->> {:<12} - get_user_profile - series_id: {:?}",
+        "HANDLER", user.id
+    );
+
     match state.db_service.get_user_profile_details(user.id).await {
         Ok(Some(profile)) => (StatusCode::OK, Json(profile)).into_response(),
         Ok(None) => (
