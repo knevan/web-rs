@@ -317,7 +317,6 @@ pub async fn get_all_manga_series_handler(
 pub struct RepairChapterRequest {
     pub chapter_number: f32,
     pub new_chapter_url: String,
-    pub new_chapter_title: Option<String>,
 }
 
 pub async fn repair_chapter_handler(
@@ -335,7 +334,6 @@ pub async fn repair_chapter_handler(
         series_id,
         chapter_number: payload.chapter_number,
         new_chapter_url: payload.new_chapter_url,
-        new_chapter_title: payload.new_chapter_title,
     };
 
     match state.worker_channels.repair_tx.send(repair_chapter_msg).await {

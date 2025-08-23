@@ -11,7 +11,6 @@ pub struct RepairChapterMsg {
     pub series_id: i32,
     pub chapter_number: f32,
     pub new_chapter_url: String,
-    pub new_chapter_title: Option<String>,
 }
 
 pub async fn run_repair_chapter_worker(
