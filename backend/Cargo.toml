@@ -16,10 +16,9 @@ rand = "0.9.1"
 ravif = { version = "0.12.0", features = ["default"] }
 regex = "1.11.1"
 reqwest = "0.12.23"
-scraper = "0.23.1"
+scraper = "0.24.0"
 serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "~1.47.0", features = ["full"] }
-tokio-retry2 = { version = "0.5.7", features = ["jitter"] }
 toml = "0.9.0"
 url = "2.5.4"
 axum-extra = { version = "0.10.1", features = ["typed-header", "erased-json", "cookie", "multipart"] }
@@ -31,9 +30,9 @@ aws-sdk-s3 = "1.100.0"
 aws-config = { version = "~1.8.0", features = ["behavior-version-latest"] }
 bytes = "1.10.1"
 slug = "0.1.6"
-backon = "1.5.1"
+backon = { version = "1.5.2", features = ["default", "tokio"] }
 dotenvy = "0.15.7"
-tower-http = { version = "0.6.6", features = ["cors"] }
+tower-http = { version = "0.6.6", features = ["cors", "tower", "compression-full", "async-compression", "timeout"] }
 argon2 = "0.5.3"
 sqlx = { version = "0.8.6", features = ["postgres", "chrono", "runtime-tokio-rustls",
     "macros", "runtime-tokio", "migrate"] }
@@ -47,3 +46,4 @@ lettre = { version = "0.11.17", default-features = false, features = [
     "ring"
 ] }
 async-channel = "2.5.0"
+tower = "0.5.2"
