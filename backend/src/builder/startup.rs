@@ -9,9 +9,12 @@ use lettre::AsyncSmtpTransport;
 use reqwest::Client;
 use std::env;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::signal;
-use tower_http::cors::CorsLayer;
+use tower::ServiceBuilder;
+use tower_http::timeout::TimeoutLayer;
+use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 
 // Type definition for Mailer
 pub type Mailer = AsyncSmtpTransport<lettre::Tokio1Executor>;
@@ -94,7 +97,13 @@ pub async fn run(
     let app = Router::new()
         .merge(api::routes::routes())
         .with_state(app_state)
-        .layer(cors);
+        .layer(
+            ServiceBuilder::new()
+                .layer(CompressionLayer::new())
+                // TODO: rate limiting
+                .layer(TimeoutLayer::new(Duration::from_secs(30)))
+                .layer(cors),
+        );
 
     println!("[STARTUP] Server started successfully!");
 
