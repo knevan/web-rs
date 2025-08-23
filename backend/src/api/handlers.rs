@@ -650,6 +650,7 @@ pub async fn fetch_chapter_details_handler(
     );
 
     let db = &state.db_service;
+    let base_url = state.storage_client.domain_cdn_url();
 
     let (series_result, all_chapters_result, images_result) = tokio::join!(
         db.get_manga_series_by_id(series_id),
@@ -678,7 +679,7 @@ pub async fn fetch_chapter_details_handler(
 
     let pages = object_keys
         .into_iter()
-        .map(|key| format!("{}{}", &state.cdn_base_url, key))
+        .map(|key| format!("{}/{}", base_url, key))
         .collect();
 
     // Get all chapters for the series and find current, next and previous chapters

@@ -27,7 +27,6 @@ pub struct AppState {
     pub sites_config: Arc<SitesConfig>,
     pub storage_client: Arc<StorageClient>,
     pub worker_channels: OnDemandChannels,
-    pub cdn_base_url: String,
 }
 
 // Function to set up builder and server
@@ -43,9 +42,6 @@ pub async fn run(
     let db_service = DatabaseService::new(db_pool);
     let sites_config =
         Arc::new(SitesConfig::load("backend/config_sites.toml")?);
-
-    let cdn_base_url =
-        env::var("CDN_BASE_URL").expect("CDN_BASE_URL must be set");
 
     // Create channels
     let worker_channels = setup_worker_channels(
@@ -63,7 +59,6 @@ pub async fn run(
         sites_config,
         storage_client,
         worker_channels,
-        cdn_base_url,
     };
 
     // CORS Configuration
