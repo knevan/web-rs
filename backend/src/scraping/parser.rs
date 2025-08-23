@@ -8,7 +8,6 @@ use url::Url;
 
 #[derive(Debug, Clone)]
 pub struct ChapterInfo {
-    pub title: String,
     pub url: String,
     pub number: f32,
 }
@@ -76,7 +75,6 @@ impl ChapterParser {
                 &title,
             ) {
                 return Ok(Some(ChapterInfo {
-                    title,
                     url: abs_url,
                     number,
                 }));

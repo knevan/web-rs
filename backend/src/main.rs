@@ -1,7 +1,7 @@
 #![allow(clippy::uninlined_format_args)]
 extern crate core;
-mod app;
 mod api;
+mod app;
 mod builder;
 mod common;
 mod database;

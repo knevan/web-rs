@@ -223,10 +223,6 @@ pub async fn repair_specific_chapter_series(
         .ok_or_else(|| anyhow!("No scraping config for host: {}", new_host))?;
 
     let chapter_info_to_scrape = ChapterInfo {
-        title: msg
-            .new_chapter_title
-            .map(|s| s.to_string())
-            .unwrap_or_default(),
         url: msg.new_chapter_url.to_string(),
         number: msg.chapter_number,
     };

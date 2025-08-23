@@ -300,7 +300,7 @@ pub async fn refresh_token_handler(
         .get_user_by_identifier(&claims.sub)
         .await
         .map_err(|_| AuthError::InvalidToken)?
-        .ok_or(AuthError::InvalidToken)?;
+        .ok_or(AuthError::InvalidRefreshToken)?;
 
     let role_name = get_role_name(&state.db_service, user.role_id).await?;
 
@@ -348,13 +348,6 @@ pub async fn logout_handler(
     };
 
     Ok((new_jar, Json(response_body)))
-}
-
-#[derive(Serialize)]
-pub struct ProtectedResponse {
-    message: String,
-    user_id: String,
-    session_expires_at: i64,
 }
 
 #[derive(Serialize)]
@@ -955,20 +948,16 @@ pub async fn update_user_profile_handler(
     Json(payload): Json<UpdateProfilePayload>,
 ) -> Response {
     // Validate email uniqueness if its being changed
-    if let Some(ref email) = payload.email {
-        if let Ok(Some(existing_user)) =
+    if let Some(ref email) = payload.email
+        && let Ok(Some(existing_user)) =
             state.db_service.get_user_by_identifier(email).await
-        {
-            if existing_user.id != user.id {
-                return (
-                    StatusCode::CONFLICT,
-                    Json(
-                        serde_json::json!({"message": "Email already in use"}),
-                    ),
-                )
-                    .into_response();
-            }
-        }
+        && existing_user.id != user.id
+    {
+        return (
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({"message": "Email already in use"})),
+        )
+            .into_response();
     }
 
     // Call db to perform partial update

@@ -183,17 +183,6 @@ pub struct CategoryTag {
     pub name: String,
 }
 
-// Public series data for the public API.
-#[derive(Debug, FromRow, Serialize)]
-pub struct PublicSeries {
-    pub id: i32,
-    pub title: String,
-    pub cover_image_url: String,
-    // Use serde_json::Value for authors to match SeriesWithAuthors, then map it in the handler
-    #[sqlx(json)]
-    pub authors: serde_json::Value,
-}
-
 // Most viewed series data for the public API.
 #[derive(Debug, FromRow, Serialize)]
 pub struct MostViewedSeries {
