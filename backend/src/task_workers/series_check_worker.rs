@@ -2,6 +2,7 @@ use crate::app::orchestrator;
 use crate::database::storage::StorageClient;
 use crate::database::{DatabaseService, Series, SeriesStatus};
 use crate::scraping::model::SitesConfig;
+use arc_swap::ArcSwap;
 use reqwest::Client;
 use std::sync::Arc;
 use std::time::Duration;
@@ -62,7 +63,7 @@ pub async fn run_series_check_worker(
     db_service: DatabaseService,
     storage_client: Arc<StorageClient>,
     http_client: Client,
-    sites_config: Arc<SitesConfig>,
+    sites_config: Arc<ArcSwap<SitesConfig>>,
     job_receiver: async_channel::Receiver<SeriesCheckJob>,
 ) {
     println!("[SERIES-WORKER {}] Starting...", worker_id);
@@ -78,7 +79,7 @@ pub async fn run_series_check_worker(
             series.clone(),
             http_client.clone(),
             &db_service,
-            sites_config.clone(),
+            sites_config.load().clone(),
             storage_client.clone(),
         )
         .await;

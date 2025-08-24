@@ -2,6 +2,7 @@ use crate::app::orchestrator::repair_specific_chapter_series;
 use crate::database::DatabaseService;
 use crate::database::storage::StorageClient;
 use crate::scraping::model::SitesConfig;
+use arc_swap::ArcSwap;
 use reqwest::Client;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -18,7 +19,7 @@ pub async fn run_repair_chapter_worker(
     db_service: DatabaseService,
     storage_client: Arc<StorageClient>,
     http_client: Client,
-    sites_config: Arc<SitesConfig>,
+    sites_config: Arc<ArcSwap<SitesConfig>>,
 ) {
     println!("[WORKER] Repair worker started.");
 
@@ -34,12 +35,14 @@ pub async fn run_repair_chapter_worker(
         let sites_config_clone = sites_config.clone();
 
         tokio::spawn(async move {
+            let sites_config_snapshot = sites_config_clone.load();
+
             if let Err(e) = repair_specific_chapter_series(
                 msg,
                 &db_clone,
                 storage_clone,
                 http_clone,
-                sites_config_clone,
+                sites_config_snapshot.clone(),
             )
             .await
             {

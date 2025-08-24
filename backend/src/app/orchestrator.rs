@@ -7,6 +7,7 @@ use crate::scraping::model::SitesConfig;
 use crate::scraping::parser::{ChapterInfo, ChapterParser};
 use crate::task_workers::repair_chapter_worker::RepairChapterMsg;
 use anyhow::{Result, anyhow};
+use arc_swap::ArcSwap;
 use reqwest::Client;
 use std::env;
 use std::sync::Arc;

@@ -1,8 +1,10 @@
-use crate::api;
+use crate::builder::config_sites_watcher::config_sites_watcher;
 use crate::database::DatabaseService;
 use crate::database::storage::StorageClient;
 use crate::scraping::model::SitesConfig;
 use crate::task_workers::channels::{OnDemandChannels, setup_worker_channels};
+use crate::{api, builder};
+use arc_swap::ArcSwap;
 use axum::http::{HeaderValue, Method, header};
 use axum::{Router, serve};
 use lettre::AsyncSmtpTransport;
@@ -24,7 +26,7 @@ pub struct AppState {
     pub db_service: DatabaseService,
     pub mailer: Mailer,
     pub http_client: Client,
-    pub sites_config: Arc<SitesConfig>,
+    pub sites_config: Arc<ArcSwap<SitesConfig>>,
     pub storage_client: Arc<StorageClient>,
     pub worker_channels: OnDemandChannels,
 }
@@ -40,8 +42,13 @@ pub async fn run(
     let storage_client = Arc::new(storage_client_env);
 
     let db_service = DatabaseService::new(db_pool);
-    let sites_config =
-        Arc::new(SitesConfig::load("backend/config_sites.toml")?);
+
+    let config_path = "backend/config_sites.toml".to_string();
+    let load_sites_config = Arc::new(SitesConfig::load(&config_path)?);
+
+    let sites_config = Arc::new(ArcSwap::new(load_sites_config));
+
+    tokio::spawn(config_sites_watcher(config_path, sites_config.clone()));
 
     // Create channels
     let worker_channels = setup_worker_channels(

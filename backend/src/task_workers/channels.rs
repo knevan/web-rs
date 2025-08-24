@@ -11,6 +11,7 @@ use crate::task_workers::repair_chapter_worker::{
 use crate::task_workers::series_check_worker::{
     SeriesCheckJob, run_series_check_scheduler, run_series_check_worker,
 };
+use arc_swap::ArcSwap;
 use reqwest::Client;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -25,7 +26,7 @@ pub fn setup_worker_channels(
     db_service: DatabaseService,
     storage_client: Arc<StorageClient>,
     http_client: Client,
-    sites_config: Arc<SitesConfig>,
+    sites_config: Arc<ArcSwap<SitesConfig>>,
 ) -> OnDemandChannels {
     // Check series worker channels
     let (series_check_tx, series_check_rx) =
