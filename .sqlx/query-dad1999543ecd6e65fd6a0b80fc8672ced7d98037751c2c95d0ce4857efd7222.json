@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \n                u.id,\n                u.username,\n                u.email,\n                r.role_name,\n                COUNT(*) OVER () as total_items\n            FROM\n                users u\n            JOIN \n                roles r ON u.role_id = r.id\n            WHERE\n                ($3::TEXT IS NULL OR u.username ILIKE $3 OR u.email ILIKE $3)\n            ORDER BY\n                u.id\n            LIMIT $1\n            OFFSET $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "role_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "total_items",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "dad1999543ecd6e65fd6a0b80fc8672ced7d98037751c2c95d0ce4857efd7222"
+}
