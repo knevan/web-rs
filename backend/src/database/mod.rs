@@ -115,6 +115,14 @@ pub struct UserProfileDetails {
     pub avatar_url: Option<String>,
 }
 
+#[derive(Debug, FromRow, Serialize)]
+pub struct UserWithRole {
+    pub id: i32,
+    pub username: String,
+    pub email: String,
+    pub role_name: String,
+}
+
 #[derive(Debug)]
 pub struct NewSeriesData<'a> {
     pub title: &'a str,

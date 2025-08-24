@@ -6,6 +6,7 @@ use crate::task_workers::series_check_worker::SeriesCheckJob;
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
+use axum_core::__private::tracing::error;
 use axum_core::response::{IntoResponse, Response};
 use axum_extra::extract::Multipart;
 use rand::Rng;
@@ -259,8 +260,8 @@ pub struct SeriesResponse {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PaginatedSeriesResponse {
-    items: Vec<SeriesResponse>,
+pub struct PaginatedResponse<T: Serialize> {
+    items: Vec<T>,
     total_items: i64,
 }
 
@@ -296,7 +297,7 @@ pub async fn get_all_manga_series_handler(
                 })
                 .collect();
 
-            let response_series_data = PaginatedSeriesResponse {
+            let response_series_data = PaginatedResponse {
                 items: response_series_items,
                 total_items: paginated_result.total_items,
             };
@@ -307,6 +308,44 @@ pub async fn get_all_manga_series_handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"status": "error", "message": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
+
+pub async fn get_all_users_handler(
+    admin: AdminUser,
+    State(state): State<AppState>,
+    Query(pagination): Query<PaginationParams>,
+) -> Response {
+    println!(
+        "->> {:<12} - get_all_users_handler - user: {}",
+        "HANDLER", admin.0.username
+    );
+
+    match state
+        .db_service
+        .get_paginated_user(
+            pagination.page,
+            pagination.page_size,
+            pagination.search.as_deref(),
+        )
+        .await
+    {
+        Ok(paginated_result) => {
+            let response_user_data = PaginatedResponse {
+                items: paginated_result.items,
+                total_items: paginated_result.total_items,
+            };
+
+            (StatusCode::OK, Json(response_user_data)).into_response()
+        }
+        Err(e) => {
+            error!("Failed to get paginated: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": "Could retrieve users."})),
             )
                 .into_response()
         }

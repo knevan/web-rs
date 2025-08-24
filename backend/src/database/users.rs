@@ -11,17 +11,6 @@ use super::*;
 /// Macros `sqlx::query_scalar!`
 /// For queries returning a single value (one row, one column).
 /// Highly efficient for this purpose.
-///
-/// Use .execute() when you want to run a command and don't need any row data back.
-/// UPDATE, DELETE, INSERT (without a RETURNING clause), or CREATE TABLE. It's fire-and-forget.
-///
-/// Use .fetch_one() when you are certain the query will return EXACTLY one row
-/// It will error if it gets zero or more than one row. Useful for fetching by a primary key.
-/// SELECT ... WHERE id = ? or INSERT ... RETURNING id. (Your logic requires a single, unique record to exist.)
-///
-/// Use .fetch_optional() when a record may or may not exist, the query could return one row or nothing.
-/// It will be Some(data) if a row is found, None if no rows are found, Error if more than one row.
-/// Use for checking if a user exists with SELECT ... WHERE email = ?.
 impl DatabaseService {
     pub async fn get_user_by_identifier(
         &self,
@@ -199,5 +188,73 @@ impl DatabaseService {
         .context("Failed to update user profile")?;
 
         Ok(())
+    }
+
+    pub async fn get_paginated_user(
+        &self,
+        page: u32,
+        page_size: u32,
+        search_query: Option<&str>,
+    ) -> AnyhowResult<PaginatedResult<UserWithRole>> {
+        let page = page.max(1);
+        let limit = page_size as i64;
+        let offset = (page as i64 - 1) * limit;
+        let formatted_search_query = search_query.map(|s| format!("%{}%", s));
+
+        #[derive(Debug, FromRow)]
+        struct QueryResult {
+            id: i32,
+            username: String,
+            email: String,
+            role_name: String,
+            total_items: Option<i64>,
+        }
+
+        let record_list = sqlx::query_as!(
+            QueryResult,
+            r#"
+            SELECT 
+                u.id,
+                u.username,
+                u.email,
+                r.role_name,
+                COUNT(*) OVER () as total_items
+            FROM
+                users u
+            JOIN 
+                roles r ON u.role_id = r.id
+            WHERE
+                ($3::TEXT IS NULL OR u.username ILIKE $3 OR u.email ILIKE $3)
+            ORDER BY
+                u.id
+            LIMIT $1
+            OFFSET $2
+            "#,
+            limit,
+            offset,
+            formatted_search_query
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to get user paginated")?;
+
+        let total_items = record_list
+            .first()
+            .map_or(0, |row| row.total_items.unwrap_or(0));
+
+        let user_list = record_list
+            .into_iter()
+            .map(|r| UserWithRole {
+                id: r.id,
+                username: r.username,
+                email: r.email,
+                role_name: r.role_name,
+            })
+            .collect();
+
+        Ok(PaginatedResult {
+            items: user_list,
+            total_items,
+        })
     }
 }
