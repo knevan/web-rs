@@ -1,24 +1,39 @@
 -- Add migration script here
 
+-- Custom ENUM type for processing_status
+CREATE TYPE series_status AS ENUM (
+    'Pending',
+    'Processing',
+    'Available',
+    'Ongoing',
+    'Completed',
+    'Hiatus',
+    'Discontinued',
+    'Error',
+    'Pending Deletion',
+    'Deleting',
+    'Deletion Failed'
+    );
+
 -- Table to store general manga, manhwa, manhua, webtoon, comic series information
 CREATE TABLE IF NOT EXISTS series
 (
     id                            SERIAL PRIMARY KEY,
-    title                         TEXT        NOT NULL,
-    original_title                TEXT        NOT NULL,
-    description                   TEXT        NOT NULL,
-    cover_image_url               TEXT        NOT NULL,
-    current_source_url            TEXT        NOT NULL,
-    source_website_host           TEXT        NOT NULL,
-    views_count                   INTEGER     NOT NULL DEFAULT 0,
-    bookmarks_count               INTEGER     NOT NULL DEFAULT 0,
-    last_chapter_found_in_storage REAL                 DEFAULT 0,
-    processing_status             TEXT        NOT NULL DEFAULT 'available',
-    check_interval_minutes        INTEGER     NOT NULL DEFAULT 60,
+    title                         TEXT          NOT NULL,
+    original_title                TEXT,
+    description                   TEXT          NOT NULL,
+    cover_image_url               TEXT          NOT NULL,
+    current_source_url            TEXT          NOT NULL,
+    source_website_host           TEXT          NOT NULL,
+    views_count                   INTEGER       NOT NULL DEFAULT 0,
+    bookmarks_count               INTEGER       NOT NULL DEFAULT 0,
+    last_chapter_found_in_storage REAL                   DEFAULT 0,
+    processing_status             series_status NOT NULL DEFAULT 'Pending',
+    check_interval_minutes        INTEGER       NOT NULL DEFAULT 60,
     last_checked_at               TIMESTAMPTZ,
     next_checked_at               TIMESTAMPTZ,
-    created_at                    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at                    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at                    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at                    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_series_title ON series (title);
@@ -28,13 +43,12 @@ CREATE INDEX IF NOT EXISTS idx_series_check ON series (next_checked_at, processi
 CREATE TABLE IF NOT EXISTS series_chapters
 (
     id             SERIAL PRIMARY KEY,
-    series_id      INTEGER     NOT NULL,
+    series_id      INTEGER     NOT NULL REFERENCES series (id) ON DELETE CASCADE,
     chapter_number REAL        NOT NULL,        -- Support chapter numbers like 1, 2, 2.5, 3, etc.
     title          TEXT,                        -- Chapter title (can be NULL)
     source_url     TEXT        NOT NULL UNIQUE, -- URL of the chapter source
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    FOREIGN KEY (series_id) REFERENCES series (id) ON DELETE CASCADE
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_chapters_series_id ON series_chapters (series_id);
@@ -44,11 +58,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_chapters_series_number ON series_chapters 
 CREATE TABLE IF NOT EXISTS chapter_images
 (
     id          SERIAL PRIMARY KEY,
-    chapter_id  INTEGER     NOT NULL, -- Foreign key to chapters.id table
-    image_order INTEGER     NOT NULL, -- Order of images in the chapter (e.g., 1, 2, 3, etc.)
-    image_url   TEXT        NOT NULL, -- URL of the image R2/CDN
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    FOREIGN KEY (chapter_id) REFERENCES series_chapters (id) ON DELETE CASCADE
+    chapter_id  INTEGER     NOT NULL REFERENCES series_chapters (id) ON DELETE CASCADE, -- Foreign key to chapters.id table
+    image_order INTEGER     NOT NULL,                                                   -- Order of images in the chapter (e.g., 1, 2, 3, etc.)
+    image_url   TEXT        NOT NULL,                                                   -- URL of the image R2/CDN
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_chapter_images_chapter_id ON chapter_images (chapter_id);
@@ -68,6 +81,8 @@ CREATE TABLE IF NOT EXISTS series_categories
     PRIMARY KEY (series_id, category_id) -- Prevents duplicate entries
 );
 
+CREATE INDEX IF NOT EXISTS idx_series_categories_category_id ON series_categories (category_id);
+
 -- Table to store Author/Artist information
 CREATE TABLE IF NOT EXISTS authors
 (
@@ -81,6 +96,8 @@ CREATE TABLE IF NOT EXISTS series_authors
     author_id INTEGER NOT NULL REFERENCES authors (id) ON DELETE CASCADE,
     PRIMARY KEY (series_id, author_id) -- Prevents duplicate entries
 );
+
+CREATE INDEX IF NOT EXISTS idx_series_authors_author_id ON series_authors (author_id);
 
 -- Table to store roles
 CREATE TABLE IF NOT EXISTS roles
@@ -120,21 +137,18 @@ CREATE TABLE IF NOT EXISTS users
 CREATE TABLE IF NOT EXISTS user_profiles
 (
     id           SERIAL PRIMARY KEY,
-    user_id      INTEGER NOT NULL,
-    display_name TEXT    NOT NULL,
-    avatar_url   TEXT,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    user_id      INTEGER NOT NULL UNIQUE REFERENCES users (id) ON DELETE CASCADE,
+    display_name TEXT,
+    avatar_url   TEXT
 );
 
 -- Table to store user bookmarks
 CREATE TABLE IF NOT EXISTS user_bookmarks
 (
     id            SERIAL PRIMARY KEY,
-    user_id       INTEGER NOT NULL,
-    series_id     INTEGER NOT NULL,
-    bookmarked_at TIMESTAMPTZ DEFAULT NOW(),
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-    FOREIGN KEY (series_id) REFERENCES series (id) ON DELETE CASCADE
+    user_id       INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    series_id     INTEGER NOT NULL REFERENCES series (id) ON DELETE CASCADE,
+    bookmarked_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_user_bookmarks_unique ON user_bookmarks (user_id, series_id);
@@ -149,7 +163,16 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Index for efficient token lookup
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token ON password_reset_tokens (token);
--- Index to quickly find token by user ID
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id ON password_reset_tokens (user_id);
+
+-- Table to log each view for a series
+CREATE TABLE IF NOT EXISTS series_view_log
+(
+    id        BIGSERIAL PRIMARY KEY,
+    series_id INTEGER     NOT NULL REFERENCES series (id) ON DELETE CASCADE,
+    viewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_series_view_log_series ON series_view_log (series_id);
+CREATE INDEX IF NOT EXISTS idx_series_view_log_timed ON series_view_log (viewed_at DESC);

@@ -33,6 +33,8 @@ impl StorageClient {
         let domain_cdn_url = env::var("R2_DOMAIN_CDN_URL")
             .context("Environment variable R2_PUBLIC_CDN_URL is not set")?;
 
+        let domain_cdn_url = domain_cdn_url.trim_end_matches('/').to_string();
+
         // Construct the S3 endpoint URL for Cloudflare R2
         let endpoint_url =
             format!("https://{account_id}.r2.cloudflarestorage.com");
@@ -195,15 +197,14 @@ impl StorageClient {
             .await
             .map_err(|e| anyhow!("Failed to upload file: {:?}", e))?;
 
-        let public_url = format!("{}/cover/{}", self.domain_cdn_url, file_name);
+        let public_url = format!("{}/{}", self.domain_cdn_url, file_name);
 
         Ok(public_url)
     }
 
     // Helper function to extract storage object key from CDN URL
     pub fn extract_object_key_from_url(&self, url: &str) -> Option<String> {
-        // Ensure base url does not have trailing slash
-        let base_url = self.domain_cdn_url.trim_end_matches('/');
+        let base_url = &self.domain_cdn_url;
 
         url.strip_prefix(base_url)
             // Remove base url(cdn url) and leading slash to get object key

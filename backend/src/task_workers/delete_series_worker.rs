@@ -1,13 +1,12 @@
 use crate::database::storage::StorageClient;
-use crate::database::{DatabaseService, Series};
+use crate::database::{DatabaseService, Series, SeriesStatus};
 use anyhow::Context;
+use backon::{BackoffBuilder, Retryable};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
-use tokio_retry2::Retry;
-use tokio_retry2::strategy::{FixedInterval, jitter};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DeletionJob {
     series: Series,
 }
@@ -75,37 +74,48 @@ pub async fn run_deletion_worker(
         );
 
         let series_id = job.series.id;
-        let retry_strategy =
-            FixedInterval::from_millis(1000).map(jitter).take(5);
+        let retry_strategy = backon::ConstantBuilder::default()
+            .with_delay(Duration::from_millis(1000))
+            .with_jitter()
+            .with_max_times(5)
+            .build();
 
         let db_clone = db_service.clone();
         let storage_clone = storage_client.clone();
 
-        let result = Retry::spawn(retry_strategy, move || {
+        let retry_operation = || {
             let db_attempt = db_clone.clone();
             let storage_attempt = storage_clone.clone();
-
             async move {
                 execute_full_deletion(series_id, &db_attempt, storage_attempt)
                     .await
-                    .map_err(|e| {
-                        eprintln!(
-                            "[WORKER] Attempt for series {} failed: {}. Retrying again.",
-                            series_id, e
-                        );
-                        tokio_retry2::RetryError::transient(e)
+                    .with_context(|| {
+                        format!("Attempt for series  {} failed", series_id)
                     })
             }
-        }).await;
+        };
+
+        let result = retry_operation
+            .retry(retry_strategy)
+            .notify(|e, dur| {
+                eprintln!(
+                    "[DELETION-WORKER] Retrying for series {} after {:?}. Error {:?}",
+                    series_id, dur, e
+                );
+            })
+            .await;
 
         if let Err(e) = result {
             eprintln!(
-                "[DELETION_WORKER] Job for series {} failed after all retry attempts: {}. Moving to 'deletion_failed'",
+                "[DELETION-WORKER] Job for series {} failed after all retry attempts: {}. Moving to 'deletion_failed'",
                 series_id, e
             );
 
             if let Err(e_update) = db_service
-                .update_series_processing_status(series_id, "deletion_failed")
+                .update_series_processing_status(
+                    series_id,
+                    SeriesStatus::DeletionFailed,
+                )
                 .await
             {
                 eprintln!(
