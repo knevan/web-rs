@@ -11,17 +11,6 @@ use super::*;
 /// Macros `sqlx::query_scalar!`
 /// For queries returning a single value (one row, one column).
 /// Highly efficient for this purpose.
-///
-/// Use .execute() when you want to run a command and don't need any row data back.
-/// UPDATE, DELETE, INSERT (without a RETURNING clause), or CREATE TABLE. It's fire-and-forget.
-///
-/// Use .fetch_one() when you are certain the query will return EXACTLY one row
-/// It will error if it gets zero or more than one row. Useful for fetching by a primary key.
-/// SELECT ... WHERE id = ? or INSERT ... RETURNING id. (Your logic requires a single, unique record to exist.)
-///
-/// Use .fetch_optional() when a record may or may not exist, the query could return one row or nothing.
-/// It will be Some(data) if a row is found, None if no rows are found, Error if more than one row.
-/// Use for checking if a user exists with SELECT ... WHERE email = ?.
 impl DatabaseService {
     /// Adds a new chapter to the database and returns its new ID.
     /// This function assumes the chapter does not already exist (checked by source_url uniqueness).
