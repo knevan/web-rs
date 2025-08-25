@@ -1,5 +1,5 @@
 <script lang="ts">
-    import {auth} from "$lib/store/auth";
+    import {apiFetch, auth} from "$lib/store/auth";
     import {page} from "$app/state";
     import {goto} from "$app/navigation";
     import {toast} from "svelte-sonner";
@@ -40,7 +40,7 @@
             isLoading = true;
             error = null;
             try {
-                const response = await fetch('/api/user/profile');
+                const response = await apiFetch('/api/user/profile');
                 if (!response.ok) {
                     throw new Error(`Failed to fetch user profile: ${response.statusText}`);
                 }
@@ -51,7 +51,12 @@
             } catch (err) {
                 const errorMessage = err instanceof Error ? err.message : 'Unknown user profile error';
                 error = errorMessage;
-                toast.error(errorMessage);
+                toast.error(errorMessage, {
+                    position: "top-center",
+                    richColors: true,
+                    closeButton: false,
+                    duration: 2000,
+                });
             } finally {
                 isLoading = false;
             }
@@ -80,15 +85,21 @@
 
     async function handleAvatarUpdate() {
         if (!avatarFile) {
-            toast.warning('Please select an image first.');
+            toast.warning('Please select an image first.', {
+                position: "top-center",
+                richColors: true,
+                closeButton: false,
+                duration: 2000,
+            });
             return;
         }
 
         isAvatarLoading = true;
-        const formData = new FormData();
-        formData.append('avatar', avatarFile);
 
-        try {
+        const avatarPromise = async () => {
+            const formData = new FormData();
+            formData.append('avatar', avatarFile!);
+
             const response = await fetch('/api/user/avatar', {
                 method: 'POST',
                 body: formData
@@ -101,17 +112,24 @@
             const result = await response.json();
             userProfile.avatarUrl = result.url;
             avatarFile = null;
-            toast.success('Avatar updated successfully');
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'An unknown error occurred');
-        } finally {
-            isAvatarLoading = false;
-        }
+        };
+        toast.promise(avatarPromise(), {
+            position: "top-center",
+            richColors: true,
+            closeButton: false,
+            duration: 2000,
+            loading: 'Uploading avatar...',
+            success: 'Avatar updated successfully.',
+            error: (err) => err instanceof Error ? err.message : 'Update avatar profile failed!',
+            finally: () => {
+                isAvatarLoading = false;
+            }
+        })
     }
 
     async function handleProfileUpdate() {
         isProfileLoading = true;
-        try {
+        const profilePromise = async () => {
             const response = await fetch('/api/user/profile', {
                 method: 'PATCH',
                 headers: {
@@ -126,12 +144,20 @@
                 const errorData = await response.json();
                 throw new Error(errorData.message || 'Failed to update profile.');
             }
-            toast.success('Profile updated successfully');
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Could not update profile.');
-        } finally {
-            isProfileLoading = false;
-        }
+        };
+
+        toast.promise(profilePromise(), {
+            position: "top-center",
+            richColors: true,
+            closeButton: false,
+            duration: 2000,
+            loading: 'Updating profile...',
+            success: 'Profile updated successfully!',
+            error: (err) => err instanceof Error ? err.message : 'Could not update profile.',
+            finally: () => {
+                isProfileLoading = false;
+            }
+        });
     }
 
     async function handlePasswordUpdate() {
@@ -144,7 +170,9 @@
             return;
         }
 
-        try {
+        isPasswordLoading = true;
+
+        const passwordPromise = async () => {
             const response = await fetch('/api/user/password', {
                 method: 'PATCH',
                 headers: {
@@ -158,15 +186,22 @@
                 const errorData = await response.json();
                 throw new Error(errorData.message || 'Failed to update password.');
             }
-            toast.success('Password changed successfully!');
-            // Clear password fields after success.
-            passwordData.newPassword = '';
-            passwordData.newPasswordConfirm = '';
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Could not change password.');
-        } finally {
-            isPasswordLoading = false;
-        }
+        };
+        toast.promise(passwordPromise(), {
+            position: "top-center",
+            richColors: true,
+            closeButton: false,
+            duration: 2000,
+            success: () => {
+                passwordData.newPassword = '';
+                passwordData.newPasswordConfirm = '';
+                return 'Password updated successfully!';
+            },
+            error: (err) => err instanceof Error ? err.message : 'Could not change password.',
+            finally: () => {
+                isPasswordLoading = false;
+            }
+        });
     }
 </script>
 
