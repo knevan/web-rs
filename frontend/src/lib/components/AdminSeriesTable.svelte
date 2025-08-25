@@ -1,7 +1,7 @@
 <script lang="ts">
     import EditSeries from "$lib/components/EditSeries.svelte";
     import {Button} from "$lib/components/ui/button";
-    // import {apiFetch} from "$lib/store/api"; // No longer needed for mocking
+    import {apiFetch} from "$lib/store/auth";
     import Pagination from "$lib/components/Pagination.svelte";
     import {FilePen, Wrench, Trash2} from "@lucide/svelte";
     import RepairChapterSeries from "$lib/components/RepairChapterSeries.svelte";
@@ -49,7 +49,7 @@
                 url.searchParams.append('search', query);
             }
 
-            const response = await fetch(url.href);
+            const response = await apiFetch(url.href);
             // Fetch logic here
             if (!response.ok) {
                 const errorData = await response.json();
@@ -73,7 +73,7 @@
         deleteSeries = null;
 
         const deleteRequest = async () => {
-            const response = await fetch(`/api/admin/series/delete/${seriesToDelete.id}`, {
+            const response = await apiFetch(`/api/admin/series/delete/${seriesToDelete.id}`, {
                 method: "DELETE",
             });
             if (!response.ok) {
@@ -88,6 +88,7 @@
         toast.promise(deleteRequest(), {
             position: "top-center",
             richColors: true,
+            closeButton: false,
             duration: 2000,
             loading: `Scheduling "${seriesToDelete.title}" for deletion...`,
             success: (title) => {
