@@ -199,62 +199,134 @@ impl DatabaseService {
         let page = page.max(1);
         let limit = page_size as i64;
         let offset = (page as i64 - 1) * limit;
-        let formatted_search_query = search_query.map(|s| format!("%{}%", s));
 
-        #[derive(Debug, FromRow)]
-        struct QueryResult {
-            id: i32,
-            username: String,
-            email: String,
-            role_name: String,
-            total_items: Option<i64>,
+        match search_query.filter(|q| !q.trim().is_empty()) {
+            Some(search_match) => {
+                let search_match = search_match.trim();
+
+                let fts_query = search_match
+                    .split_whitespace()
+                    .filter(|word| !word.is_empty())
+                    .map(|word| format!("{}:*", word))
+                    .collect::<Vec<String>>()
+                    .join(" & ");
+
+                let records = sqlx::query!(
+                    r#"
+                    WITH search_results AS (
+                        SELECT
+                            u.id,
+                            u.username,
+                            u.email,
+                            r.role_name,
+                            u.user_tsv
+                        FROM users u
+                        JOIN roles r ON u.role_id = r.id
+                        WHERE
+                            -- ILIKE for substring matches
+                            u.username ILIKE '%' || $3 || '%'
+                            OR u.email ILIKE '%' || $3 || '%'
+                            -- FTS for whole-word/prefix matches
+                            OR u.user_tsv @@ to_tsquery('simple', $4)
+                            -- fuzzy match filtering
+                            OR (u.username || ' ' || u.email) % $3
+                    ),
+                    ranked_results AS (
+                        SELECT
+                            *,
+                            CASE
+                                WHEN username ILIKE '%' || $3 || '%' OR email ILIKE '%' || $3 || '%' THEN 10
+                                WHEN user_tsv @@ to_tsquery('simple', $4) THEN 8
+                                ELSE 6
+                            END as search_rank,
+                            -- Calculate similarity score for ranking
+                            similarity(username || ' ' || email, $3) as sim_score
+                        FROM search_results
+                     ),
+                    total_count AS (
+                        SELECT COUNT(*) AS total FROM ranked_results WHERE search_rank > 0
+                    )
+                    SELECT
+                        rr.id,
+                        rr.username,
+                        rr.email,
+                        rr.role_name,
+                        tc.total as total_items
+                    FROM ranked_results rr
+                    CROSS JOIN total_count tc
+                    WHERE rr.search_rank > 0
+                    ORDER BY rr.search_rank DESC, rr.sim_score DESC, rr.id ASC
+                    LIMIT $1 OFFSET $2
+                    "#,
+                    limit,
+                    offset,
+                    search_match,
+                    fts_query
+                )
+                    .fetch_all(&self.pool)
+                    .await
+                    .context("Failed to update user profile")?;
+
+                let total_items = records
+                    .first()
+                    .map_or(0, |row| row.total_items.unwrap_or(0));
+
+                let user_list = records
+                    .into_iter()
+                    .map(|row| UserWithRole {
+                        id: row.id,
+                        username: row.username,
+                        email: row.email,
+                        role_name: row.role_name,
+                    })
+                    .collect();
+
+                Ok(PaginatedResult {
+                    items: user_list,
+                    total_items,
+                })
+            }
+            None => {
+                // No search - simple pagination
+                let records = sqlx::query!(
+                    r#"
+                SELECT
+                    u.id,
+                    u.username,
+                    u.email,
+                    r.role_name,
+                    COUNT(*) OVER() as total_items
+                FROM users u
+                JOIN roles r ON u.role_id = r.id
+                ORDER BY u.id ASC
+                LIMIT $1 OFFSET $2
+                "#,
+                    limit,
+                    offset
+                )
+                .fetch_all(&self.pool)
+                .await
+                .context("Failed to get paginated users")?;
+
+                let total_items = records
+                    .first()
+                    .map_or(0, |row| row.total_items.unwrap_or(0));
+
+                let user_list = records
+                    .into_iter()
+                    .map(|row| UserWithRole {
+                        id: row.id,
+                        username: row.username,
+                        email: row.email,
+                        role_name: row.role_name,
+                    })
+                    .collect();
+
+                Ok(PaginatedResult {
+                    items: user_list,
+                    total_items,
+                })
+            }
         }
-
-        let record_list = sqlx::query_as!(
-            QueryResult,
-            r#"
-            SELECT 
-                u.id,
-                u.username,
-                u.email,
-                r.role_name,
-                COUNT(*) OVER () as total_items
-            FROM
-                users u
-            JOIN 
-                roles r ON u.role_id = r.id
-            WHERE
-                ($3::TEXT IS NULL OR u.username ILIKE $3 OR u.email ILIKE $3)
-            ORDER BY
-                u.id
-            LIMIT $1
-            OFFSET $2
-            "#,
-            limit,
-            offset,
-            formatted_search_query
-        )
-        .fetch_all(&self.pool)
-        .await
-        .context("Failed to get user paginated")?;
-
-        let total_items = record_list
-            .first()
-            .map_or(0, |row| row.total_items.unwrap_or(0));
-
-        let user_list = record_list
-            .into_iter()
-            .map(|r| UserWithRole {
-                id: r.id,
-                username: r.username,
-                email: r.email,
-                role_name: r.role_name,
-            })
-            .collect();
-
-        Ok(PaginatedResult {
-            items: user_list,
-            total_items,
-        })
     }
 }

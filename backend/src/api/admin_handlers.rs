@@ -342,10 +342,10 @@ pub async fn get_all_users_handler(
             (StatusCode::OK, Json(response_user_data)).into_response()
         }
         Err(e) => {
-            error!("Failed to get paginated: {}", e);
+            error!("Failed to get paginated users: {:#?}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"status": "error", "message": "Could retrieve users."})),
+                Json(serde_json::json!({"status": "error", "message": "Could not retrieve users"})),
             )
                 .into_response()
         }
