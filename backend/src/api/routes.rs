@@ -6,7 +6,7 @@ use crate::api::handlers::{
     add_bookmark_series_handler, delete_bookmark_series_handler,
     fetch_chapter_details_handler, fetch_most_viewed_series_handler,
     fetch_new_series_handler, fetch_series_details_by_id_handler,
-    fetch_updated_series_handler, forgot_password_handler,
+    fetch_updated_series_chapter_handler, forgot_password_handler,
     get_bookmark_status_current_user_handler,
     get_user_bookmark_library_handler, get_user_profile_handler, login_handler,
     logout_handler, protected_handler, realtime_check_username_handler,
@@ -18,7 +18,7 @@ use crate::api::handlers::{
 use crate::builder::startup::AppState;
 
 pub fn routes() -> Router<AppState> {
-    // Route for public api
+    // Route for user auth api
     let auth_api_routes = Router::new()
         .route("/login", post(login_handler))
         .route("/register", post(register_new_user_handler))
@@ -29,11 +29,14 @@ pub fn routes() -> Router<AppState> {
         .route("/forgot-password", post(forgot_password_handler))
         .route("/reset-password", post(reset_password_handler));
 
-    // Route for most view updates
+    // Route for public api
     let public_series_api_routes = Router::new()
         .route("/series/most-viewed", get(fetch_most_viewed_series_handler))
         .route("/series/new-series", get(fetch_new_series_handler))
-        .route("/series/updated-series", get(fetch_updated_series_handler))
+        .route(
+            "/series/latest-updated-series",
+            get(fetch_updated_series_chapter_handler),
+        )
         .route(
             "/series/details/{id}",
             get(fetch_series_details_by_id_handler),

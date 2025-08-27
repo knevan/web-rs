@@ -179,7 +179,7 @@ impl SeriesDeletionImagekeys {
 }
 
 // Pagination parameters for fetching series list.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PaginatedResult<T> {
     pub items: Vec<T>,
     pub total_items: i64,
@@ -209,6 +209,16 @@ pub enum SeriesOrderBy {
 
 #[derive(Debug, FromRow, Serialize)]
 pub struct BookmarkedSeries {
+    pub id: i32,
+    pub title: String,
+    pub cover_image_url: String,
+    pub last_chapter_found_in_storage: Option<f32>,
+    pub updated_at: DateTime<Utc>,
+    pub chapter_title: Option<String>,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct LatestReleaseSeries {
     pub id: i32,
     pub title: String,
     pub cover_image_url: String,

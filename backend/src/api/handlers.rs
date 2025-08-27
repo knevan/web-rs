@@ -609,21 +609,45 @@ pub async fn fetch_new_series_handler(
     }
 }
 
-pub async fn fetch_updated_series_handler(
+#[derive(Deserialize)]
+pub struct PaginationParams {
+    #[serde(default = "default_page")]
+    page: u32,
+    #[serde(default = "default_pagesize")]
+    page_size: u32,
+    #[serde(default)]
+    search: Option<String>,
+}
+
+fn default_page() -> u32 {
+    1
+}
+fn default_pagesize() -> u32 {
+    50
+}
+
+pub async fn fetch_updated_series_chapter_handler(
     State(state): State<AppState>,
+    Query(params): Query<PaginationParams>,
 ) -> Response {
     match state
         .db_service
-        .get_public_series_paginated(1, 20, SeriesOrderBy::UpdatedAt)
+        .get_latest_release_series_chapter_paginated(
+            params.page,
+            params.page_size,
+        )
         .await
     {
-        Ok(series) => (StatusCode::OK, Json(series)).into_response(),
+        Ok(paginated_result) => {
+            (StatusCode::OK, Json(paginated_result)).into_response()
+        }
         Err(e) => {
-            eprintln!("Error fetching updated series: {}", e);
+            error!("Error fetching updated series: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"status": "error", "message": "Could not retrieve updated series."})),
-            ).into_response()
+            )
+                .into_response()
         }
     }
 }

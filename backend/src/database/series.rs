@@ -305,7 +305,7 @@ impl DatabaseService {
         let offset = (page as i64 - 1) * limit;
 
         // Format search query, wraps the query in '%' to allow match substrings
-        let formatted_search_query = search_query.map(|s| format!("%{}%", s));
+        // let formatted_search_query = search_query.map(|s| format!("%{}%", s));
 
         #[derive(Debug, FromRow)]
         struct QueryResult {
@@ -334,14 +334,10 @@ impl DatabaseService {
                 sr.current_source_url,
                 sr.updated_at,
                 sr.processing_status as "processing_status: SeriesStatus",
-                -- Use a LEFT JOIN to include all authors, even if they are not linked to the series.
-                -- Aggregate author names into a JSON array. If no authors, return an empty array.
-                -- The '!' asserts the value is not null, matching COALESCE
                 COALESCE(
                     json_agg(a.name) FILTER (WHERE a.id IS NOT NULL),
                     '[]'::json
                 ) as "authors!",
-                -- Use a window function to get the total count of series without a separate query.
                 COUNT(*) OVER () as total_items
             FROM
                 series sr
@@ -350,8 +346,7 @@ impl DatabaseService {
             LEFT JOIN
                 authors a ON sa.author_id = a.id
             WHERE
-                -- Filter by search query if provided
-                ($3::TEXT IS NULL OR sr.title ILIKE $3)
+                ($3::TEXT IS NULL OR sr.title_tsv @@ plainto_tsquery('english', $3))
             GROUP BY
                 sr.id
             ORDER BY
@@ -361,7 +356,7 @@ impl DatabaseService {
             "#,
             limit,
             offset,
-            formatted_search_query
+            search_query
         )
             .fetch_all(&self.pool)
             .await
@@ -448,6 +443,78 @@ impl DatabaseService {
             .context("Failed to query public series")?;
 
         Ok(series_list)
+    }
+
+    // Paginated fetching of latest release series
+    pub async fn get_latest_release_series_chapter_paginated(
+        &self,
+        page: u32,
+        page_size: u32,
+    ) -> AnyhowResult<PaginatedResult<LatestReleaseSeries>> {
+        let limit = page_size.min(100) as i64;
+        let offset = (page.max(1) as i64 - 1) * limit;
+
+        #[derive(Debug, FromRow)]
+        struct QueryResult {
+            id: i32,
+            title: String,
+            cover_image_url: String,
+            last_chapter_found_in_storage: Option<f32>,
+            updated_at: DateTime<Utc>,
+            chapter_title: Option<String>,
+            total_items: Option<i64>,
+        }
+
+        let records = sqlx::query_as!(
+            QueryResult,
+            r#"
+            SELECT
+                s.id,
+                s.title,
+                s.cover_image_url,
+                s.updated_at,
+                s.last_chapter_found_in_storage,
+                sc.title as chapter_title,
+                COUNT(*) OVER () as total_items
+            FROM
+                series s
+            LEFT JOIN
+                series_chapters sc ON s.id = sc.series_id
+                AND s.last_chapter_found_in_storage = sc.chapter_number
+            WHERE
+                s.updated_at >= NOW() - interval '7 days'
+            ORDER BY
+                s.updated_at DESC
+            LIMIT $1
+            OFFSET $2
+            "#,
+            limit,
+            offset
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to query latest release series")?;
+
+        let total_items = records
+            .first()
+            .map_or(0, |row| row.total_items.unwrap_or(0));
+
+        let series_list = records
+            .into_iter()
+            .map(|r| LatestReleaseSeries {
+                id: r.id,
+                title: r.title,
+                cover_image_url: r.cover_image_url,
+                last_chapter_found_in_storage: r.last_chapter_found_in_storage,
+                updated_at: r.updated_at,
+                chapter_title: r.chapter_title,
+            })
+            .collect();
+
+        Ok(PaginatedResult {
+            items: series_list,
+            total_items,
+        })
     }
 
     /// Updates only the processing status of a series.
