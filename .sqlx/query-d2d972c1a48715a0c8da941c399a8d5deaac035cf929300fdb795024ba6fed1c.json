@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            WITH candidate AS (\n                SELECT id FROM series\n                WHERE processing_status = $1\n                LIMIT 1\n                FOR UPDATE SKIP LOCKED\n            )\n            UPDATE series\n            SET processing_status = $2\n            WHERE id = (SELECT id FROM candidate)\n            RETURNING\n                id, title, original_title, description, cover_image_url, current_source_url,\n                source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage,\n                processing_status as \"processing_status: SeriesStatus\", check_interval_minutes, last_checked_at,\n                next_checked_at, created_at, updated_at\n            ",
+  "query": "\n            WITH candidate AS (\n                SELECT id FROM series\n                WHERE\n                    processing_status = $1\n                    AND next_checked_at <= NOW()\n                ORDER BY next_checked_at ASC\n                LIMIT 1\n                FOR UPDATE SKIP LOCKED\n            )\n            UPDATE series\n            SET processing_status = $2\n            WHERE id = (SELECT id FROM candidate)\n            RETURNING\n                id, title, original_title, description, cover_image_url, current_source_url,\n                source_website_host, views_count, bookmarks_count, total_rating_score, total_ratings_count, last_chapter_found_in_storage,\n                processing_status as \"processing_status: SeriesStatus\", check_interval_minutes, last_checked_at,\n                next_checked_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -50,11 +50,21 @@
       },
       {
         "ordinal": 9,
+        "name": "total_rating_score",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "total_ratings_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
         "name": "last_chapter_found_in_storage",
         "type_info": "Float4"
       },
       {
-        "ordinal": 10,
+        "ordinal": 12,
         "name": "processing_status: SeriesStatus",
         "type_info": {
           "Custom": {
@@ -78,27 +88,27 @@
         }
       },
       {
-        "ordinal": 11,
+        "ordinal": 13,
         "name": "check_interval_minutes",
         "type_info": "Int4"
       },
       {
-        "ordinal": 12,
+        "ordinal": 14,
         "name": "last_checked_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 13,
+        "ordinal": 15,
         "name": "next_checked_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 14,
+        "ordinal": 16,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 15,
+        "ordinal": 17,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -157,6 +167,8 @@
       false,
       false,
       false,
+      false,
+      false,
       true,
       false,
       false,
@@ -166,5 +178,5 @@
       false
     ]
   },
-  "hash": "99ec2568ba0b1b7761f4d12a4223f491b9a3165c1eeed2abc01f3fe7487d2936"
+  "hash": "d2d972c1a48715a0c8da941c399a8d5deaac035cf929300fdb795024ba6fed1c"
 }

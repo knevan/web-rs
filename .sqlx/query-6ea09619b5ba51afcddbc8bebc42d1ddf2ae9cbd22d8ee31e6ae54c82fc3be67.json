@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT \n                u.id,\n                u.username,\n                u.email,\n                r.role_name,\n                COUNT(*) OVER () as total_items\n            FROM\n                users u\n            JOIN \n                roles r ON u.role_id = r.id\n            WHERE\n                ($3::TEXT IS NULL OR u.username ILIKE $3 OR u.email ILIKE $3)\n            ORDER BY\n                u.id\n            LIMIT $1\n            OFFSET $2\n            ",
+  "query": "\n                SELECT\n                    u.id,\n                    u.username,\n                    u.email,\n                    r.role_name,\n                    COUNT(*) OVER() as total_items\n                FROM users u\n                JOIN roles r ON u.role_id = r.id\n                ORDER BY u.id ASC\n                LIMIT $1 OFFSET $2\n                ",
   "describe": {
     "columns": [
       {
@@ -32,8 +32,7 @@
     "parameters": {
       "Left": [
         "Int8",
-        "Int8",
-        "Text"
+        "Int8"
       ]
     },
     "nullable": [
@@ -44,5 +43,5 @@
       null
     ]
   },
-  "hash": "dad1999543ecd6e65fd6a0b80fc8672ced7d98037751c2c95d0ce4857efd7222"
+  "hash": "6ea09619b5ba51afcddbc8bebc42d1ddf2ae9cbd22d8ee31e6ae54c82fc3be67"
 }

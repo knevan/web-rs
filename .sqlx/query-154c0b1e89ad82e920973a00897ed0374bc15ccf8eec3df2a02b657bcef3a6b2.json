@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                sr.id,\n                sr.title,\n                sr.original_title,\n                sr.description,\n                sr.cover_image_url,\n                sr.current_source_url,\n                sr.updated_at,\n                sr.processing_status as \"processing_status: SeriesStatus\",\n                -- Use a LEFT JOIN to include all authors, even if they are not linked to the series.\n                -- Aggregate author names into a JSON array. If no authors, return an empty array.\n                -- The '!' asserts the value is not null, matching COALESCE\n                COALESCE(\n                    json_agg(a.name) FILTER (WHERE a.id IS NOT NULL),\n                    '[]'::json\n                ) as \"authors!\",\n                -- Use a window function to get the total count of series without a separate query.\n                COUNT(*) OVER () as total_items\n            FROM\n                series sr\n            LEFT JOIN\n                series_authors sa ON sr.id = sa.series_id\n            LEFT JOIN\n                authors a ON sa.author_id = a.id\n            WHERE\n                -- Filter by search query if provided\n                ($3::TEXT IS NULL OR sr.title ILIKE $3)\n            GROUP BY\n                sr.id\n            ORDER BY\n                sr.updated_at DESC\n            LIMIT $1\n            OFFSET $2\n            ",
+  "query": "\n            SELECT\n                sr.id,\n                sr.title,\n                sr.original_title,\n                sr.description,\n                sr.cover_image_url,\n                sr.current_source_url,\n                sr.updated_at,\n                sr.processing_status as \"processing_status: SeriesStatus\",\n                COALESCE(\n                    json_agg(a.name) FILTER (WHERE a.id IS NOT NULL),\n                    '[]'::json\n                ) as \"authors!\",\n                COUNT(*) OVER () as total_items\n            FROM\n                series sr\n            LEFT JOIN\n                series_authors sa ON sr.id = sa.series_id\n            LEFT JOIN\n                authors a ON sa.author_id = a.id\n            WHERE\n                ($3::TEXT IS NULL OR sr.title_tsv @@ plainto_tsquery('english', $3))\n            GROUP BY\n                sr.id\n            ORDER BY\n                sr.updated_at DESC\n            LIMIT $1\n            OFFSET $2\n            ",
   "describe": {
     "columns": [
       {
@@ -93,5 +93,5 @@
       null
     ]
   },
-  "hash": "ac855703a971a7b3829c63013aeac4d2cde13acfb339c628358e86ee62e87e11"
+  "hash": "154c0b1e89ad82e920973a00897ed0374bc15ccf8eec3df2a02b657bcef3a6b2"
 }

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO series_ratings (series_id, user_id, rating) VALUES ($1, $2, $3)\n                ON CONFLICT (user_id, series_id) DO UPDATE SET rating = $3, updated_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Int2"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c07704f7b459b9bacce8fabba895c6310650c485e6770f7ab9749330064825de"
+}
