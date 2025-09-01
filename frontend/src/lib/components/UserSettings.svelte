@@ -205,11 +205,13 @@
     }
 </script>
 
-<div class="max-w-3xl mx-auto p-4 md:p-6 text-gray-200">
+<div class="max-w-3xl lg:max-7-xl mx-auto p-4 md:p-6 text-gray-200">
     <div class="mb-8">
-        <h1 class="text-3xl font-bold text-center text-gray-800 dark:text-gray-200">Change Profile Settings</h1>
-        <p class="text-gray-800 dark:text-gray-200 mt-4 text-center text-lg">
-            Hello, <span class="font-semibold text-lg">{$auth.user?.identifier ?? 'User'}</span>.
+        <h1 class="text-2xl md:text-3xl font-bold text-center text-gray-800 dark:text-gray-200">
+            Change Profile Settings
+        </h1>
+        <p class="text-gray-800 dark:text-gray-200 mt-4 text-center text-xl">
+            Hello, <span class="font-bold text-xl">{$auth.user?.identifier ?? 'User'}</span>.
         </p>
     </div>
 
@@ -227,8 +229,8 @@
             <section>
                 <h2 class="text-xl font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2 mb-4">
                     Change Avatar</h2>
-                <p class="text-base mb-4 text-gray-800 dark:text-gray-200">
-                    Use the form below to change your avatar. Using inappropriate images may result in an account ban.
+                <p class="text-sm mb-4 text-gray-800 dark:text-gray-200">
+                    Use the form below to change your avatar.
                 </p>
                 <div class="flex flex-col gap-3">
 

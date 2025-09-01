@@ -2,9 +2,11 @@
     import slugify from "slugify";
     import {page} from "$app/state";
     import {goto} from "$app/navigation";
+    import {apiFetch} from "$lib/store/auth";
+    import {Timer} from "@lucide/svelte";
 
     interface LatestChapterInfo {
-        chapter_number: number;
+        chapterNumber: number;
         title: string;
     }
 
@@ -25,7 +27,7 @@
             isLoading = true;
             error = null;
             try {
-                const response = await fetch(`/api/user/bookmark`);
+                const response = await apiFetch(`/api/user/bookmark`);
 
                 if (!response.ok) {
                     if (response.status === 401) {
@@ -84,7 +86,7 @@
         }
         if (result.length === 0) return "Just Now";
 
-        return result.join(', ');
+        return result.join(", ");
     }
 
     function createSlugTitle(title: string): string {
@@ -92,7 +94,15 @@
     }
 </script>
 
-<div class="w-full">
+<div class="max-w-4xl mx-auto">
+    <div class="mb-8 border-b p-6">
+        <h1 class="text-xl md:text-3xl font-bold text-center text-gray-800 dark:text-gray-200">
+            Your Bookmarked Manga Library
+        </h1>
+        <p class="text-lg md:text-3xl text-center text-gray-800 dark:text-gray-200">
+            The list of Series you bookmarked.
+        </p>
+    </div>
     {#if isLoading}
         <div class="grid grid-cols-3 md:grid-cols-4 gap-4 md:gap-5">
             {#each Array(10) as _}
@@ -120,39 +130,49 @@
             </button>
         </div>
     {:else}
-        <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-5">
+        <ul class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-5">
             {#each bookmarks as bookmark (bookmark.id)}
-                <a
-                        href="/manga/{bookmark.id}/{createSlugTitle(bookmark.title)}"
-                        class="group relative overflow-hidden rounded-md shadow-lg block transition-transform duration-300 ease-in-out hover:-translate-y-1"
-                >
-                    <div class="aspect-[2/3] bg-blue-600 rounded-md">
-                        <img
-                                src={bookmark.coverImageUrl}
-                                alt="Cover"
-                                class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                loading="lazy"
-                        />
-                        <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
-                    </div>
-
-                    <div class="absolute bottom-0 left-0 right-0 p-3 text-white">
-                        <h3 class="font-semibold truncate text-base" title="{bookmark.title}">
+                <li>
+                    <a
+                            href="/manga/{bookmark.id}/{createSlugTitle(bookmark.title)}"
+                            class="group block transition-transform duration-300 ease-in-out hover:-translate-y-1"
+                    >
+                        <figure class="aspect-[2/3] bg-gray-800 rounded-md shadow-lg overflow-hidden">
+                            <img
+                                    src={bookmark.coverImageUrl}
+                                    alt="Cover for {bookmark.title}"
+                                    class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                    loading="lazy"
+                            />
+                        </figure>
+                        <h4 class="font-semibold text-lg truncate text-gray-800 dark:text-gray-100"
+                            title="{bookmark.title}">
                             {bookmark.title}
-                        </h3>
-                        <div class="flex items-center justify-between text-sm text-gray-400 mt-1">
-                            <span class="truncate">
+                        </h4>
+                    </a>
+                    <div class="text-gray-600 dark:text-gray-400 space-y-1 mt-2">
+                        <span class="text-lg ml-1 block mb-1 text-wrap">
+                            <Timer class="inline-block mr-2 mt-4"/>
+                            {formatRelativeTime(bookmark.updatedAt)}
+                        </span>
+                        <div>
+                            <span class="block text-lg border-b pb-0.5 mb-1">Latest Chapter</span>
+                            <span class="truncate text-lg">
                                 {#if bookmark.latestChapter}
-                                    {bookmark.latestChapter.title ?? `Chapter ${bookmark.latestChapter.chapter_number}`}
-                                    {:else }
-                                    No Chapter
-                                    {/if}
+                                    <a href="/manga/{bookmark.id}/{createSlugTitle(bookmark.title)}/read-chapter/{bookmark.latestChapter.chapterNumber}"
+                                       class="truncate text-lg block"
+                                    >
+                                        Chapter {bookmark.latestChapter.title ?? `Chapter ${bookmark.latestChapter.chapterNumber}`}
+                                    </a>
+                                {:else }
+                                    <span class="truncate text-lg">No Chapter</span>
+                                {/if}
                             </span>
-                            <span class="">{formatRelativeTime(bookmark.updatedAt)}</span>
                         </div>
                     </div>
-                </a>
+
+                </li>
             {/each}
-        </div>
+        </ul>
     {/if}
 </div>
