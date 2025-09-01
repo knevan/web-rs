@@ -96,7 +96,7 @@
 <svelte:window onkeydown={handleKeydown}/>
 
 <header class="top-0 z-20 backdrop-blur-md border border-gray-700 shadow-lg mt-2">
-    <div class="max-w-7xl mx-auto px-4 pt-2">
+    <div class="max-w-7xl mx-auto md:px-4 pt-2">
         <div class="flex flex-col gap-1 pb-1">
             <div class="flex items-center gap-4">
                 <div class="pl-4">
@@ -106,7 +106,7 @@
             </div>
 
             {#if chapterView}
-                <div class="flex justify-between items-center gap-2 pt-3 px-[100px]">
+                <div class="flex justify-between items-center gap-2 pt-3 px-4 md:px-[100px]">
                     <Button size="lg"
                             onclick={() => navigateToChapter(chapterView?.prevChapterNumber)}
                             disabled={!chapterView.prevChapterNumber}
@@ -165,7 +165,7 @@
             </button>
         </div>
     {:else if chapterView}
-        <div class="flex flex-col items-center max-w-[820px]">
+        <div class="flex flex-col items-center w-full max-w-[820px] mx-auto">
             {#each chapterView.pages as pageUrl, i (pageUrl)}
                 <img src={pageUrl}
                      alt="Manga Page {i + 1} for Chapter {chapterView.chapterNumber}"
@@ -174,7 +174,7 @@
             {/each}
         </div>
 
-        <div class="flex justify-between items-center my-4 px-[100px]">
+        <div class="flex justify-between items-center my-4 px-4 md:px-[100px]">
             <Button size="lg"
                     onclick={() => navigateToChapter(chapterView?.prevChapterNumber)}
                     disabled={!chapterView.prevChapterNumber}
