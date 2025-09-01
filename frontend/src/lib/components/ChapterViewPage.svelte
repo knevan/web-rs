@@ -3,6 +3,7 @@
     import {ChevronRight, ChevronLeft} from "@lucide/svelte";
     import {Button} from "$lib/components/ui/button";
     import * as Select from '$lib/components/ui/select/index.js';
+    import CommentSystem from "$lib/components/comments/CommentSystem.svelte";
 
     interface ChapterViewData {
         seriesTitle: string;
@@ -140,7 +141,6 @@
                     </Button>
                 </div>
             {/if}
-
             <div class="w-24 hidden sm:block">
             </div>
         </div>
@@ -204,6 +204,12 @@
                 NEXT
                 <ChevronRight/>
             </Button>
+        </div>
+        <div class="max-w-[820px] mx-auto mt-4 px-4 md:px-0">
+            <h2 class="text-2xl font-bold mb-1 ml-1">
+                Comments
+            </h2>
+            <CommentSystem/>
         </div>
     {/if}
 </main>
