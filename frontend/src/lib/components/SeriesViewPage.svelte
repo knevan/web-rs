@@ -1,10 +1,11 @@
 <script lang="ts">
     import {goto} from "$app/navigation";
     import slugify from "slugify";
-    import {auth} from "$lib/store/auth";
+    import {apiFetch, auth} from "$lib/store/auth";
     import {page} from "$app/state";
     import {Button} from "$lib/components/ui/button";
     import {toast} from "svelte-sonner";
+    import {Star} from "@lucide/svelte";
 
     interface MangaSeries {
         id: number;
@@ -14,6 +15,8 @@
         cover_image_url: string;
         views_count: number;
         bookmarks_count: number;
+        total_rating_score: number;
+        total_ratings_count: number;
         processing_status: string;
         updated_at: string;
     }
@@ -39,12 +42,14 @@
     let error = $state<string | null>(null);
     let mangaData = $state<MangaData | null>(null);
     let isBookmarked = $state(false);
+    let isDescriptionExpanded = $state(false);
+    let descriptionElement = $state<HTMLParagraphElement | null>(null);
+    let isDescriptionOverflowing = $state(false);
+    let hoveredRating = $state(0);
+    let userRating = $state(0);
 
     const authState = $derived($auth);
-
-    // Base URL for Manga API
-    //const API_BASE_URL = 'http://localhost:8000';
-
+    const MAX_DESCRIPTION_LINES = 5;
     const currentMangaId = $derived(mangaId);
     const seriesSlug = $derived(slugify(mangaData?.series?.title || '', {lower: true}));
     const chaptersCount = $derived(mangaData?.chapters?.length || 0);
@@ -74,7 +79,11 @@
         return {label: 'Ongoing', className: 'text-green-400'};
     });
 
-    // use $effect hook to fetch manga data
+    const averageRating = $derived(
+        mangaData && mangaData.series.total_ratings_count > 0
+            ? (mangaData.series.total_rating_score / mangaData.series.total_ratings_count) : 0
+    );
+
     // $effect running first time when Layout mounts
     $effect(() => {
         async function loadData() {
@@ -123,6 +132,21 @@
 
         loadData();
     });
+
+    $effect(() => {
+        const element = descriptionElement;
+        if (!element) return;
+
+        const style = window.getComputedStyle(element);
+        const lineHeight = parseFloat(style.lineHeight);
+        const maxHeight = lineHeight * MAX_DESCRIPTION_LINES;
+
+        if (element.scrollHeight > maxHeight) {
+            isDescriptionOverflowing = true;
+        } else {
+            isDescriptionOverflowing = false;
+        }
+    })
 
     // Fungsi-fungsi ini adalah JavaScript biasa dan tidak terpengaruh oleh Runes.
     function formatCount(num: number): string {
@@ -182,6 +206,54 @@
         goto(`/browse?category=${encodeURIComponent(category)}`);
     }
 
+    async function handleRatingClick(rating: number) {
+        if (!authState.isAuthenticated) {
+            toast.warning('Please log in to rate this series', {
+                position: "top-center",
+                closeButton: false,
+                duration: 3000,
+                action: {
+                    label: 'Login',
+                    onClick: () => handleLoginClick(),
+                },
+            });
+            return;
+        }
+
+        if (!currentMangaId) return;
+        userRating = rating;
+        try {
+            const response = await fetch(`/api/series/${currentMangaId}/rate`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({rating: rating}),
+            });
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to submit rating');
+            }
+
+            if (mangaData) {
+                mangaData.series.total_rating_score = result.new_total_score;
+                mangaData.series.total_ratings_count = result.new_total_count;
+            }
+            toast.success(`You rated this series ${rating} stars!`, {
+                position: "top-center",
+                closeButton: false,
+                duration: 1500,
+            });
+        } catch (err) {
+            userRating = 0;
+            toast.error(err instanceof Error ? err.message : 'An unknown error occurred', {
+                position: "top-center",
+                closeButton: false,
+                duration: 3000,
+            });
+        }
+    }
+
     async function handleBookmarkSaveClick() {
         if (!mangaData) return;
 
@@ -194,7 +266,7 @@
 
         const updateBookmarkStatus = async () => {
             const method = newBookmarkStatus ? "POST" : "DELETE";
-            const response = await fetch(`/api/series/${currentMangaId}/bookmark`, {
+            const response = await apiFetch(`/api/series/${currentMangaId}/bookmark`, {
                 method: method,
             });
 
@@ -231,10 +303,6 @@
         const redirectTo = page.url.pathname;
         goto(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
     }
-
-    /*function handleBackToList() {
-        goto('/manga');
-    }*/
 </script>
 
 <svelte:head>
@@ -243,17 +311,7 @@
 </svelte:head>
 
 <div class="min-h-screen bg-dark-primary text-gray-100">
-    <!-- Header
-    <div class="sticky top-0 z-10 bg-dark-primary/90 backdrop-blur-sm border-b border-gray-800">
-        <div class="max-w-6xl mx-auto px-4 py-3">
-            <button onclick={handleBackToList}
-                    class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
-                Back to Manga List
-            </button>
-        </div>
-    </div> -->
-
-    <div class="max-w-6xl mx-auto p-4 md:p-5">
+    <div class="max-w-6xl mx-auto md:p-5">
         <!-- Loading State -->
         {#if isLoading}
             <div class="flex flex-col justify-center items-center h-96">
@@ -268,25 +326,16 @@
                     <h2 class="text-2xl font-bold">Error Loading Manga</h2>
                 </div>
                 <p class="text-gray-400 mb-4">{error}</p>
-                <button onclick={() => {
-                    isLoading = true;
-                    error = null;
-                }}
-                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors">
-                    Try Again
-                </button>
             </div>
         {:else if mangaData}
             <!-- Main Content -->
-            <div class="space-y-1">
-                <div class="bg-[#16213e] shadow-2xl rounded-none md:rounded-2xl p-6 md:p-8 flex flex-col gap-8">
+            <div>
+                <div class="bg-[#16213e] shadow-2xl rounded-none md:rounded-sm p-4 md:p-8 flex flex-col gap-8">
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-7">
-
                         <div class="md:col-span-1 flex justify-center">
                             <img src={mangaData.series.cover_image_url} alt={mangaData.series.title}
                                  class="w-full h-auto object-cover rounded-lg shadow-lg max-w-[200px] md:max-w-full"
-                                 style="max-height: 300px;"
-                                 loading="lazy"/>
+                                 style="max-height: 300px;" loading="lazy"/>
                         </div>
 
                         <div class="md:col-span-2 flex flex-col space-y-4">
@@ -304,26 +353,41 @@
                                     </span>
                                 </p>
                             </div>
+                            <div class="flex items-center gap-2 md:gap-3">
+                                <div class="flex items-center">
+                                    {#each {length: 5} as _, i}
+                                        {@const starValue = i + 1}
+                                        <Star class="
+                                            {averageRating >= starValue ? 'text-yellow-400' : 'text-gray-500'}
+                                            {averageRating >= (starValue - 0.5) && averageRating < starValue ? 'text-yellow-400 half-star' : ''}
+                                            h-4 w-4 md:h-6 md:w-6 stroke-1 fill-current
+                                        "/>
+                                    {/each}
+                                </div>
+                                <div class="text-white font-bold text-base md:text-lg">
+                                    {averageRating.toFixed(1)}
+                                </div>
+                                <div class="text-gray-400 text-sm md:text-lg">
+                                    ({formatCount(mangaData.series.total_ratings_count)})
+                                </div>
+                            </div>
 
                             <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-1 p-2 bg-dark-secondary rounded-lg">
                                 <div class="text-center flex flex-col items-center gap-x-1">
                                     <p class="text-md text-gray-400">Chapters</p>
                                     <div class="text-xl font-bold text-white flex items-center justify-center gap-2">
-
                                         {chaptersCount}
                                     </div>
                                 </div>
                                 <div class="text-center flex flex-col items-center gap-x-1">
                                     <p class="text-md text-gray-400">Views</p>
                                     <div class="text-xl font-bold text-white flex items-center justify-center gap-2">
-
                                         {formatCount(mangaData.series.views_count)}
                                     </div>
                                 </div>
                                 <div class="text-center flex flex-col items-center gap-x-1">
                                     <p class="text-md text-gray-400">Bookmarked</p>
                                     <div class="text-xl font-bold text-white flex items-center justify-center gap-2">
-
                                         {formatCount(mangaData.series.bookmarks_count)}
                                     </div>
                                 </div>
@@ -355,51 +419,93 @@
                                 </span>
                             </div>
 
-                            <div class="flex items-center gap-4 pt-2">
+                            <div class="flex items-center gap-2 pt-2">
                                 {#if firstChapter}
                                     <Button onclick={() => handleChapterClick(firstChapter.chapter_number)} size="lg"
-                                            class="flex-1 text-center cursor-pointer text-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold py-6 px-5 rounded-lg transition-colors duration-300 shadow-md"
+                                            class="w-1/2 flex text-center cursor-pointer border border-transparent bg-blue-600 hover:bg-blue-700 text-white font-semibold py-6 px-5 rounded-lg transition-colors duration-300 shadow-md"
                                     >
-                                        Read Chapter {firstChapter.chapter_number}
+                                        <span class="text-base md:text-lg">
+											Read Chapter {firstChapter.chapter_number}
+										</span>
                                     </Button>
                                 {/if}
 
                                 {#if authState.isAuthenticated}
                                     <Button onclick={handleBookmarkSaveClick} size="lg"
                                             class={[
-                                    'flex-1 text-center cursor-pointer border border-gray-400 bg-white/10 backdrop-blur-sm text-gray-200 hover:bg-white/20 font-semibold py-6 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2',
-                                    isBookmarked && '!bg-yellow-500 hover:!bg-yellow-600 !border-yellow-500'
-                                ]}
+                                                'w-1/2 text-center cursor-pointer border border-gray-400 bg-white/10 backdrop-blur-sm text-gray-200 hover:bg-white/20 font-semibold py-6 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2',
+                                                isBookmarked && '!bg-yellow-500 hover:!bg-yellow-600 !border-yellow-500'
+                                            ]}
                                     >
-                                        <span>{isBookmarked ? 'Bookmarked' : 'Bookmark'}</span>
+                                        <span class="text-base md:text-lg">
+											{isBookmarked ? 'Bookmarked' : 'Bookmark'}
+										</span>
                                     </Button>
                                 {:else}
                                     <Button onclick={handleLoginClick} size="lg"
-                                            class="flex-1 text-center cursor-pointer border border-gray-400 bg-white/10 backdrop-blur-sm text-gray-200 hover:bg-white/20 font-semibold py-6 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2">
-                                        <span class="text-lg">LOGIN</span>
+                                            class="w-1/2 text-center cursor-pointer border border-gray-400 bg-white/10 backdrop-blur-sm text-gray-200 hover:bg-white/20 font-semibold py-6 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2">
+                                        <span class="text-base md:text-lg">LOGIN</span>
                                     </Button>
                                 {/if}
                             </div>
                         </div>
                     </div>
-
-
                     {#if mangaData.series.description}
-                        <div class="space-y-3 pt-5 border-t border-gray-700/50">
+                        <div class="space-y-2 pt-5 border-t border-gray-700/50">
                             <h3 class="text-md font-semibold text-white">Description</h3>
-                            <p class="text-gray-300 leading-relaxed">
+                            <p bind:this={descriptionElement}
+                               class={[
+                                'text-gray-300 leading-relaxed transition-all duration-300',
+                                (isDescriptionOverflowing && !isDescriptionExpanded) && 'line-clamp-4'
+                               ].filter(Boolean).join(' ')}
+                            >
                                 {mangaData.series.description}
                             </p>
+                            {#if isDescriptionOverflowing}
+                                <div class="flex justify-end">
+                                    <button onclick={() => isDescriptionExpanded = !isDescriptionExpanded}
+                                            class="text-blue-400 hover:text-blue-300 font-semibold text-sm">
+                                        {isDescriptionExpanded ? 'Show Less' : 'Read More'}
+                                    </button>
+                                </div>
+                            {/if}
                         </div>
                     {/if}
                 </div>
 
                 <!-- Chapter List Section -->
                 {#if sortedChapters.length > 0}
-                    <div class="bg-[#16213e] shadow-2xl rounded-none md:rounded-2xl p-6 md:p-8">
+                    <div class="bg-[#16213e] shadow-2xl rounded-none md:rounded-sm md:mt-1 p-4 md:p-8">
+                        <div class="mb-6 p-4 bg-dark-secondary rounded-lg">
+                            <h3 class="text-base md:text-lg font-semibold text-white mb-2 text-center">
+                                {authState.isAuthenticated ? 'Rate this Series' : 'Rate this Series'}
+                            </h3>
+                            <div class="flex justify-center items-center gap-1 md:gap-2"
+                                 role="group"
+                                 aria-label="Star Rating"
+                                 onmouseleave={() => hoveredRating = 0}
+                                 onfocusout={() => hoveredRating = 0}
+                            >
+                                {#each {length: 5} as _, i}
+                                    {@const starValue = i + 1}
+                                    <button
+                                            type="button"
+                                            onmouseenter={() => hoveredRating = starValue}
+                                            onclick={() => handleRatingClick(starValue)}
+                                            class="transition-transform duration-200 active:scale-125 hover:scale-125"
+                                    >
+                                        <Star class="
+                                             {(hoveredRating || userRating) >= starValue ? 'text-yellow-400' : 'text-gray-500'}
+                                             {!authState.isAuthenticated ? 'opacity-50' : ''}
+                                             w-6 h-6 md:w-8 md:h-8 fill-current stroke-1"
+                                        />
+                                    </button>
+                                {/each}
+                            </div>
+                        </div>
                         <div class="flex justify-between items-center mb-6">
                             <h2 class="text-2xl font-bold text-white">
-                                Chapters ({chaptersCount})
+                                Chapters
                             </h2>
                             <div class="text-sm text-gray-400">
                                 Latest: Chapter {sortedChapters[0]?.chapter_number}
@@ -410,23 +516,22 @@
                             <div class="grid gap-3 grid-cols-1 md:grid-cols-2">
                                 {#each sortedChapters as chapter}
                                     <button onclick={() => handleChapterClick(chapter.chapter_number)}
-                                            class="p-4 rounded-lg text-left cursor-pointer bg-[#1e293b] border-l-4 border-gray-600 transition-all duration-300 ease-in-out hover:bg-gray-700 hover:border-blue-500 hover:translate-x-2">
-                                    <span class="flex justify-between items-center">
-                                        <span class="flex-1">
-                                            <span class="font-semibold text-white mb-1">
-                                                <!--{chapter.chapter_number}-->
-                                                {#if chapter.title}
-                                                    <span class="text-gray-300">{chapter.title}</span>
-                                                {/if}
+                                            class="p-4 rounded-lg text-left cursor-pointer bg-[#1e293b] border-l-1 border-gray-600 transition-all duration-300 ease-in-out hover:bg-gray-700 hover:border-blue-500 hover:translate-x-2">
+                                        <span class="flex justify-between items-center">
+                                            <span class="flex flex-1 flex-col items-start">
+                                                <span class="font-semibold text-white">
+                                                    {#if chapter.title}
+                                                        <span class="text-gray-300">{chapter.title}</span>
+                                                    {/if}
+                                                </span>
+                                                <span class="text-sm text-gray-400">
+                                                    {formatRelativeTime(chapter.created_at)}
+                                                </span>
                                             </span>
-                                            <span class="text-sm text-gray-400">
-                                                {formatRelativeTime(chapter.created_at)}
-                                            </span>
-                                        </span>
-                                        <span class="text-blue-400">
+                                            <span class="text-blue-400">
 
+                                            </span>
                                         </span>
-                                    </span>
                                     </button>
                                 {/each}
                             </div>
