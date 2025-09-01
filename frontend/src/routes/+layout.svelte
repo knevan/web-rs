@@ -9,7 +9,7 @@
 
     let {data, children} = $props();
 
-    // It will sync the `auth` store whenever the `data` from `load` function change
+    // It will sync the `api` store whenever the `data` from `load` function change
     $effect(() => {
         if (data.user) {
             auth.set({
@@ -43,6 +43,6 @@
         }}
 />
 
-
+<Header/>
 {@render children()}
 

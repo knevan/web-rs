@@ -7,7 +7,7 @@ interface User {
 	role: string;
 }
 
-// Define the shape of the auth store
+// Define the shape of the api store
 interface AuthStore {
 	isAuthenticated: boolean;
 	user: User | null;

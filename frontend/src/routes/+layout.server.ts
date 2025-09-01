@@ -22,7 +22,7 @@ export const load: LayoutServerLoad = async ({ fetch, cookies }) => {
 		return { user: null };
 	} catch (error) {
 		// In case of a network error or if the backend is down.
-		console.error('Server-side auth check error:', error);
+		console.error('Server-side api check error:', error);
 		return { user: null };
 	}
 };
