@@ -1,17 +1,22 @@
-use crate::auth;
+use crate::builder::config_sites_watcher::config_sites_watcher;
 use crate::database::DatabaseService;
 use crate::database::storage::StorageClient;
 use crate::scraping::model::SitesConfig;
-use crate::task_workers::channels::{WorkerChannels, setup_worker_channels};
+use crate::task_workers::channels::{OnDemandChannels, setup_worker_channels};
+use crate::{api, builder};
+use arc_swap::ArcSwap;
 use axum::http::{HeaderValue, Method, header};
 use axum::{Router, serve};
 use lettre::AsyncSmtpTransport;
 use reqwest::Client;
 use std::env;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::signal;
-use tower_http::cors::CorsLayer;
+use tower::ServiceBuilder;
+use tower_http::timeout::TimeoutLayer;
+use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 
 // Type definition for Mailer
 pub type Mailer = AsyncSmtpTransport<lettre::Tokio1Executor>;
@@ -21,9 +26,9 @@ pub struct AppState {
     pub db_service: DatabaseService,
     pub mailer: Mailer,
     pub http_client: Client,
-    pub sites_config: Arc<SitesConfig>,
+    pub sites_config: Arc<ArcSwap<SitesConfig>>,
     pub storage_client: Arc<StorageClient>,
-    pub worker_channels: WorkerChannels,
+    pub worker_channels: OnDemandChannels,
 }
 
 // Function to set up builder and server
@@ -37,8 +42,13 @@ pub async fn run(
     let storage_client = Arc::new(storage_client_env);
 
     let db_service = DatabaseService::new(db_pool);
-    let sites_config =
-        Arc::new(SitesConfig::load("backend/config_sites.toml")?);
+
+    let config_path = "backend/config_sites.toml".to_string();
+    let load_sites_config = Arc::new(SitesConfig::load(&config_path)?);
+
+    let sites_config = Arc::new(ArcSwap::new(load_sites_config));
+
+    tokio::spawn(config_sites_watcher(config_path, sites_config.clone()));
 
     // Create channels
     let worker_channels = setup_worker_channels(
@@ -60,7 +70,7 @@ pub async fn run(
 
     // CORS Configuration
     let frontend_origin = env::var("FRONTEND_ORIGIN")
-        .unwrap_or_else(|_| "http://localhost:5173".to_string());
+        .unwrap_or_else(|_| "http://localhost:1998".to_string());
 
     let cors = CorsLayer::new()
         .allow_methods([
@@ -87,9 +97,15 @@ pub async fn run(
     // Setup App router
     // Initialize the router and attach the authentication routes
     let app = Router::new()
-        .merge(auth::routes::routes())
+        .merge(api::routes::routes())
         .with_state(app_state)
-        .layer(cors);
+        .layer(
+            ServiceBuilder::new()
+                .layer(CompressionLayer::new())
+                // TODO: rate limiting
+                .layer(TimeoutLayer::new(Duration::from_secs(30)))
+                .layer(cors),
+        );
 
     println!("[STARTUP] Server started successfully!");
 

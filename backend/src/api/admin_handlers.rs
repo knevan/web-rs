@@ -1,10 +1,12 @@
+use crate::api::extractor::AdminUser;
 use crate::builder::startup::AppState;
-use crate::common::jwt::Claims;
-use crate::database::{NewSeriesData, UpdateSeriesData};
+use crate::database::{NewSeriesData, Series, UpdateSeriesData};
 use crate::task_workers::repair_chapter_worker;
+use crate::task_workers::series_check_worker::SeriesCheckJob;
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
+use axum_core::__private::tracing::error;
 use axum_core::response::{IntoResponse, Response};
 use axum_extra::extract::Multipart;
 use rand::Rng;
@@ -19,11 +21,12 @@ pub struct CreateSeriesRequest {
     description: String,
     cover_image_url: String,
     source_url: String,
+    category_ids: Vec<i32>,
 }
 
-// This route is protected and can only be accessed by a logged-in admin-dashboard.
+// Admin endpoint to create new series
 pub async fn create_new_series_handler(
-    claims: Claims,
+    admin: AdminUser,
     State(state): State<AppState>,
     Json(payload): Json<CreateSeriesRequest>,
 ) -> Response {
@@ -31,35 +34,72 @@ pub async fn create_new_series_handler(
 
     println!(
         "->> {:<12} - create_series_handler - user: {}",
-        "Handler", claims.sub
+        "Handler", admin.0.username
     );
 
-    let check_interval_minutes = rand::rng().random_range(60..=100);
+    // Random time to check target website
+    let check_interval_minutes = rand::rng().random_range(90..=120);
 
     let new_series_data = NewSeriesData {
         title: &payload.title,
         original_title: payload.original_title.as_deref(),
         authors: payload.authors.as_ref(),
+        category_ids: Some(&payload.category_ids),
         description: &payload.description,
         cover_image_url: &payload.cover_image_url,
         source_url: &payload.source_url,
         check_interval_minutes,
     };
 
-    match db_service.add_new_series(&new_series_data)
+    // Create new series in DB
+    let new_series_id = match db_service.add_new_series(&new_series_data).await
+    {
+        Ok(id) => id,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": e.to_string()}))
+            )
+                .into_response();
+        }
+    };
+
+    let fetch_new_series: Series = match db_service
+        .get_manga_series_by_id(new_series_id)
         .await
     {
-        Ok(new_id) => (
-            StatusCode::CREATED,
-            Json(serde_json::json!({"status": "success", "id": new_id})),
-        )
-            .into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"status": "error", "message": e.to_string()})),
-        )
-            .into_response(),
+        Ok(Some(series)) => series,
+        _ => {
+            eprintln!("Error fetching new series from DB: {}", new_series_id);
+            return (
+                StatusCode::CREATED,
+                Json(serde_json::json!({"status": "success", "id": new_series_id, "warning": "Could not schedule immediate check."}))
+            )
+                .into_response();
+        }
+    };
+
+    // Crate and send job to worker via priority queue
+    let job = SeriesCheckJob {
+        series: fetch_new_series,
+    };
+    if let Err(e) = state.worker_channels.series_check_tx.send(job).await {
+        eprintln!(
+            "Failed to send job to worker for series: {} {}",
+            new_series_id, e
+        );
+    } else {
+        println!(
+            "Successfully scheduled immediate check for series: {}",
+            new_series_id
+        );
     }
+
+    (
+        StatusCode::CREATED,
+        Json(serde_json::json!({"status": "success", "id": new_series_id, "message": "Series created and scheduled for immediate scraping"})),
+    )
+        .into_response()
 }
 
 #[derive(Deserialize)]
@@ -71,11 +111,12 @@ pub struct UpdateSeriesRequest {
     description: Option<String>,
     cover_image_url: Option<String>,
     source_url: Option<String>,
+    category_ids: Option<Vec<i32>>,
 }
 
 pub async fn update_existing_series_handler(
     Path(series_id): Path<i32>,
-    claims: Claims,
+    admin: AdminUser,
     State(state): State<AppState>,
     Json(payload): Json<UpdateSeriesRequest>,
 ) -> Response {
@@ -83,7 +124,7 @@ pub async fn update_existing_series_handler(
 
     println!(
         "->> {:<12} - update_series_handler - user: {}, series_id: {}",
-        "HANDLER", claims.sub, series_id
+        "HANDLER", admin.0.username, series_id
     );
 
     let update_series_data = UpdateSeriesData {
@@ -94,11 +135,12 @@ pub async fn update_existing_series_handler(
         cover_image_url: payload.cover_image_url.as_deref(),
         source_url: payload.source_url.as_deref(),
         check_interval_minutes: None,
+        category_ids: payload.category_ids.as_deref(),
     };
 
     // Call the async method on the DatabaseService instance
     match db_service
-        .update_manga_series_metadata(series_id, &update_series_data)
+        .update_series_metadata(series_id, &update_series_data)
         .await
     {
         Ok(rows_affected) if rows_affected > 0 => {
@@ -192,6 +234,8 @@ pub struct PaginationParams {
     page: u32,
     #[serde(default = "default_page_size")]
     page_size: u32,
+    #[serde(default)]
+    search: Option<String>,
 }
 
 fn default_page() -> u32 {
@@ -205,34 +249,35 @@ fn default_page_size() -> u32 {
 pub struct SeriesResponse {
     id: i32,
     title: String,
-    original_title: String,
+    original_title: Option<String>,
     description: String,
     cover_image_url: String,
     source_url: String,
     authors: Vec<String>,
     last_updated: String,
+    processing_status: String,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PaginatedSeriesResponse {
-    items: Vec<SeriesResponse>,
+pub struct PaginatedResponse<T: Serialize> {
+    items: Vec<T>,
     total_items: i64,
 }
 
 pub async fn get_all_manga_series_handler(
-    claims: Claims,
+    admin: AdminUser,
     State(state): State<AppState>,
     Query(pagination): Query<PaginationParams>,
 ) -> Response {
     println!(
         "->> {:<12} - get_all_manga_series_handler - user: {}",
-        "HANDLER", claims.sub
+        "HANDLER", admin.0.username
     );
 
     match state
         .db_service
-        .get_paginated_series_with_authors(pagination.page, pagination.page_size)
+        .get_admin_paginated_series(pagination.page, pagination.page_size, pagination.search.as_deref())
         .await
     {
         Ok(paginated_result) => {
@@ -248,10 +293,11 @@ pub async fn get_all_manga_series_handler(
                     source_url: s.current_source_url,
                     authors: serde_json::from_value(s.authors).unwrap_or_else(|_| vec![]),
                     last_updated: s.updated_at.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    processing_status: s.processing_status.to_string(),
                 })
                 .collect();
 
-            let response_series_data = PaginatedSeriesResponse {
+            let response_series_data = PaginatedResponse {
                 items: response_series_items,
                 total_items: paginated_result.total_items,
             };
@@ -268,29 +314,65 @@ pub async fn get_all_manga_series_handler(
     }
 }
 
+pub async fn get_all_users_handler(
+    admin: AdminUser,
+    State(state): State<AppState>,
+    Query(pagination): Query<PaginationParams>,
+) -> Response {
+    println!(
+        "->> {:<12} - get_all_users_handler - user: {}",
+        "HANDLER", admin.0.username
+    );
+
+    match state
+        .db_service
+        .get_paginated_user(
+            pagination.page,
+            pagination.page_size,
+            pagination.search.as_deref(),
+        )
+        .await
+    {
+        Ok(paginated_result) => {
+            let response_user_data = PaginatedResponse {
+                items: paginated_result.items,
+                total_items: paginated_result.total_items,
+            };
+
+            (StatusCode::OK, Json(response_user_data)).into_response()
+        }
+        Err(e) => {
+            error!("Failed to get paginated users: {:#?}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": "Could not retrieve users"})),
+            )
+                .into_response()
+        }
+    }
+}
+
 #[derive(Deserialize)]
 pub struct RepairChapterRequest {
     pub chapter_number: f32,
     pub new_chapter_url: String,
-    pub new_chapter_title: Option<String>,
 }
 
 pub async fn repair_chapter_handler(
-    claims: Claims,
+    admin: AdminUser,
     Path(series_id): Path<i32>,
     State(state): State<AppState>,
     Json(payload): Json<RepairChapterRequest>,
 ) -> Response {
     println!(
         "->> {:<12} - repair_chapter_handler - user: {}, series_id: {}",
-        "HANDLER", claims.sub, series_id
+        "HANDLER", admin.0.username, series_id
     );
 
     let repair_chapter_msg = repair_chapter_worker::RepairChapterMsg {
         series_id,
         chapter_number: payload.chapter_number,
         new_chapter_url: payload.new_chapter_url,
-        new_chapter_title: payload.new_chapter_title,
     };
 
     match state.worker_channels.repair_tx.send(repair_chapter_msg).await {
@@ -313,13 +395,13 @@ pub async fn repair_chapter_handler(
 }
 
 pub async fn delete_series_handler(
-    claims: Claims,
+    admin: AdminUser,
     Path(series_id): Path<i32>,
     State(state): State<AppState>,
 ) -> Response {
     println!(
         "->> {:<12} - SCHEDULE DELETE - user: {}, series_id: {}",
-        "HANDLER", claims.sub, series_id
+        "HANDLER", admin.0.username, series_id
     );
 
     // Send series_id to deletion worker with channel
@@ -355,13 +437,13 @@ pub struct CreateCategoryTagRequest {
 }
 
 pub async fn create_category_tag_handler(
-    claims: Claims,
+    admin: AdminUser,
     State(state): State<AppState>,
     Json(payload): Json<CreateCategoryTagRequest>,
 ) -> Response {
     println!(
         "->> {:<12} - create_category_tag_handler - user: {}",
-        "HANDLER", claims.sub
+        "HANDLER", admin.0.username
     );
 
     match state.db_service.create_category_tag(&payload.name).await {
@@ -374,15 +456,13 @@ pub async fn create_category_tag_handler(
             // Check for unique violation error from PostgreSQL (code 23505)
             if let Some(sqlx::Error::Database(db_error)) =
                 e.root_cause().downcast_ref::<sqlx::Error>()
-            {
-                if db_error.code() == Some(std::borrow::Cow::from("23505")) {
+                && db_error.code() == Some(std::borrow::Cow::from("23505")) {
                     return (
                             StatusCode::CONFLICT,
                             Json(serde_json::json!({"status": "error", "message": "Category tag already exists."})),
                         )
                             .into_response();
                 }
-            }
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"status": "error", "message": e.to_string()})),
@@ -393,13 +473,13 @@ pub async fn create_category_tag_handler(
 }
 
 pub async fn delete_category_tag_handler(
-    claims: Claims,
+    admin: AdminUser,
     State(state): State<AppState>,
     Path(category_id): Path<i32>,
 ) -> Response {
     println!(
         "->> {:<12} - delete_category_tag_handler - user: {}, category_id: {}",
-        "HANDLER", claims.sub, category_id
+        "HANDLER", admin.0.username, category_id
     );
 
     match state.db_service.delete_category_tag(category_id).await {
@@ -422,12 +502,12 @@ pub async fn delete_category_tag_handler(
 }
 
 pub async fn get_list_category_tags_handler(
-    claims: Claims,
+    admin: AdminUser,
     State(state): State<AppState>,
 ) -> Response {
     println!(
         "->> {:<12} - get_list_category_tags_handler - user: {}",
-        "HANDLER", claims.sub
+        "HANDLER", admin.0.username
     );
 
     match state.db_service.get_list_all_categories().await {
@@ -441,5 +521,27 @@ pub async fn get_list_category_tags_handler(
                 Json(serde_json::json!({"status": "error", "message": e.to_string()})),
         )
             .into_response(),
+    }
+}
+
+pub async fn get_series_category_tags_handler(
+    admin: AdminUser,
+    State(state): State<AppState>,
+    Path(series_id): Path<i32>,
+) -> Response {
+    println!(
+        "->> {:<12} - get_series_category_tags_handler - user: {}, series_id: {}",
+        "HANDLER", admin.0.username, series_id
+    );
+
+    match state.db_service.get_category_tag_by_series_id(series_id).await {
+        Ok(tags) => (
+            StatusCode::OK,
+            Json(serde_json::json!({"status": "success", "tags": tags})),
+        ).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"status": "error", "message": e.to_string()}))
+        ).into_response(),
     }
 }

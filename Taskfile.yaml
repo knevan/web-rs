@@ -7,7 +7,7 @@ tasks:
 
   release:
     cmds:
-      - task: backend --release
+      - task: backend -- --release
   
   frontend:
     cmds:

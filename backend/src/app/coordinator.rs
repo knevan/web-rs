@@ -11,7 +11,7 @@ use crate::encoding::image_encoding;
 use crate::scraping::model::SiteScrapingConfig;
 use crate::scraping::{fetcher, parser};
 
-// Loops through a list of chapters and processes them one by one.
+// Manage loop through a list of chapters and processes them one by one.
 pub async fn process_series_chapters_from_list(
     series_data: &Series,
     chapters_to_process: &[parser::ChapterInfo],
@@ -41,7 +41,8 @@ pub async fn process_series_chapters_from_list(
             Ok(Some(chapter_num)) => {
                 last_successfully_downloaded_chapter = Some(chapter_num);
             }
-            Ok(None) => { /* Chapter was processed but had no images, which is fine */
+            Ok(None) => {
+                /* Chapter was processed but had no images, which is fine don't stop process */
             }
             Err(e) => {
                 eprintln!(
@@ -52,12 +53,13 @@ pub async fn process_series_chapters_from_list(
                 // break;
             }
         }
-        random_sleep_time(6, 12).await; // Pause between chapters
+        // Pause between scraping chapters
+        random_sleep_time(4, 8).await;
     }
     Ok(last_successfully_downloaded_chapter)
 }
 
-/// Process scraping and downloading single chapters
+// Process scraping and downloading single chapters
 pub async fn process_single_chapter(
     series: &Series,
     chapter_info: &parser::ChapterInfo,
@@ -66,6 +68,11 @@ pub async fn process_single_chapter(
     config: &SiteScrapingConfig,
     db_service: &DatabaseService,
 ) -> Result<Option<f32>> {
+    let convert_chapter_number =
+        chapter_info.number.to_string().replace('.', "-");
+
+    let consistent_title = format!("{}-eng", convert_chapter_number);
+
     println!(
         "[COORDINATOR] Processing Chapter {} for '{}'...",
         chapter_info.number, series.title
@@ -75,7 +82,7 @@ pub async fn process_single_chapter(
         .add_new_chapter(
             series.id,
             chapter_info.number,
-            Some(&chapter_info.title),
+            Some(&consistent_title),
             &chapter_info.url,
         )
         .await?;
@@ -87,7 +94,8 @@ pub async fn process_single_chapter(
     let html_content =
         fetcher::fetch_html(http_client, &chapter_info.url).await?;
 
-    random_sleep_time(3, 5).await;
+    // Pause before start processing images
+    random_sleep_time(2, 4).await;
 
     let image_urls = parser::extract_image_urls_from_html_content(
         &html_content,
@@ -107,10 +115,11 @@ pub async fn process_single_chapter(
     let series_slug = slugify(&series.title);
 
     for (index, img_url) in image_urls.iter().enumerate() {
+        // Pause between image downloads
         random_sleep_time(2, 4).await;
 
         // store image to R2 object storage
-        let final_cdn_url = match fetcher::fetch_image_bytes(
+        let image_store_result = match fetcher::fetch_image_bytes(
             http_client,
             img_url,
         )
@@ -125,11 +134,12 @@ pub async fn process_single_chapter(
                 match avif_bytes_result {
                     Ok(avif_bytes) => {
                         // Define the key for the object in R2
+                        // domain/{series-name}/{chapter-number}/{image-number}.avif
                         let object_key = format!(
-                            "{}/{}/{:03}.avif",
+                            "series/{}/ch-{}/{:03}.avif",
                             series_slug,
-                            chapter_info.number,
-                            index + 1
+                            chapter_info.number.to_string().replace('.', "-"),
+                            index
                         );
 
                         // Upload to R2
@@ -141,7 +151,7 @@ pub async fn process_single_chapter(
                             )
                             .await
                         {
-                            Ok(cdn_url) => Some(cdn_url),
+                            Ok(_) => Some(object_key),
                             Err(e) => {
                                 eprintln!(
                                     "[COORDINATOR] Failed to upload to R2: {e}"
@@ -166,15 +176,18 @@ pub async fn process_single_chapter(
             }
         };
 
-        // Save CDN Url to the database if successful
-        if let Some(cdn_url) = final_cdn_url {
-            if db_service
-                .add_chapter_images(chapter_id, (index + 1) as i32, &cdn_url)
+        // Save CDN object key to the database if successful
+        if let Some(key_to_save) = image_store_result
+            && db_service
+                .add_chapter_images(
+                    chapter_id,
+                    (index + 1) as i32,
+                    &key_to_save,
+                )
                 .await
                 .is_ok()
-            {
-                image_saved_count += 1;
-            }
+        {
+            image_saved_count += 1;
         }
     }
 
@@ -186,6 +199,16 @@ pub async fn process_single_chapter(
     );
 
     if image_saved_count > 0 {
+        // If images were saved, it means new content was added.
+        if let Err(e) = db_service
+            .update_series_new_content_timestamp(series.id)
+            .await
+        {
+            eprintln!(
+                "Failed to update series content timestamp for series_id {}: {}",
+                series.id, e
+            );
+        }
         Ok(Some(chapter_info.number))
     } else {
         Ok(None)
