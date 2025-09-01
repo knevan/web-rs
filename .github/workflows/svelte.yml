@@ -1,0 +1,28 @@
+name: svelte
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  svelte-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+          registry-url: |
+            https://registry.npmjs.org
+
+      - name: Install dep
+        run: bun i
+        working-directory: './frontend'
+
+      - name: Check Svelte
+        uses: ofkm/gha-svelte-check@v1
+        with:
+          working-directory: './frontend'
+          tsconfig: './tsconfig.json'
+

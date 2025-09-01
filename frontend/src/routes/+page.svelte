@@ -5,53 +5,46 @@
 
 <script lang="ts">
     // Import komponen yang diperlukan
-    import MangaCarousel from '$lib/components/MangaCarousel.svelte';
+    import SeriesCarousel from '$lib/components/SeriesCarousel.svelte';
 
-    const placeholderManga = Array(16).fill(null).map((_, index) => ({
+    const placeholderManga = Array(20).fill(null).map((_, index) => ({
         id: index + 1,
         title: `Manga Title ${index + 1}`,
     }));
 
     const mostViewedToday = placeholderManga.slice(0, 12);
-    const newManga = placeholderManga.slice(6);
+
+    type Manga = {
+        id: number;
+        title: string;
+        cover_image_url: string;
+    }
+
+    let newSeries = $state<Manga[]>([]);
+    let isLoadingNewSeries = $state(true);
+
+    $effect(() => {
+        const fetchNewSeries = async () => {
+            isLoadingNewSeries = true;
+            try {
+                const response = await fetch(`/api/series/new-series`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch new manga series`);
+                }
+                newSeries = await response.json();
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                newSeries = [];
+            } finally {
+                isLoadingNewSeries = false;
+            }
+        }
+        fetchNewSeries();
+    });
 </script>
 
-<div class="new-manga-carousel">
+<div class="w-full space-y-12">
     <div class="new-manga-carousel-outer">
-        <MangaCarousel manga="{mostViewedToday}" itemsPerPage={1}/>
+        <SeriesCarousel manga={newSeries}/>
     </div>
 </div>
-
-<div class="most-viewed-carousel">
-    <div>
-        <MangaCarousel manga="{newManga}" itemsPerPage={1}/>
-    </div>
-</div>
-
-<style>
-    div.new-manga-carousel {
-        margin-bottom: 70px;
-    }
-
-    .new-manga-carousel {
-        width: 100%;
-        height: 200px;
-    }
-
-    .new-manga-carousel-outer {
-        width: 100%;
-        height: 200px;
-    }
-
-    .most-viewed-carousel {
-        width: 100%;
-        height: 200px;
-    }
-
-    .new-manga-carousel-outer {
-        width: 100%;
-        height: 200px;
-        display: flex;
-    }
-
-</style>
