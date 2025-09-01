@@ -4,7 +4,11 @@ version = "0.1.0"
 edition = "2024"
 resolver = "3"
 license = "AGPL-3"
-rust-version = "1.88.0"
+rust-version = "1.89.0"
+
+[[bin]]
+name = "backend"
+path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.98"
