@@ -9,9 +9,9 @@ use crate::api::handlers::{
     fetch_updated_series_chapter_handler, forgot_password_handler,
     get_bookmark_status_current_user_handler,
     get_user_bookmark_library_handler, get_user_profile_handler, login_handler,
-    logout_handler, protected_handler, realtime_check_username_handler,
-    record_series_view_handler, refresh_token_handler,
-    register_new_user_handler, reset_password_handler,
+    logout_handler, protected_handler, rate_series_handler,
+    realtime_check_username_handler, record_series_view_handler,
+    refresh_token_handler, register_new_user_handler, reset_password_handler,
     update_user_avatar_handler, update_user_password_setting_handler,
     update_user_profile_handler,
 };
@@ -45,6 +45,7 @@ pub fn routes() -> Router<AppState> {
             "/series/{id}/chapter/{chapter_number}",
             get(fetch_chapter_details_handler),
         )
+        .route("/series/{id}/rate", post(rate_series_handler))
         .route("/series/{id}/views-count", post(record_series_view_handler))
         .route(
             "/series/{id}/bookmark",

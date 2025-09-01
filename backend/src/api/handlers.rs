@@ -1113,3 +1113,62 @@ pub async fn update_user_avatar_handler(
     )
         .into_response()
 }
+
+#[derive(Deserialize)]
+pub struct RateSeriesPayload {
+    rating: i16,
+}
+#[derive(Serialize)]
+pub struct RateSeriesResponse {
+    message: String,
+    new_total_score: i64,
+    new_total_count: i32,
+}
+
+pub async fn rate_series_handler(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+    Path(series_id): Path<i32>,
+    Json(payload): Json<RateSeriesPayload>,
+) -> Response {
+    // validate rating value
+    if !(1..=5).contains(&payload.rating) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(
+                serde_json::json!({"error": "Rating must be between 1 and 5"}),
+            ),
+        )
+            .into_response();
+    }
+
+    match state
+        .db_service
+        .add_or_update_series_rating(series_id, payload.rating, user.id)
+        .await
+    {
+        Ok(_) => {
+            match state.db_service.get_manga_series_by_id(series_id).await {
+                Ok(Some(series)) => {
+                    let response = RateSeriesResponse {
+                        message: "Rating submitted".to_string(),
+                        new_total_score: series.total_rating_score,
+                        new_total_count: series.total_ratings_count
+                    };
+                    (StatusCode::OK, Json(response)).into_response()
+                }
+                _ => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({"error": "Failed for retrieve updated series data"})),
+                    ).into_response(),
+            }
+        }
+        Err(e) => {
+            error!("Failed to proess rating: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": format!("Failed to update rating: {}", e)})),
+                ).into_response()
+        }
+    }
+}

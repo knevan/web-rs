@@ -77,6 +77,8 @@ pub struct Series {
     pub source_website_host: String,
     pub views_count: i32,
     pub bookmarks_count: i32,
+    pub total_rating_score: i64,
+    pub total_ratings_count: i32,
     pub last_chapter_found_in_storage: Option<f32>, // support 10.0, 10.5
     pub processing_status: SeriesStatus,
     pub check_interval_minutes: i32,

@@ -208,7 +208,7 @@ impl DatabaseService {
         let series = sqlx::query_as!(
             Series,
             r#"SELECT id, title, original_title, description, cover_image_url, current_source_url,
-       source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage,
+       source_website_host, views_count, bookmarks_count, total_rating_score, total_ratings_count, last_chapter_found_in_storage,
        processing_status as "processing_status: SeriesStatus",
        check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at
        FROM series WHERE id = $1"#,
@@ -227,7 +227,7 @@ impl DatabaseService {
         let series = sqlx::query_as!(
             Series,
             r#"SELECT id, title, original_title, description, cover_image_url, current_source_url,
-            source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage,
+            source_website_host, views_count, bookmarks_count, total_rating_score, total_ratings_count, last_chapter_found_in_storage,
             processing_status as "processing_status: SeriesStatus",
             check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at
             FROM series WHERE title = $1"#,
@@ -760,7 +760,7 @@ impl DatabaseService {
             WHERE id = (SELECT id FROM candidate)
             RETURNING
                 id, title, original_title, description, cover_image_url, current_source_url,
-                source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage,
+                source_website_host, views_count, bookmarks_count, total_rating_score, total_ratings_count, last_chapter_found_in_storage,
                 processing_status as "processing_status: SeriesStatus", check_interval_minutes, last_checked_at,
                 next_checked_at, created_at, updated_at
             "#,
@@ -793,7 +793,7 @@ impl DatabaseService {
             WHERE id = (SELECT id FROM candidate)
             RETURNING
                 id, title, original_title, description, cover_image_url, current_source_url,
-                source_website_host, views_count, bookmarks_count, last_chapter_found_in_storage,
+                source_website_host, views_count, bookmarks_count, total_rating_score, total_ratings_count, last_chapter_found_in_storage,
                 processing_status as "processing_status: SeriesStatus", check_interval_minutes, last_checked_at,
                 next_checked_at, created_at, updated_at
             "#,
@@ -1078,5 +1078,66 @@ impl DatabaseService {
         .context("Failed to fetch bookmarked series list")?;
 
         Ok(series_list)
+    }
+
+    pub async fn add_or_update_series_rating(
+        &self,
+        series_id: i32,
+        rating: i16,
+        user_id: i32,
+    ) -> AnyhowResult<()> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to begin transaction.")?;
+
+        let old_rating: Option<i16> = sqlx::query_scalar!(
+            "SELECT rating FROM series_ratings WHERE user_id = $1 AND series_id = $2",
+            user_id,
+            series_id
+        )
+            .fetch_optional(&mut *tx)
+            .await?;
+
+        sqlx::query!(
+            r#"INSERT INTO series_ratings (series_id, user_id, rating) VALUES ($1, $2, $3)
+                ON CONFLICT (user_id, series_id) DO UPDATE SET rating = $3, updated_at = NOW()
+            "#,
+            series_id,
+            user_id,
+            rating,
+        )
+        .execute(&mut *tx)
+            .await
+            .context("Failed to update series rating")?;
+
+        match old_rating {
+            Some(old_score) => {
+                // User is UPDATING their rating
+                let rating_diff = rating as i64 - old_score as i64;
+                sqlx::query!(
+                    "UPDATE series SET total_rating_score = total_rating_score + $1 WHERE id = $2",
+                    rating_diff,
+                    series_id,
+                )
+                .execute(&mut *tx)
+                .await
+                .context("Failed to update user series rating")?;
+            }
+            None => {
+                // New rating
+                sqlx::query!(
+                    "UPDATE series SET total_rating_score = total_rating_score + $1, total_ratings_count = total_ratings_count + 1 WHERE id = $2",
+                    rating as i64,
+                    series_id,
+                )
+                .execute(&mut *tx)
+                .await
+                .context("Failed to update new series rating")?;
+            }
+        }
+        tx.commit().await.context("Failed to commit transaction.")?;
+        Ok(())
     }
 }
