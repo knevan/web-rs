@@ -5,6 +5,8 @@ use crate::database::Users;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum_core::__private::tracing::error;
+use axum_extra::extract::CookieJar;
+use jsonwebtoken::Validation;
 
 pub struct AuthenticatedUser {
     pub id: i32,
