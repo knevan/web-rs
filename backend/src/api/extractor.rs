@@ -5,8 +5,7 @@ use crate::database::Users;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum_core::__private::tracing::error;
-use axum_extra::extract::CookieJar;
-use jsonwebtoken::Validation;
+use std::convert::Infallible;
 
 pub struct AuthenticatedUser {
     pub id: i32,
@@ -40,6 +39,26 @@ impl FromRequestParts<AppState> for AuthenticatedUser {
             username: user.username,
             role_id: user.role_id,
         })
+    }
+}
+
+pub struct OptionalAuthenticatedUser(pub Option<AuthenticatedUser>);
+
+impl FromRequestParts<AppState> for OptionalAuthenticatedUser {
+    type Rejection = Infallible;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let user_result =
+            AuthenticatedUser::from_request_parts(parts, state).await;
+
+        // If extraction is successful, wrap it in Some.
+        // we treat it as None instead of rejecting the request.
+        let user = user_result.ok();
+
+        Ok(OptionalAuthenticatedUser(user))
     }
 }
 
