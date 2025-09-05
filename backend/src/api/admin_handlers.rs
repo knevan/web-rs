@@ -65,7 +65,7 @@ pub async fn create_new_series_handler(
     };
 
     let fetch_new_series: Series = match db_service
-        .get_manga_series_by_id(new_series_id)
+        .get_series_by_id(new_series_id)
         .await
     {
         Ok(Some(series)) => series,
@@ -265,13 +265,13 @@ pub struct PaginatedResponse<T: Serialize> {
     total_items: i64,
 }
 
-pub async fn get_all_manga_series_handler(
+pub async fn get_all_series_handler(
     admin: AdminUser,
     State(state): State<AppState>,
     Query(pagination): Query<PaginationParams>,
 ) -> Response {
     println!(
-        "->> {:<12} - get_all_manga_series_handler - user: {}",
+        "->> {:<12} - get_all_series_handler - user: {}",
         "HANDLER", admin.0.username
     );
 

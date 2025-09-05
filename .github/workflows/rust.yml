@@ -31,7 +31,7 @@ jobs:
           cache-on-failure: true
       - name: Run linter (clippy action)
         #env: SQLX_OFFLINE: true
-        uses: clechasseur/rs-clippy-check@v4.0.5
+        uses: clechasseur/rs-clippy-check@v5.0.1
         with:
           #token: ${{ secrets.GITHUB_TOKEN }}
           args: --workspace
