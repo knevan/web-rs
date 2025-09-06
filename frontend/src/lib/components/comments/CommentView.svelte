@@ -1,21 +1,31 @@
 <script lang="ts">
     import CommentForm from './CommentForm.svelte';
     import CommentView from './CommentView.svelte';
-    import DOMPurify from "dompurify";
-    import {marked} from "marked";
     import {Button} from "$lib/components/ui/button";
+    import {mountSpoilers, parseAndSanitize} from "$lib/utils/markdown";
+    import {tick} from "svelte";
 
     let {comment, addReply} = $props();
     let showReplyForm = $state(false);
+    let contentContainer = $state<HTMLElement | null>(null);
 
     const sanitizedContent = $derived(
-        DOMPurify.sanitize(marked.parse(comment.content, {breaks: true, gfm: true}) as string),
+        parseAndSanitize(comment.content),
     )
 
     function handleReplySubmit(contentText: string) {
         addReply(comment.id, contentText);
         showReplyForm = false;
     }
+
+    $effect(() => {
+        if (contentContainer) {
+            // Use tick to ensure the DOM is ready
+            tick().then(() => {
+                mountSpoilers(contentContainer);
+            });
+        }
+    });
 </script>
 
 <div class="flex flex-col">
@@ -27,7 +37,7 @@
                 <span class="text-sm text-zinc-500 dark:text-zinc-400">{comment.timestamp}</span>
             </div>
 
-            <div class="prose prose-zinc mt-1 max-w-none dark:prose-invert">
+            <div bind:this={contentContainer} class="prose prose-zinc mt-1 max-w-none dark:prose-invert">
                 {@html sanitizedContent}
             </div>
 
