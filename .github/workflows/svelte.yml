@@ -3,6 +3,10 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - '**/*.svelte'
+      - '**/*.ts'
+      - '**/*.js'
 
 jobs:
   svelte-check:
