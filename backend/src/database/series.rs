@@ -41,7 +41,7 @@ impl DatabaseService {
         )
             .fetch_one(&mut *tx)
             .await
-            .context("Failed to add manga series with sqlx")?;
+            .context("Failed to add series with sqlx")?;
 
         if let Some(author_names) = data.authors {
             for name in author_names {
@@ -68,7 +68,7 @@ impl DatabaseService {
                     "INSERT INTO series_authors (series_id, author_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
                     new_series_id,
                     author_id
-                ).execute(&mut *tx).await.context(format!("Failed to link author {} to manga", name))?;
+                ).execute(&mut *tx).await.context(format!("Failed to link author {} to ", name))?;
             }
         }
 
@@ -84,7 +84,7 @@ impl DatabaseService {
                     )
                         .execute(&mut *tx)
                         .await
-                        .context(format!("Failed to link category {} to manga", category_id))?;
+                        .context(format!("Failed to link category {} to series", category_id))?;
             }
         }
 
@@ -129,7 +129,7 @@ impl DatabaseService {
         )
         .execute(&mut *tx)
         .await
-        .context("Failed to update manga series with sqlx")?;
+        .context("Failed to update series with sqlx")?;
 
         if let Some(author_names) = data.authors {
             sqlx::query!(
@@ -138,7 +138,7 @@ impl DatabaseService {
             )
             .execute(&mut *tx)
             .await
-            .context("Failed to delete existing authors for manga")?;
+            .context("Failed to delete existing authors for series")?;
 
             for name in author_names {
                 let author_id = sqlx::query_scalar!(
@@ -169,7 +169,7 @@ impl DatabaseService {
                 )
                     .execute(&mut *tx)
                     .await
-                    .context(format!("Failed to link author {} to manga", name))?;
+                    .context(format!("Failed to link author {} to series", name))?;
             }
         }
 
@@ -180,7 +180,7 @@ impl DatabaseService {
             )
             .execute(&mut *tx)
             .await
-            .context("Failed to delete existing categories for manga")?;
+            .context("Failed to delete existing categories for series")?;
 
             if !category_ids.is_empty() {
                 for category_id in category_ids {
@@ -191,7 +191,7 @@ impl DatabaseService {
                     )
                         .execute(&mut *tx)
                     .await
-                    .context(format!("Failed to link category {} to manga", category_id))?;
+                    .context(format!("Failed to link category {} to series", category_id))?;
                 }
             }
         }
@@ -201,7 +201,7 @@ impl DatabaseService {
         Ok(result.rows_affected())
     }
 
-    pub async fn get_manga_series_by_id(
+    pub async fn get_series_by_id(
         &self,
         id: i32,
     ) -> AnyhowResult<Option<Series>> {
@@ -220,7 +220,7 @@ impl DatabaseService {
         Ok(series)
     }
 
-    pub async fn get_manga_series_by_title(
+    pub async fn get_series_by_title(
         &self,
         title: &str,
     ) -> AnyhowResult<Option<Series>> {
@@ -561,14 +561,12 @@ impl DatabaseService {
     ) -> AnyhowResult<u64> {
         // First, get the series data asynchronously.
         let series =
-            self.get_manga_series_by_id(series_id)
-                .await?
-                .ok_or_else(|| {
-                    anyhow!(
-                        "Series with id {} not found for schedule update",
-                        series_id
-                    )
-                })?;
+            self.get_series_by_id(series_id).await?.ok_or_else(|| {
+                anyhow!(
+                    "Series with id {} not found for schedule update",
+                    series_id
+                )
+            })?;
 
         // Calculate the next check time if not provided
         let final_next_checked_at = new_next_checked_at.unwrap_or_else(|| {

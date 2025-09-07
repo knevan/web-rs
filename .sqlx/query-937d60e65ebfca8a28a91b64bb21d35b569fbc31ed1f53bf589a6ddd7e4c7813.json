@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM user_bookmarks WHERE user_id = $1 AND series_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "937d60e65ebfca8a28a91b64bb21d35b569fbc31ed1f53bf589a6ddd7e4c7813"
+}

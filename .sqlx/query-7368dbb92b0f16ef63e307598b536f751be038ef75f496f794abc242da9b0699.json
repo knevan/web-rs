@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                s.id,\n                s.title,\n                s.cover_image_url,\n                COUNT(svl.series_id) AS \"view_count\"\n            FROM\n                series s\n            INNER JOIN\n                series_view_log svl ON s.id = svl.series_id\n            WHERE\n                svl.viewed_at >= NOW() - $1::interval\n            GROUP BY\n                s.id\n            ORDER BY\n                view_count DESC\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "cover_image_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "view_count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Interval",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "7368dbb92b0f16ef63e307598b536f751be038ef75f496f794abc242da9b0699"
+}
