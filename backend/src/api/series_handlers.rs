@@ -1,6 +1,9 @@
-use crate::api::extractor::AuthenticatedUser;
+use crate::api::extractor::{AuthenticatedUser, OptionalAuthenticatedUser};
 use crate::builder::startup::AppState;
-use crate::database::{CategoryTag, Series, SeriesChapter, SeriesOrderBy};
+use crate::database::{
+    CategoryTag, CommentEntityType, NewCommentPayload, Series, SeriesChapter,
+    SeriesOrderBy,
+};
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum_core::__private::tracing::error;
@@ -364,6 +367,103 @@ pub async fn rate_series_handler(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": format!("Failed to update rating: {}", e)})),
                 ).into_response()
+        }
+    }
+}
+
+// Fetch comments
+pub async fn get_series_comment_handler(
+    State(state): State<AppState>,
+    Path(series_id): Path<i32>,
+    user: OptionalAuthenticatedUser,
+) -> Response {
+    let user_id = user.0.map(|u| u.id);
+    match state
+        .db_service
+        .get_comments(CommentEntityType::Series, series_id, user_id)
+        .await
+    {
+        Ok(comments) => (StatusCode::OK, Json(comments)).into_response(),
+        Err(e) => {
+            error!(
+                "[SERIES] Failed to get comments for series {}: {}",
+                series_id, e
+            );
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Failed to get comments for series"})),
+            ).into_response()
+        }
+    }
+}
+
+// Post new comment
+pub async fn post_series_comment_handler(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+    Path(series_id): Path<i32>,
+    Json(payload): Json<NewCommentPayload>,
+) -> Response {
+    match state
+        .db_service
+        .create_new_comment(
+            user.id,
+            CommentEntityType::Series,
+            series_id,
+            &payload.content_markdown,
+            payload.parent_id,
+        )
+        .await
+    {
+        Ok(new_id) => (
+            StatusCode::OK,
+            Json(
+                serde_json::json!({"message": "Comment created", "id": new_id}),
+            ),
+        )
+            .into_response(),
+        Err(e) => {
+            error!("Failed to create comment for series {}: {}", series_id, e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Failed to create comment for series"}))).into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct UpdateCommentPayload {
+    pub content_markdown: String,
+}
+
+pub async fn update_existing_comment_handler(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+    Path(comment_id): Path<i64>,
+    Json(payload): Json<UpdateCommentPayload>,
+) -> Response {
+    match state
+        .db_service
+        .update_existing_comment(comment_id, user.id, &payload.content_markdown)
+        .await
+    {
+        Ok(Some(updated_html)) => {
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({"message": "Comment updated successfully", "new_html_content": updated_html})),
+            ).into_response()
+        }
+        Ok(None) => {
+            (StatusCode::NOT_FOUND, Json(serde_json::json!({"message": "Comment not found or permission denied"}))).into_response()
+        }
+        Err(e) => {
+            error!(
+                "Failed to update existing comment with id {}: {}",
+                comment_id, e
+            );
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Could not update comment"})),
+            )
+                .into_response()
         }
     }
 }
