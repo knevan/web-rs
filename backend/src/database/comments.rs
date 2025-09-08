@@ -1,44 +1,54 @@
 use super::*;
 use ammonia::Builder;
+use once_cell::sync::Lazy;
 use pulldown_cmark::{Options, Parser, html};
+use regex::Regex;
 use std::collections::{HashMap, HashSet};
+
+static SPOILER_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"\|\|(.*?)\|\|").unwrap());
 
 impl DatabaseService {
     // Helper function to transform a flat list of comments into a nested tree structure.
     fn nested_comment_tree(&self, rows: Vec<CommentFlatRow>) -> Vec<Comment> {
-        let mut comments_map: HashMap<i64, Comment> = HashMap::new();
+        if rows.is_empty() {
+            return Vec::new();
+        }
+
+        // A map to hold all child comments, grouped by their parent's ID for efficient lookup.
+        let mut children_map: HashMap<i64, Vec<Comment>> =
+            HashMap::with_capacity(rows.len());
+
+        // A vector to store the root-level comments.
         let mut root_comments: Vec<Comment> = Vec::new();
 
         for row in rows {
-            let comment = Comment {
-                id: row.id,
-                parent_id: row.parent_id,
-                content_html: row.content_html,
-                created_at: row.created_at,
-                updated_at: row.updated_at,
-                user: CommentUser {
-                    username: row.user_username,
-                    avatar_url: row.user_avatar_url,
-                },
-                upvotes: row.upvotes,
-                downvotes: row.downvotes,
-                current_user_vote: row.current_user_vote,
-                replies: Vec::new(),
-            };
-            comments_map.insert(comment.id, comment);
-        }
+            let comment: Comment = row.into();
 
-        let comments_link_parent: Vec<Comment> =
-            comments_map.values().cloned().collect();
-        for comment in comments_link_parent {
             if let Some(parent_id) = comment.parent_id {
-                if let Some(parent) = comments_map.get_mut(&parent_id) {
-                    parent.replies.push(comment);
-                }
+                // If it's a reply, add it to the children_map, keyed by its parent's ID.
+                children_map.entry(parent_id).or_default().push(comment);
             } else {
                 root_comments.push(comment);
             }
         }
+
+        let mut stack: Vec<&mut Comment> = root_comments.iter_mut().collect();
+
+        while let Some(parent) = stack.pop() {
+            if let Some(mut children) = children_map.remove(&parent.id) {
+                // Sort by creation date
+                children.sort_by_key(|c| c.created_at);
+
+                parent.replies = children;
+
+                for child in &mut parent.replies {
+                    stack.push(child);
+                }
+            }
+        }
+
+        root_comments.sort_by_key(|c| c.created_at);
         root_comments
     }
 
@@ -100,6 +110,103 @@ impl DatabaseService {
         Ok(self.nested_comment_tree(flat_comments))
     }
 
+    fn process_comment_markdown(&self, markdown: &str) -> AnyhowResult<String> {
+        // Process spoiler markdown ||spoiler|| to <span>
+        let processed_spoiler_markdown = SPOILER_REGEX
+            .replace_all(markdown, r#"<span class="spoiler-hook">$1</span>"#);
+
+        let mut options = Options::empty();
+        options.insert(Options::ENABLE_STRIKETHROUGH);
+
+        let parser = Parser::new_ext(&processed_spoiler_markdown, options);
+
+        let mut unsafe_html = String::new();
+        html::push_html(&mut unsafe_html, parser);
+
+        // Replace <strong> with <b> more efficient
+        let unsafe_html = unsafe_html
+            .replace("<strong>", "<b>")
+            .replace("</strong>", "</b>");
+
+        let allowed_tags = HashSet::from([
+            "p",
+            "b",
+            "strong",
+            "em",
+            "a",
+            "code",
+            "pre",
+            "blockquote",
+            "ul",
+            "ol",
+            "li",
+            "h1",
+            "h2",
+            "h3",
+            "span",
+        ]);
+
+        let mut allowed_classes = HashMap::new();
+        // Allow class "spoiler" for <span> tag
+        allowed_classes.insert("span", HashSet::from(["spoiler"]));
+
+        let sanitized_html = Builder::new()
+            .tags(allowed_tags)
+            //.add_tag_attributes("span", &["class"])
+            .allowed_classes(allowed_classes)
+            .link_rel(Some("nofollow noopener noreferrer"))
+            .clean(&unsafe_html)
+            .to_string();
+
+        Ok(sanitized_html)
+    }
+
+    // Function to add new comment on existing comment tree list
+    pub async fn get_comment_by_id(
+        &self,
+        comment_id: i64,
+        current_user_id: Option<i32>,
+    ) -> AnyhowResult<Option<Comment>> {
+        let comment_row:Option<CommentFlatRow> = sqlx::query_as!(
+            CommentFlatRow,
+            r#"
+            WITH vote_summary AS (
+                SELECT
+                    cv.comment_vote_id,
+                    COUNT(*) FILTER (WHERE cv.vote_type = 1) AS upvotes,
+                    COUNT(*) FILTER (WHERE cv.vote_type = -1) AS downvotes
+                FROM comment_votes cv
+                WHERE cv.comment_vote_id = $1
+                GROUP BY cv.comment_vote_id
+            )
+            SELECT
+                c.id as "id!",
+                c.parent_id,
+                c.content_html as "content_html!",
+                c.created_at as "created_at!",
+                c.updated_at as "updated_at!",
+                COALESCE(up.display_name, u.username) as "user_username!",
+                up.avatar_url as "user_avatar_url",
+                COALESCE(vs.upvotes, 0) as "upvotes!",
+                COALESCE(vs.downvotes, 0) as "downvotes!",
+                cv.vote_type as "current_user_vote: _"
+            FROM comments c
+            JOIN users u ON c.user_id = u.id
+            LEFT JOIN user_profiles up ON u.id = up.user_id
+            LEFT JOIN vote_summary vs ON c.id = vs.comment_vote_id
+            LEFT JOIN comment_votes cv ON c.id = cv.comment_vote_id AND cv.user_id = $2
+            WHERE c.id = $1 AND c.deleted_at IS NULL
+            "#,
+            comment_id,
+            current_user_id
+        )
+            .fetch_optional(&self.pool)
+            .await
+            .context("Failed to fetch comment row")?;
+
+        Ok(comment_row.map(Comment::from))
+    }
+
     pub async fn create_new_comment(
         &self,
         user_id: i32,
@@ -108,33 +215,7 @@ impl DatabaseService {
         content_markdown: &str,
         parent_id: Option<i64>,
     ) -> AnyhowResult<i64> {
-        let mut options = Options::empty();
-        options.insert(Options::ENABLE_STRIKETHROUGH);
-
-        let parser = Parser::new_ext(content_markdown, options);
-
-        let mut unsafe_html = String::new();
-        html::push_html(&mut unsafe_html, parser);
-
-        let content_html = Builder::new()
-            .tags(HashSet::from([
-                "p",
-                "strong",
-                "em",
-                "a",
-                "code",
-                "pre",
-                "blockquote",
-                "ul",
-                "ol",
-                "li",
-                "h1",
-                "h2",
-                "h3",
-            ]))
-            .link_rel(Some("nofollow noopener noreferrer"))
-            .clean(&unsafe_html)
-            .to_string();
+        let content_html = self.process_comment_markdown(content_markdown)?;
 
         let new_comment_id = sqlx::query_scalar!(
             r#"
@@ -162,26 +243,8 @@ impl DatabaseService {
         user_id: i32,
         new_content_markdown: &str,
     ) -> AnyhowResult<Option<String>> {
-        let mut options = Options::empty();
-        options.insert(Options::ENABLE_STRIKETHROUGH);
-
-        let parser = Parser::new_ext(new_content_markdown, options);
-        let mut unsafe_html = String::new();
-        html::push_html(&mut unsafe_html, parser);
-
-        let new_content_html = Builder::new()
-            .tags(HashSet::from([
-                "p",
-                "strong",
-                "em",
-                "a",
-                "code",
-                "pre",
-                "blockquote",
-            ]))
-            .link_rel(Some("nofollow noopener noreferrer"))
-            .clean(&unsafe_html)
-            .to_string();
+        let new_content_html =
+            self.process_comment_markdown(new_content_markdown)?;
 
         let updated_html = sqlx::query_scalar!(
             r#"

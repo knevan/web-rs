@@ -9,7 +9,6 @@ use url::Url;
 pub mod auth;
 pub mod chapters;
 pub mod comments;
-pub mod db;
 pub mod series;
 pub mod storage;
 pub mod users;
@@ -259,6 +258,26 @@ struct CommentFlatRow {
     upvotes: i64,
     downvotes: i64,
     current_user_vote: Option<i16>,
+}
+
+impl From<CommentFlatRow> for Comment {
+    fn from(row: CommentFlatRow) -> Self {
+        Comment {
+            id: row.id,
+            parent_id: row.parent_id,
+            content_html: row.content_html,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            user: CommentUser {
+                username: row.user_username,
+                avatar_url: row.user_avatar_url,
+            },
+            upvotes: row.upvotes,
+            downvotes: row.downvotes,
+            current_user_vote: row.current_user_vote,
+            replies: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, FromRow, Serialize, Clone)]

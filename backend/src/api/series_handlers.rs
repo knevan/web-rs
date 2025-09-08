@@ -404,7 +404,8 @@ pub async fn post_series_comment_handler(
     Path(series_id): Path<i32>,
     Json(payload): Json<NewCommentPayload>,
 ) -> Response {
-    match state
+    // Create the new comment and get its ID
+    let new_comment_id = match state
         .db_service
         .create_new_comment(
             user.id,
@@ -415,17 +416,31 @@ pub async fn post_series_comment_handler(
         )
         .await
     {
-        Ok(new_id) => (
-            StatusCode::OK,
-            Json(
-                serde_json::json!({"message": "Comment created", "id": new_id}),
-            ),
-        )
-            .into_response(),
+        Ok(id) => id,
         Err(e) => {
             error!("Failed to create comment for series {}: {}", series_id, e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Failed to create comment for series"}))).into_response()
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Failed to create comment for series"})),
+            )
+                .into_response();
         }
+    };
+
+    // After creating, fetch the full data for the new comment
+    match state
+        .db_service
+        .get_comment_by_id(new_comment_id, Some(user.id))
+        .await
+    {
+        // If fetch is successful, return the full comment object
+        Ok(Some(new_comment)) => (StatusCode::OK, Json(new_comment)).into_response(),
+        // Handle cases where the comment couldn't be fetched right after creation
+        Ok(None) | Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": "Comment created but failed to retrieve its data"})),
+        )
+            .into_response(),
     }
 }
 
