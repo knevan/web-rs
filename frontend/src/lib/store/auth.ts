@@ -2,7 +2,7 @@ import { writable } from 'svelte/store';
 import { goto } from '$app/navigation';
 
 // Define the shape of the user object
-interface User {
+export interface User {
 	identifier: string;
 	role: string;
 }

@@ -7,11 +7,12 @@
     let {
         submitText,
         placeholder = 'Send your comment...',
-        submitLabel = 'Send'
+        submitLabel = 'Send',
+        initialContent = ''
     } = $props();
 
     // State for the textarea content
-    let contentText = $state('');
+    let contentText = $state(initialContent);
     let activeTab = $state('write');
     let textareaElement = $state<HTMLTextAreaElement | null>(null);
     let previewContainer = $state<HTMLElement | null>(null);
@@ -21,7 +22,7 @@
     )
 
     $effect(() => {
-        if (previewContainer) {
+        if (previewContainer && previewComment) {
             // We need to wait for Svelte to render the new HTML from previewComment
             tick().then(() => {
                 mountSpoilers(previewContainer);
