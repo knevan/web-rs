@@ -1,56 +1,130 @@
 <script lang="ts">
     import Comment from './CommentView.svelte';
     import CommentForm from './CommentForm.svelte';
+    import type {CommentType} from "$lib/components/comments/comments";
+    import {apiFetch} from "$lib/store/auth";
+    import type {User} from "$lib/store/auth"
 
-    type CommentType = {
-        id: number;
-        user: {
-            name: string;
-            avatar: string;
-        };
-        timestamp: string;
-        content: string;
-        upvotes: number;
-        replies: CommentType[];
-    };
+    let {seriesId, initialComments = [], currentUser = null} = $props<{
+        seriesId: number;
+        initialComments?: CommentType[];
+        currentUser: User | null;
+    }>();
 
-    let comments = $state<CommentType[]>([]);
+    let comments = $state<CommentType[]>(initialComments);
 
-    function addTopLevelComment(content: string) {
-        const newComment = createCommentObject(content);
-        comments.push(newComment);
+    $effect(() => {
+        console.log(`Fetching comments for series ID: ${seriesId}`);
+        fetchComments();
+    });
+
+    async function fetchComments() {
+        try {
+            const response = await fetch(`/api/series/${seriesId}/comments`);
+            if (response.ok) {
+                comments = await response.json();
+            } else {
+                console.error(response);
+            }
+        } catch (error) {
+            console.error(error);
+        }
     }
 
-    // Function to add a reply to any comment, nested or not
-    function addReply(parentId: number, content: string) {
-        // This recursive function will search for the parent comment in the entire tree
-        function findAndAddReply(nodes: CommentType[], targetId: number) {
-            for (const node of nodes) {
-                if (node.id === targetId) {
-                    node.replies.push(createCommentObject(content));
-                    return true;
+    async function addTopLevelComment(content: string) {
+        if (!currentUser) return;
+
+        try {
+            const response = await apiFetch(`/api/series/${seriesId}/comments`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    content_markdown: content,
+                    parent_id: null
+                })
+            })
+
+            if (response.ok) {
+                // After successfully posting, refresh the comments list
+                const newComments = await response.json();
+                comments = [newComments, ...comments];
+            } else {
+                const errorData = await response.json();
+                console.error(errorData);
+
+            }
+            //const newCommentFromServer = await response.json();
+            //comments.unshift(newCommentFromServer);
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    // A recursive function to find a comment by ID and add a reply to it
+    function addReplyToComment(commentsArray: CommentType[], parentId: number, newReply: CommentType): boolean {
+        for (let comment of commentsArray) {
+            if (comment.id === parentId) {
+                if (!comment.replies) {
+                    comment.replies = [];
                 }
-                if (node.replies && findAndAddReply(node.replies, targetId)) {
+                comment.replies.push(newReply);
+                return true;
+            }
+            // If not found, search in its replies recursively
+            if (comment.replies && comment.replies.length > 0) {
+                if (addReplyToComment(comment.replies, parentId, newReply)) {
                     return true;
                 }
             }
-            return false;
         }
-
-        findAndAddReply(comments, parentId);
+        return false;
     }
 
-    // Helper function to create a new comment object
+    // Function to add a reply to any comment, nested or not
+    async function addReply(parentId: number, content: string) {
+        if (!currentUser) return;
+
+        // This recursive function will search for the parent comment in the entire tree
+        try {
+            const response = await apiFetch(`/api/series/${seriesId}/comments`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    content_markdown: content,
+                    parent_id: parentId
+                })
+            });
+            if (response.ok) {
+                const newReply = await response.json();
+                const updatedComments = [...comments];
+
+                addReplyToComment(updatedComments, parentId, newReply);
+                comments = updatedComments;
+            } else {
+                const errorData = await response.json();
+                console.error(errorData);
+            }
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    /* Helper function to create a new comment object
     function createCommentObject(content: string): CommentType {
         return {
             id: Date.now(),
-            user: {name: 'CurrentUser', avatar: 'https://i.pravatar.cc/40?u=current'},
+            user: {username: 'CurrentUser', avatar_url: 'https://i.pravatar.cc/40?u=current'},
             timestamp: 'Baru saja',
-            content: content,
+            content: parseAndSanitize(content),
+            content_markdown: content,
             upvotes: 0,
             replies: []
         };
-    }
+    }*/
 
 </script>
 
@@ -61,7 +135,7 @@
 
     <div class="flex flex-col gap-4">
         {#each comments as comment (comment.id)}
-            <Comment {comment} {addReply}/>
+            <Comment {comment} {addReply} {currentUser}/>
         {/each}
     </div>
 </div>
