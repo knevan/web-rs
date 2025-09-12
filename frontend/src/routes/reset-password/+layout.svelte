@@ -1,6 +1,4 @@
 <script lang="ts">
-    import Footer from "$lib/components/Footer.svelte";
-
     let {children} = $props();
 </script>
 
@@ -8,6 +6,4 @@
     <main class="w-full flex-1 lg:max-w-6xl mx-auto p-4">
         {@render children()}
     </main>
-
-    <Footer/>
 </div>

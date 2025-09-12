@@ -6,6 +6,8 @@
     import {Button} from "$lib/components/ui/button";
     import {toast} from "svelte-sonner";
     import {Star} from "@lucide/svelte";
+    import {Badge} from "$lib/components/ui/badge";
+    import CommentSystem from "$lib/components/comments/CommentSystem.svelte";
 
     interface MangaSeries {
         id: number;
@@ -27,10 +29,15 @@
         created_at: string;
     }
 
+    interface CategoryTag {
+        id: number;
+        name: string;
+    }
+
     interface MangaData {
         series: MangaSeries;
         authors: string[];
-        categoryTags: string[];
+        categoryTags: CategoryTag[];
         chapters: MangaChapter[];
     }
 
@@ -111,7 +118,7 @@
 
                 if (authState.isAuthenticated) {
                     try {
-                        const bookmarkStatusResponse = await fetch(`/api/series/${currentMangaId}/bookmark/status`);
+                        const bookmarkStatusResponse = await apiFetch(`/api/series/${currentMangaId}/bookmark/status`);
                         if (bookmarkStatusResponse.ok) {
                             const data = await bookmarkStatusResponse.json();
                             isBookmarked = data.isBookmarked;
@@ -202,8 +209,8 @@
         }
     }
 
-    function handleCategoryClick(category: string) {
-        goto(`/browse?category=${encodeURIComponent(category)}`);
+    function handleCategoryClick(tag: CategoryTag) {
+        goto(`/browse?category=${encodeURIComponent(tag.name)}`);
     }
 
     async function handleRatingClick(rating: number) {
@@ -399,19 +406,6 @@
                                 </div>
                             </div>
 
-                            {#if mangaData.categoryTags?.length > 0}
-                                <div class="space-y-3">
-                                    <div class="flex flex-wrap gap-2">
-                                        {#each mangaData.categoryTags as category}
-                                            <button onclick={() => handleCategoryClick(category)}
-                                                    class="px-3 py-1 text-sm font-medium rounded-full bg-[#0f3460] text-[#c0c0ff] transition-all duration-300 ease-in-out hover:bg-blue-600 hover:text-white hover:-translate-y-0.5">
-                                                {category}
-                                            </button>
-                                        {/each}
-                                    </div>
-                                </div>
-                            {/if}
-
                             <div class="text-gray-400 text-sm">
                                 Last Update:
                                 <span class="text-gray-300">
@@ -448,6 +442,22 @@
                                     </Button>
                                 {/if}
                             </div>
+                            {#if mangaData.categoryTags?.length > 0}
+                                <div class="space-y-3">
+                                    <h3 class="text-gray-300 font-semibold text-xl mt-2 text-center md:text-left">
+                                        Categories
+                                    </h3>
+                                    <div class="flex flex-wrap gap-2 mt-4">
+                                        {#each mangaData.categoryTags as tag (tag.id)}
+                                            <Badge onclick={() => handleCategoryClick(tag)}
+                                                   role="button"
+                                                   class="px-3 py-1 text-sm font-medium rounded-full bg-[#0f3460] text-[#c0c0ff] transition-all duration-300 ease-in-out hover:bg-blue-600 hover:text-white hover:-translate-y-0.5">
+                                                {tag.name}
+                                            </Badge>
+                                        {/each}
+                                    </div>
+                                </div>
+                            {/if}
                         </div>
                     </div>
                     {#if mangaData.series.description}
@@ -540,6 +550,18 @@
                 {:else}
                     <div class="text-center py-12">
                         <p class="text-gray-400">No chapters available</p>
+                    </div>
+                {/if}
+
+                {#if mangaId}
+                    <div class="bg-[#16213e] shadow-2xl rounded-none md:rounded-sm md:mt-1 p-4 md:p-8">
+                        <h2 class="text-2xl font-bold mb-1 ml-1">
+                            Comments
+                        </h2>
+                        <CommentSystem
+                                seriesId={+mangaId}
+                                currentUser={$auth.user}
+                        />
                     </div>
                 {/if}
             </div>

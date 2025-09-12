@@ -4,7 +4,6 @@
 </svelte:head>
 
 <script lang="ts">
-    // Import komponen yang diperlukan
     import SeriesCarousel from '$lib/components/SeriesCarousel.svelte';
 
     const placeholderManga = Array(20).fill(null).map((_, index) => ({
