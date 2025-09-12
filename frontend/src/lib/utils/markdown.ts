@@ -47,7 +47,10 @@ marked.use({ extensions: [spoilerExtension] });
 
 export function parseAndSanitize(content: string): string {
 	const rawHtml = marked.parseInline(content, { breaks: true, gfm: true }) as string;
-	const sanitizedHtml = DOMPurify.sanitize(rawHtml);
+	const sanitizedHtml = DOMPurify.sanitize(rawHtml, {
+		ALLOWED_TAGS: ['strong', 'b', 'em', 'i', 'a', 'span', 'br'],
+		ALLOWED_ATTR: ['href', 'class']
+	});
 	return `${sanitizedHtml}`;
 }
 
