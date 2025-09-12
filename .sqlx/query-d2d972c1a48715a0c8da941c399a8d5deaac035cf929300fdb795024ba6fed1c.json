@@ -1,0 +1,182 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH candidate AS (\n                SELECT id FROM series\n                WHERE\n                    processing_status = $1\n                    AND next_checked_at <= NOW()\n                ORDER BY next_checked_at ASC\n                LIMIT 1\n                FOR UPDATE SKIP LOCKED\n            )\n            UPDATE series\n            SET processing_status = $2\n            WHERE id = (SELECT id FROM candidate)\n            RETURNING\n                id, title, original_title, description, cover_image_url, current_source_url,\n                source_website_host, views_count, bookmarks_count, total_rating_score, total_ratings_count, last_chapter_found_in_storage,\n                processing_status as \"processing_status: SeriesStatus\", check_interval_minutes, last_checked_at,\n                next_checked_at, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "original_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "cover_image_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "current_source_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "source_website_host",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "views_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "bookmarks_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "total_rating_score",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "total_ratings_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "last_chapter_found_in_storage",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 12,
+        "name": "processing_status: SeriesStatus",
+        "type_info": {
+          "Custom": {
+            "name": "series_status",
+            "kind": {
+              "Enum": [
+                "Pending",
+                "Processing",
+                "Available",
+                "Ongoing",
+                "Completed",
+                "Hiatus",
+                "Discontinued",
+                "Error",
+                "Pending Deletion",
+                "Deleting",
+                "Deletion Failed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "check_interval_minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 14,
+        "name": "last_checked_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "next_checked_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 17,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "series_status",
+            "kind": {
+              "Enum": [
+                "Pending",
+                "Processing",
+                "Available",
+                "Ongoing",
+                "Completed",
+                "Hiatus",
+                "Discontinued",
+                "Error",
+                "Pending Deletion",
+                "Deleting",
+                "Deletion Failed"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "series_status",
+            "kind": {
+              "Enum": [
+                "Pending",
+                "Processing",
+                "Available",
+                "Ongoing",
+                "Completed",
+                "Hiatus",
+                "Discontinued",
+                "Error",
+                "Pending Deletion",
+                "Deleting",
+                "Deletion Failed"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "d2d972c1a48715a0c8da941c399a8d5deaac035cf929300fdb795024ba6fed1c"
+}

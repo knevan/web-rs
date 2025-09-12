@@ -8,7 +8,7 @@ use url::Url;
 
 pub mod auth;
 pub mod chapters;
-pub mod db;
+pub mod comments;
 pub mod series;
 pub mod storage;
 pub mod users;
@@ -65,7 +65,7 @@ impl fmt::Display for SeriesStatus {
     }
 }
 
-// Struct represents a manga series stored in the database.
+// Struct represents a series stored in the database.
 #[derive(Debug, Clone, FromRow, Serialize)]
 pub struct Series {
     pub id: i32,
@@ -227,6 +227,83 @@ pub struct LatestReleaseSeries {
     pub last_chapter_found_in_storage: Option<f32>,
     pub updated_at: DateTime<Utc>,
     pub chapter_title: Option<String>,
+}
+
+#[derive(Debug, FromRow, Serialize, Clone)]
+pub struct Comment {
+    pub id: i64,
+    pub parent_id: Option<i64>,
+    pub content_html: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub user: CommentUser,
+    pub upvotes: i64,
+    pub downvotes: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_user_vote: Option<i16>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub replies: Vec<Comment>,
+}
+
+// Helper struct to map the flat comment result
+#[derive(Debug, FromRow)]
+struct CommentFlatRow {
+    id: i64,
+    parent_id: Option<i64>,
+    content_html: String,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    user_username: String,
+    user_avatar_url: Option<String>,
+    upvotes: i64,
+    downvotes: i64,
+    current_user_vote: Option<i16>,
+}
+
+impl From<CommentFlatRow> for Comment {
+    fn from(row: CommentFlatRow) -> Self {
+        Comment {
+            id: row.id,
+            parent_id: row.parent_id,
+            content_html: row.content_html,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            user: CommentUser {
+                username: row.user_username,
+                avatar_url: row.user_avatar_url,
+            },
+            upvotes: row.upvotes,
+            downvotes: row.downvotes,
+            current_user_vote: row.current_user_vote,
+            replies: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, FromRow, Serialize, Clone)]
+pub struct CommentUser {
+    pub username: String,
+    pub avatar_url: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[sqlx(type_name = "comments_entity", rename_all = "snake_case")]
+pub enum CommentEntityType {
+    Series,
+    SeriesChapters,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NewCommentPayload {
+    pub content_markdown: String,
+    pub parent_id: Option<i64>,
+}
+
+// Payload for voting on a comment.
+#[derive(Debug, Deserialize)]
+pub struct VotePayload {
+    // 1 for upvote, -1 for downvote, 0 to remove vote
+    pub vote_type: i16,
 }
 
 // A helper function to extract a hostname from an optional URL string.

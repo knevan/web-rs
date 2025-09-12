@@ -1,21 +1,26 @@
-use axum::Router;
-use axum::routing::{get, patch, post};
-
 use crate::api::admin_routes::admin_routes;
-use crate::api::handlers::{
-    add_bookmark_series_handler, delete_bookmark_series_handler,
+use crate::api::auth_handlers::{
+    forgot_password_handler, login_handler, logout_handler, protected_handler,
+    realtime_check_username_handler, refresh_token_handler,
+    register_new_user_handler, reset_password_handler,
+};
+use crate::api::series_handlers::{
     fetch_chapter_details_handler, fetch_most_viewed_series_handler,
     fetch_new_series_handler, fetch_series_details_by_id_handler,
-    fetch_updated_series_chapter_handler, forgot_password_handler,
+    fetch_updated_series_chapter_handler, get_series_comment_handler,
+    post_series_comment_handler, rate_series_handler,
+    record_series_view_handler, update_existing_comment_handler,
+};
+use crate::api::user_handlers::{
+    add_bookmark_series_handler, delete_bookmark_series_handler,
     get_bookmark_status_current_user_handler,
-    get_user_bookmark_library_handler, get_user_profile_handler, login_handler,
-    logout_handler, protected_handler, rate_series_handler,
-    realtime_check_username_handler, record_series_view_handler,
-    refresh_token_handler, register_new_user_handler, reset_password_handler,
+    get_user_bookmark_library_handler, get_user_profile_handler,
     update_user_avatar_handler, update_user_password_setting_handler,
     update_user_profile_handler,
 };
 use crate::builder::startup::AppState;
+use axum::Router;
+use axum::routing::{get, patch, post};
 
 pub fn routes() -> Router<AppState> {
     // Route for user auth api
@@ -55,6 +60,14 @@ pub fn routes() -> Router<AppState> {
         .route(
             "/series/{id}/bookmark/status",
             get(get_bookmark_status_current_user_handler),
+        )
+        .route(
+            "/series/{id}/comments",
+            get(get_series_comment_handler).post(post_series_comment_handler),
+        )
+        .route(
+            "/comments/{id}/edit",
+            patch(update_existing_comment_handler),
         )
         // Route for user space
         .route("/user/bookmark", get(get_user_bookmark_library_handler))

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE series SET total_rating_score = total_rating_score + $1, total_ratings_count = total_ratings_count + 1 WHERE id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a4db7a6b69547b5c38475c80e2867cc0de25523f2443bca7af360494bc7d07df"
+}
