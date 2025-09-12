@@ -7,14 +7,16 @@
     import {apiFetch} from "$lib/store/auth";
     import {UserRound} from "@lucide/svelte";
     import {ChevronUp, ChevronDown} from "@lucide/svelte";
+    import ModalDialog from "$lib/components/ModalDialog.svelte";
 
     let {comment, addReply, currentUser} = $props();
     let showReplyForm = $state(false);
     let contentContainer = $state<HTMLElement | null>(null);
     let isEditing = $state(false);
+    let showLinkWarningModal = $state(false);
+    let targetUrl = $state('');
 
     const isOwnerComment = $derived(currentUser?.username === comment.user.username);
-
     const sanitizedContent = $derived(comment.content_html);
 
     function handleReplySubmit(contentText: string) {
@@ -45,15 +47,6 @@
         }
     }
 
-    $effect(() => {
-        if (contentContainer) {
-            // Use tick to ensure the DOM is ready
-            tick().then(() => {
-                mountSpoilers(contentContainer);
-            });
-        }
-    });
-
     function formatRelativeTime(dateString: string) {
         if (!dateString) return '';
 
@@ -72,6 +65,35 @@
 
         return `${days} day${days > 1 ? 's' : ''} ago`;
     }
+
+    function handleLinkClick(event: MouseEvent) {
+        const link = (event.target as HTMLElement).closest('a');
+
+        if (link && link.href) {
+            if (link.protocol.startsWith("http")) {
+                event.preventDefault();
+
+                targetUrl = link.href;
+                showLinkWarningModal = true;
+            }
+        }
+    }
+
+    function confirmNavigation() {
+        if (targetUrl) {
+            window.open(targetUrl, '_blank', 'noopener noreferrer');
+        }
+        showLinkWarningModal = false;
+    }
+
+    $effect(() => {
+        if (contentContainer) {
+            // Use tick to ensure the DOM is ready
+            tick().then(() => {
+                mountSpoilers(contentContainer);
+            });
+        }
+    });
 </script>
 
 <div class="flex flex-col gap-2">
@@ -95,13 +117,17 @@
                 <CommentForm submitText={handleUpdateSubmit}
                              initialContent={comment.content_markdown}
                              submitLabel="Save Changes"
+                             {currentUser}
                 />
                 <Button variant="ghost" size="sm" onclick={() => (isEditing = false)} class="mt-1 text-xs">
                     Cancel
                 </Button>
             </div>
         {:else}
-            <div bind:this={contentContainer} class="prose prose-zinc mt-1 max-w-none dark:prose-invert">
+            <div bind:this={contentContainer}
+                 onclick={handleLinkClick}
+                 role="none"
+                 class="prose prose-a:text-blue-500 mt-1 max-w-none dark:prose-invert">
                 {@html sanitizedContent}
             </div>
 
@@ -134,6 +160,20 @@
             </div>
         {/if}
     </div>
+    {#if showLinkWarningModal}
+        <ModalDialog bind:open={showLinkWarningModal}
+                     title="Hold On"
+                     description="Do you trust this link?"
+                     confirmText="Yes, I trust this link!"
+                     onConfirm={confirmNavigation}
+                     onCancel={() => (showLinkWarningModal = false)}
+                     dialogClass=""
+        >
+            <div class="mt-2 break-all test-left rounded-md bg-gray-100 p-2 text-sm dark:bg-gray-200 text-gray-800 dark:text-gray-700">
+                {targetUrl}
+            </div>
+        </ModalDialog>
+    {/if}
 
     {#if showReplyForm && !isEditing}
         <div class="mt-3 pl-12">
@@ -141,6 +181,7 @@
                     submitText={handleReplySubmit}
                     placeholder={`Reply to ${comment.user.username}`}
                     submitLabel="Reply"
+                    {currentUser}
             />
         </div>
     {/if}

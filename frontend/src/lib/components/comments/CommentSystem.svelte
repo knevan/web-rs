@@ -112,25 +112,11 @@
             console.error(error);
         }
     }
-
-    /* Helper function to create a new comment object
-    function createCommentObject(content: string): CommentType {
-        return {
-            id: Date.now(),
-            user: {username: 'CurrentUser', avatar_url: 'https://i.pravatar.cc/40?u=current'},
-            timestamp: 'Baru saja',
-            content: parseAndSanitize(content),
-            content_markdown: content,
-            upvotes: 0,
-            replies: []
-        };
-    }*/
-
 </script>
 
 <div class="mx-auto my-2 max-w-4xl rounded-sm border border-zinc-200 p-1 font-sans sm:p-1 dark:border-zinc-700">
     <div class="mb-1">
-        <CommentForm submitText={addTopLevelComment}/>
+        <CommentForm submitText={addTopLevelComment} {currentUser}/>
     </div>
 
     <div class="flex flex-col gap-4">
