@@ -1,7 +1,5 @@
 <script lang="ts">
-    import Footer from "$lib/components/Footer.svelte";
     import type {Snippet} from "svelte";
-
 
     let {children}: { children: Snippet } = $props();
 </script>
@@ -11,5 +9,4 @@
         {@render children()}
     </main>
 
-    <Footer/>
 </div>
