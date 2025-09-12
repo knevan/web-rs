@@ -26,8 +26,7 @@
     let activeUserId = $state<number | null>(null);
     let deleteUser = $state<User | null>(null);
     let previousSearchQuery = $state(searchQuery);
-
-    // Derived state is perfect for this. It automatically recalculates when its dependencies change.
+    
     let totalPages = $derived(Math.ceil(totalItems / rowsPerPage));
 
     async function loadUsers(page: number, query: string, limit: number) {

@@ -41,7 +41,7 @@
 
     async function fetchTags() {
         try {
-            const allTagsResponse = await apiFetch('/api/admin/category/tag /list');
+            const allTagsResponse = await apiFetch('/api/admin/category/tag/list');
             if (!allTagsResponse.ok) throw new Error('Failed to fetch category tags');
             const allTagsData = await allTagsResponse.json();
             availableTags = allTagsData.categories || [];
