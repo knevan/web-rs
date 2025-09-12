@@ -404,6 +404,10 @@ pub async fn post_series_comment_handler(
     Path(series_id): Path<i32>,
     Json(payload): Json<NewCommentPayload>,
 ) -> Response {
+    println!(
+        "->> {:<12} - record_series_view - series_id: {:?}",
+        "HANDLER", series_id
+    );
     // Create the new comment and get its ID
     let new_comment_id = match state
         .db_service

@@ -148,11 +148,11 @@ impl DatabaseService {
 
         let mut allowed_classes = HashMap::new();
         // Allow class "spoiler" for <span> tag
-        allowed_classes.insert("span", HashSet::from(["spoiler"]));
+        allowed_classes.insert("span", HashSet::from(["spoiler-hook"]));
 
         let sanitized_html = Builder::new()
             .tags(allowed_tags)
-            //.add_tag_attributes("span", &["class"])
+            .add_tag_attributes("a", &["href"])
             .allowed_classes(allowed_classes)
             .link_rel(Some("nofollow noopener noreferrer"))
             .clean(&unsafe_html)
@@ -202,7 +202,7 @@ impl DatabaseService {
         )
             .fetch_optional(&self.pool)
             .await
-            .context("Failed to fetch comment row")?;
+            .context("Failed to fetch comment by its id")?;
 
         Ok(comment_row.map(Comment::from))
     }
