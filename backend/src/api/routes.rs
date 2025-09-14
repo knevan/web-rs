@@ -10,6 +10,7 @@ use crate::api::series_handlers::{
     fetch_updated_series_chapter_handler, get_series_comment_handler,
     post_series_comment_handler, rate_series_handler,
     record_series_view_handler, update_existing_comment_handler,
+    vote_on_comment_handler,
 };
 use crate::api::user_handlers::{
     add_bookmark_series_handler, delete_bookmark_series_handler,
@@ -69,6 +70,7 @@ pub fn routes() -> Router<AppState> {
             "/comments/{id}/edit",
             patch(update_existing_comment_handler),
         )
+        .route("/comments/{id}/vote", post(vote_on_comment_handler))
         // Route for user space
         .route("/user/bookmark", get(get_user_bookmark_library_handler))
         .route(

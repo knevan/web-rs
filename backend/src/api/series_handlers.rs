@@ -2,7 +2,7 @@ use crate::api::extractor::{AuthenticatedUser, OptionalAuthenticatedUser};
 use crate::builder::startup::AppState;
 use crate::database::{
     CategoryTag, CommentEntityType, NewCommentPayload, Series, SeriesChapter,
-    SeriesOrderBy,
+    SeriesOrderBy, VotePayload,
 };
 use axum::Json;
 use axum::extract::{Path, Query, State};
@@ -494,6 +494,31 @@ pub async fn update_existing_comment_handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": "Could not update comment"})),
+            )
+                .into_response()
+        }
+    }
+}
+
+pub async fn vote_on_comment_handler(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+    Path(comment_id): Path<i64>,
+    Json(payload): Json<VotePayload>,
+) -> Response {
+    match state
+        .db_service
+        .vote_on_comment(comment_id, user.id, payload.vote_type)
+        .await
+    {
+        Ok(response_data) => {
+            (StatusCode::OK, Json(response_data)).into_response()
+        }
+        Err(e) => {
+            error!("Failed to vote on comment {}: {}", comment_id, e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Failed to vote on comment {}"})),
             )
                 .into_response()
         }

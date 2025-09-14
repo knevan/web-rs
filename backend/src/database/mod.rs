@@ -313,6 +313,13 @@ pub struct VotePayload {
     pub vote_type: i16,
 }
 
+#[derive(Debug, Serialize)]
+pub struct CommentVoteResponse {
+    pub new_upvotes: i64,
+    pub new_downvotes: i64,
+    pub current_user_vote: Option<i16>,
+}
+
 // A helper function to extract a hostname from an optional URL string.
 // This is created to avoid code duplication, following the DRY principle.
 fn get_host_from_url(url_option: Option<&str>) -> Option<String> {

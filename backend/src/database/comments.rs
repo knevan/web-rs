@@ -1,5 +1,6 @@
 use super::*;
 use ammonia::Builder;
+use anyhow::anyhow;
 use once_cell::sync::Lazy;
 use pulldown_cmark::{Options, Parser, html};
 use regex::Regex;
@@ -270,5 +271,82 @@ impl DatabaseService {
         .context("Failed to update existing comment")?;
 
         Ok(updated_html)
+    }
+
+    pub async fn vote_on_comment(
+        &self,
+        comment_id: i64,
+        user_id: i32,
+        vote_type: i16,
+    ) -> AnyhowResult<CommentVoteResponse> {
+        // Validate that vote_type is either 1 or -1
+        if vote_type != 1 && vote_type != -1 {
+            return Err(anyhow!("Invalid vote type"));
+        }
+
+        let mut tx = self.pool.begin().await?;
+
+        let user_current_vote: Option<i16> = sqlx::query_scalar!(
+            "SELECT vote_type FROM comment_votes WHERE comment_vote_id = $1 AND user_id = $2",
+            comment_id,
+            user_id
+        )
+            .fetch_optional(&mut *tx)
+            .await
+            .context("Failed to fetch comment vote")?;
+
+        let mut final_user_vote: Option<i16> = Some(vote_type);
+
+        // Decide db action base on vote status
+        if Some(vote_type) == user_current_vote {
+            // Delete vote if user clicking same button again
+            sqlx::query!(
+                "DELETE FROM comment_votes WHERE comment_vote_id = $1 AND user_id = $2",
+                comment_id,
+                user_id
+            )
+                .execute(&mut *tx)
+                .await
+                .context("Failed to delete comment")?;
+            final_user_vote = None;
+        } else {
+            // New vote or changing vote
+            sqlx::query!(
+                r#"
+                INSERT INTO comment_votes (comment_vote_id, user_id, vote_type) VALUES ($1, $2, $3)
+                ON CONFLICT (comment_vote_id, user_id)
+                DO UPDATE SET vote_type = EXCLUDED.vote_type
+                "#,
+                comment_id,
+                user_id,
+                vote_type
+            )
+                .execute(&mut *tx)
+                .await
+                .context("Failed to insert comment")?;
+        }
+
+        // Recalculate new total votes for comment
+        let vote_counts = sqlx::query!(
+            r#"
+            SELECT
+                COUNT(*) FILTER (WHERE vote_type = 1) AS "upvotes!",
+                COUNT(*) FILTER (WHERE vote_type = -1) AS "downvotes!"
+            FROM comment_votes
+            WHERE comment_vote_id = $1
+            "#,
+            comment_id
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .context("Failed to recalculate total votes")?;
+
+        tx.commit().await?;
+
+        Ok(CommentVoteResponse {
+            new_upvotes: vote_counts.upvotes,
+            new_downvotes: vote_counts.downvotes,
+            current_user_vote: final_user_vote,
+        })
     }
 }
