@@ -82,6 +82,42 @@
         return false;
     }
 
+    // Recursive helper function to find and update a comment in the comment state tree
+    function updateCommentInState(commentsArray: CommentType[], updatedComment: Partial<CommentType>): boolean {
+        if (typeof updatedComment.id === 'undefined') {
+            return false;
+        }
+
+        for (let i = 0; i < commentsArray.length; i++) {
+            let comment = commentsArray[i];
+            if (comment.id === updatedComment.id) {
+                if (updatedComment.content_html !== undefined) {
+                    comment.content_html = updatedComment.content_html;
+                }
+                if (updatedComment.content_markdown !== undefined) {
+                    comment.content_markdown = updatedComment.content_markdown;
+                }
+                if (updatedComment.updated_at !== undefined) {
+                    comment.updated_at = updatedComment.updated_at;
+                }
+
+                return true;
+            }
+
+            if (comment.replies && comment.replies.length > 0) {
+                if (updateCommentInState(comment.replies, updatedComment)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // function that will be passed as a prop
+    function handleCommentUpdate(updateComment: Partial<CommentType>) {
+        updateCommentInState(comments, updateComment);
+    }
+
     // Function to add a reply to any comment, nested or not
     async function addReply(parentId: number, content: string) {
         if (!currentUser) return;
@@ -121,7 +157,7 @@
 
     <div class="flex flex-col gap-4">
         {#each comments as comment (comment.id)}
-            <Comment {comment} {addReply} {currentUser}/>
+            <Comment {comment} {addReply} {currentUser} onUpdate={handleCommentUpdate}/>
         {/each}
     </div>
 </div>

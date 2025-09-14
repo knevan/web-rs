@@ -13,13 +13,17 @@
         placeholder = 'Send your comment...',
         submitLabel = 'Send',
         initialContent = '',
-        currentUser = null
+        currentUser = null,
+        onCancel,
+        cancelLabel = 'Cancel',
     } = $props<{
         submitText: (content: string) => void;
         placeholder?: string;
         submitLabel?: string;
         initialContent?: string;
         currentUser?: User | null;
+        onCancel?: () => void;
+        cancelLabel?: string;
     }>();
 
     // State for the textarea content
@@ -140,7 +144,7 @@
             <div class="flex items-center gap-1">
                 <Button onclick={() => wrapSelection('**', '**')}
                         variant="outline"
-                        size="icon"
+                        size="iconLabel"
                         class="font-bold"
                         aria-label="Bold"
                 >
@@ -148,7 +152,7 @@
                 </Button>
                 <Button onclick={() => wrapSelection('*', '*')}
                         variant="outline"
-                        size="icon"
+                        size="iconLabel"
                         class="italic"
                         aria-label="Italic"
                 >
@@ -156,7 +160,7 @@
                 </Button>
                 <Button onclick={() => wrapSelection('[', '](url)')}
                         variant="outline"
-                        size="icon"
+                        size="iconLabel"
                         class="italic"
                         aria-label="Italic"
                 >
@@ -164,24 +168,32 @@
                 </Button>
                 <Button onclick={() => wrapSelection('||', '||')}
                         variant="outline"
-                        size="icon"
+                        size="iconLabel"
                         aria-label="Spoiler"
                 >
                     <EyeClosed/>
                 </Button>
                 <Button
                         variant="outline"
-                        size="icon"
+                        size="iconLabel"
                         class="italic"
                         aria-label="Italic"
                 >
                     <ImagePlus/>
                 </Button>
             </div>
-            <Button onclick={handleSend}
-                    class="cursor-pointer rounded-md  bg-blue-600 px-4 py-2 font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
-                {submitLabel}
-            </Button>
+
+            <div class="flex items-center gap-2">
+                {#if onCancel}
+                    <Button variant="destructive" size="sm" onclick={onCancel} class="text-sm font-medium">
+                        {cancelLabel}
+                    </Button>
+                {/if}
+                <Button onclick={handleSend} size="sm"
+                        class="cursor-pointer rounded-md  bg-blue-600 px-4 py-2 font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+                    {submitLabel}
+                </Button>
+            </div>
         </div>
     </div>
 </div>

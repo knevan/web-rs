@@ -3,7 +3,8 @@ import { goto } from '$app/navigation';
 
 // Define the shape of the user object
 export interface User {
-	identifier: string;
+	id: number;
+	username: string;
 	role: string;
 }
 

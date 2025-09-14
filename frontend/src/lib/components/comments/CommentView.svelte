@@ -8,15 +8,21 @@
     import {UserRound} from "@lucide/svelte";
     import {ChevronUp, ChevronDown} from "@lucide/svelte";
     import ModalDialog from "$lib/components/ModalDialog.svelte";
+    import type {CommentType} from "$lib/components/comments/comments";
 
-    let {comment, addReply, currentUser} = $props();
+    let {comment, addReply, currentUser, onUpdate} = $props<{
+        comment: CommentType;
+        addReply: (parentId: number, content: string) => void;
+        currentUser: any;
+        onUpdate: (updatedCommentData: Partial<CommentType>) => void;
+    }>();
     let showReplyForm = $state(false);
     let contentContainer = $state<HTMLElement | null>(null);
     let isEditing = $state(false);
     let showLinkWarningModal = $state(false);
     let targetUrl = $state('');
 
-    const isOwnerComment = $derived(currentUser?.username === comment.user.username);
+    const isOwnerComment = $derived(currentUser?.id === comment.user.id);
     const sanitizedContent = $derived(comment.content_html);
 
     function handleReplySubmit(contentText: string) {
@@ -38,8 +44,7 @@
                 return;
             }
             const updatedComment = await response.json();
-            comment.content_html = updatedComment.new_html_content;
-            comment.content_markdown = newMarkdown;
+            onUpdate(updatedComment);
 
             isEditing = false;
         } catch (error) {
@@ -51,7 +56,7 @@
         if (!dateString) return '';
 
         const date = new Date(dateString);
-        const now = new Date();// Calculate the difference in seconds between now and the provided date
+        const now = new Date();
         let seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
         const minutes = Math.floor(seconds / 60);
@@ -94,6 +99,8 @@
             });
         }
     });
+
+
 </script>
 
 <div class="flex flex-col gap-2">
@@ -116,12 +123,11 @@
             <div class="mt-2">
                 <CommentForm submitText={handleUpdateSubmit}
                              initialContent={comment.content_markdown}
-                             submitLabel="Save Changes"
+                             submitLabel="Save"
                              {currentUser}
+                             onCancel={() => (isEditing = false)}
+                             cancelLabel="Cancel"
                 />
-                <Button variant="ghost" size="sm" onclick={() => (isEditing = false)} class="mt-1 text-xs">
-                    Cancel
-                </Button>
             </div>
         {:else}
             <div bind:this={contentContainer}
@@ -136,22 +142,28 @@
             {/if} -->
 
             <div class="comment-actions mt-1 flex items-center gap-1">
-                <Button class="text-sm bg-transparent text-gray-700 dark:text-gray-200 hover:bg-transparent dark:hover:bg-transparent"
+                <Button variant="ghost"
+                        class="text-sm bg-transparent text-gray-700 dark:text-gray-200 hover:bg-transparent dark:hover:bg-transparent"
                         size="sm">
                     {comment.upvotes}
                     <ChevronUp/>
                 </Button>
-                <Button class="text-sm bg-transparent text-gray-700 dark:text-gray-200 hover:bg-transparent dark:hover:bg-transparent"
+                <Button variant="ghost"
+                        class="text-sm bg-transparent text-gray-700 dark:text-gray-200 hover:bg-transparent dark:hover:bg-transparent"
                         size="sm">
                     <ChevronDown/>
                 </Button>
-                <Button class="text-sm font-medium bg-transparent text-gray-700 dark:text-gray-200 hover:bg-transparent dark:hover:bg-transparent"
-                        size="sm"
-                        onclick={() => (showReplyForm = !showReplyForm)}>
-                    Reply
-                </Button>
+                {#if currentUser}
+                    <Button variant="ghost"
+                            class="text-sm font-medium bg-transparent text-gray-700 dark:text-gray-200 hover:bg-transparent dark:hover:bg-transparent"
+                            size="sm"
+                            onclick={() => (showReplyForm = !showReplyForm)}>
+                        Reply
+                    </Button>
+                {/if}
                 {#if isOwnerComment}
-                    <Button class="text-sm font-medium bg-transparent text-gray-700 dark:text-gray-200"
+                    <Button variant="ghost"
+                            class="text-sm font-medium bg-transparent text-gray-700 dark:text-gray-200 hover:bg-transparent dark:hover:bg-transparent"
                             onclick={() => (isEditing = true)}
                     >
                         Edit
@@ -189,7 +201,7 @@
     {#if comment.replies?.length > 0}
         <div class="mt-1 border-l-1 border-zinc-200 pl-2 ml-2">
             {#each comment.replies as reply (reply.id)}
-                <CommentView {currentUser} comment={reply} {addReply}/>
+                <CommentView {currentUser} comment={reply} {addReply} {onUpdate}/>
             {/each}
         </div>
     {/if}
