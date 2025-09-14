@@ -71,7 +71,7 @@ impl DatabaseService {
                 FROM comments c
                 JOIN comment_thread ct ON c.parent_id = ct.id
                 WHERE c.deleted_at IS NULL
-             ),
+            ),
             vote_summary AS (
                 SELECT
                     cv.comment_vote_id,
@@ -85,8 +85,10 @@ impl DatabaseService {
                 ct.id as "id!",
                 ct.parent_id,
                 ct.content_html as "content_html!",
+                ct.content_user_markdown as "content_markdown!",
                 ct.created_at as "created_at!",
                 ct.updated_at as "updated_at!",
+                ct.user_id as "user_id!",
                 COALESCE(up.display_name, u.username) as "user_username!",
                 up.avatar_url as "user_avatar_url",
                 COALESCE(vs.upvotes, 0) as "upvotes!",
@@ -183,8 +185,10 @@ impl DatabaseService {
                 c.id as "id!",
                 c.parent_id,
                 c.content_html as "content_html!",
+                c.content_user_markdown as "content_markdown!",
                 c.created_at as "created_at!",
                 c.updated_at as "updated_at!",
+                c.user_id as "user_id!",
                 COALESCE(up.display_name, u.username) as "user_username!",
                 up.avatar_url as "user_avatar_url",
                 COALESCE(vs.upvotes, 0) as "upvotes!",

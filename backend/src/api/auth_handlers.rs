@@ -43,7 +43,8 @@ async fn get_role_name(
 // Struct for Responses
 #[derive(Serialize)]
 pub struct UserData {
-    identifier: String,
+    id: i32,
+    username: String,
     role: String,
 }
 
@@ -133,7 +134,8 @@ pub async fn login_handler(
     let response = LoginResponse {
         message: "Login Successfull".to_string(),
         user: UserData {
-            identifier: user.username,
+            id: user.id,
+            username: user.username,
             role: role_name,
         },
     };
@@ -219,7 +221,8 @@ pub async fn protected_handler(
     let role_name = get_role_name(&state.db_service, user.role_id).await?;
 
     let user_data = UserData {
-        identifier: user.username,
+        id: user.id,
+        username: user.username,
         role: role_name,
     };
 

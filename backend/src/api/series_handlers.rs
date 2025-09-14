@@ -464,11 +464,24 @@ pub async fn update_existing_comment_handler(
         .update_existing_comment(comment_id, user.id, &payload.content_markdown)
         .await
     {
-        Ok(Some(updated_html)) => {
-            (
-                StatusCode::OK,
-                Json(serde_json::json!({"message": "Comment updated successfully", "new_html_content": updated_html})),
-            ).into_response()
+        Ok(Some(_)) => {
+            match state
+                .db_service
+                .get_comment_by_id(comment_id, Some(user.id))
+                .await
+            {
+                Ok(Some(updated_comment)) => {
+                    (
+                        StatusCode::OK,
+                        Json(updated_comment),
+                    ).into_response()
+                }
+                _ => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({"message": "Comment updated but failed to retrieve new data"})),
+                )
+                    .into_response(),
+            }
         }
         Ok(None) => {
             (StatusCode::NOT_FOUND, Json(serde_json::json!({"message": "Comment not found or permission denied"}))).into_response()

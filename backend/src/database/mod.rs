@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool, Type};
 use std::fmt;
 use url::Url;
+use url::quirks::username;
 
 pub mod auth;
 pub mod chapters;
@@ -234,6 +235,7 @@ pub struct Comment {
     pub id: i64,
     pub parent_id: Option<i64>,
     pub content_html: String,
+    pub content_markdown: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub user: CommentUser,
@@ -251,8 +253,10 @@ struct CommentFlatRow {
     id: i64,
     parent_id: Option<i64>,
     content_html: String,
+    content_markdown: String,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+    user_id: i32,
     user_username: String,
     user_avatar_url: Option<String>,
     upvotes: i64,
@@ -266,9 +270,11 @@ impl From<CommentFlatRow> for Comment {
             id: row.id,
             parent_id: row.parent_id,
             content_html: row.content_html,
+            content_markdown: row.content_markdown,
             created_at: row.created_at,
             updated_at: row.updated_at,
             user: CommentUser {
+                id: row.user_id,
                 username: row.user_username,
                 avatar_url: row.user_avatar_url,
             },
@@ -282,6 +288,7 @@ impl From<CommentFlatRow> for Comment {
 
 #[derive(Debug, FromRow, Serialize, Clone)]
 pub struct CommentUser {
+    pub id: i32,
     pub username: String,
     pub avatar_url: Option<String>,
 }
