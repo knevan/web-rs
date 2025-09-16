@@ -31,32 +31,23 @@
         }
     }
 
-    async function addTopLevelComment(content: string) {
+    async function addTopLevelComment(formData: FormData) { // Terima FormData
         if (!currentUser) return;
-
         try {
+            // apiFetch sudah pintar menangani FormData
             const response = await apiFetch(`/api/series/${seriesId}/comments`, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    content_markdown: content,
-                    parent_id: null
-                })
-            })
+                // HAPUS 'Content-Type', browser akan set otomatis untuk FormData
+                body: formData // Langsung kirim FormData
+            });
 
             if (response.ok) {
-                // After successfully posting, refresh the comments list
-                const newComments = await response.json();
-                comments = [newComments, ...comments];
+                const newComment = await response.json();
+                comments = [newComment, ...comments];
             } else {
                 const errorData = await response.json();
                 console.error(errorData);
-
             }
-            //const newCommentFromServer = await response.json();
-            //comments.unshift(newCommentFromServer);
         } catch (error) {
             console.error(error);
         }
@@ -152,12 +143,12 @@
 
 <div class="mx-auto my-2 max-w-4xl rounded-sm border border-zinc-200 p-1 font-sans sm:p-1 dark:border-zinc-700">
     <div class="mb-1">
-        <CommentForm submitText={addTopLevelComment} {currentUser}/>
+        <CommentForm submitComment={addTopLevelComment} {currentUser}/>
     </div>
 
     <div class="flex flex-col gap-4">
-        {#each comments as comment (comment.id)}
-            <Comment {comment} {addReply} {currentUser} onUpdate={handleCommentUpdate}/>
+        {#each comments as comment, i (comment.id)}
+            <Comment bind:comment={comments[i]} {addReply} {currentUser} onUpdate={handleCommentUpdate}/>
         {/each}
     </div>
 </div>

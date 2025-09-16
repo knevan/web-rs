@@ -7,9 +7,10 @@
     import {page} from "$app/state";
     import {goto} from "$app/navigation";
     import {LogIn, Bold, Italic, Link, EyeClosed, ImagePlus} from "@lucide/svelte";
+    import {toast} from "svelte-sonner";
 
     let {
-        submitText,
+        submitComment,
         placeholder = 'Send your comment...',
         submitLabel = 'Send',
         initialContent = '',
@@ -17,7 +18,7 @@
         onCancel,
         cancelLabel = 'Cancel',
     } = $props<{
-        submitText: (content: string) => void;
+        submitComment: (formData: FormData) => void;
         placeholder?: string;
         submitLabel?: string;
         initialContent?: string;
@@ -31,12 +32,16 @@
     let activeTab = $state('write');
     let textareaElement = $state<HTMLTextAreaElement | null>(null);
     let previewContainer = $state<HTMLElement | null>(null);
+    let fileInputElement = $state<HTMLInputElement | null>(null);
+    let selectedFile = $state<File | null>(null);
+    let previewUrl = $state<string | null>(null);
 
     const isLoggedIn = $derived(!!currentUser);
     const previewComment = $derived(
         parseAndSanitize(contentText),
     )
 
+    // Effect for spoiler
     $effect(() => {
         if (previewContainer && previewComment) {
             // We need to wait for Svelte to render the new HTML from previewComment
@@ -46,14 +51,19 @@
         }
     });
 
-    // Function to handle form submission
-    function handleSend() {
-        if (!contentText.trim()) return;
-        submitText(contentText);
-        contentText = '';
-        activeTab = 'write';
-    }
+    // Effect for image preview
+    $effect(() => {
+        if (selectedFile) {
+            const url = URL.createObjectURL(selectedFile);
+            previewUrl = url;
 
+            return () => {
+                URL.revokeObjectURL(url);
+            };
+        }
+    });
+
+    // Make template wrap markdown
     async function wrapSelection(prefix: string, suffix: string) {
         if (!textareaElement) return;
 
@@ -99,6 +109,52 @@
         textareaElement.setSelectionRange(finalSelectionStart, finalSelectionEnd);
     }
 
+    function handleSend() {
+        if (!contentText.trim() && !selectedFile) return;
+
+        // Gunakan FormData untuk mengirim data multipart
+        const formData = new FormData();
+        formData.append('content_markdown', contentText);
+
+        if (selectedFile) {
+            formData.append('attachment', selectedFile);
+        }
+
+        submitComment(formData);
+        contentText = '';
+        activeTab = 'write';
+        removeSelectedImage();
+    }
+
+    function handleSelectImage() {
+        fileInputElement?.click();
+    }
+
+    function handleFileSelected(event: Event) {
+        const target = event.target as HTMLInputElement;
+        const file = target.files?.[0];
+
+        if (file) {
+            if (file.size > 5 * 1024 * 1024) {
+                toast.warning('File size cannot exceed 5MB.', {
+                    position: "top-center",
+                    closeButton: false,
+                    duration: 3000,
+                })
+                return;
+            }
+            selectedFile = file;
+        }
+    }
+
+    function removeSelectedImage() {
+        selectedFile = null;
+        previewUrl = null;
+        if (fileInputElement) {
+            fileInputElement.value = '';
+        }
+    }
+
     function handleLoginClick() {
         const redirectTo = page.url.pathname;
         goto(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
@@ -133,9 +189,28 @@
                 <h4 class="text-sm font-semibold text-gray-500">
                     Preview
                 </h4>
-                <div bind:this={previewContainer}
-                     class="prose prose-a:text-blue-500 dark:prose-invert max-w-none wrap-normal">
-                    {@html previewComment}
+                <div class="flex flex-col gap-2">
+                    {#if contentText.trim()}
+                        <div bind:this={previewContainer}
+                             class="prose prose-a:text-blue-500 dark:prose-invert max-w-none wrap-normal">
+                            {@html previewComment}
+                        </div>
+                    {/if}
+
+                    {#if previewUrl}
+                        <div class="relative w-fit max-w-xs rounded-md">
+                            <img src={previewUrl} alt="Image preview" class="max-h-40 rounded-md object-contain"/>
+                            <Button
+                                    onclick={removeSelectedImage}
+                                    variant="destructive"
+                                    size="icon"
+                                    class="absolute -right-2 -top-2 h-6 w-6 rounded-full shadow-md"
+                                    aria-label="Remove image"
+                            >
+                                &times;
+                            </Button>
+                        </div>
+                    {/if}
                 </div>
             </div>
         {/if}
@@ -173,7 +248,14 @@
                 >
                     <EyeClosed/>
                 </Button>
-                <Button
+                <input
+                        type="file"
+                        bind:this={fileInputElement}
+                        onchange={handleFileSelected}
+                        accept="image/png, image/jpeg, image/gif"
+                        class="hidden"
+                />
+                <Button onclick={handleSelectImage}
                         variant="outline"
                         size="iconLabel"
                         class="italic"

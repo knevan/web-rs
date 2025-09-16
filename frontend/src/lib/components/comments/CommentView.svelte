@@ -10,7 +10,7 @@
     import ModalDialog from "$lib/components/ModalDialog.svelte";
     import type {CommentType} from "$lib/components/comments/comments";
 
-    let {comment, addReply, currentUser, onUpdate} = $props<{
+    let {comment = $bindable(), addReply, currentUser, onUpdate} = $props<{
         comment: CommentType;
         addReply: (parentId: number, content: string) => void;
         currentUser: any;
@@ -25,13 +25,15 @@
     const isOwnerComment = $derived(currentUser?.id === comment.user.id);
     const sanitizedContent = $derived(comment.content_html);
 
-    function handleReplySubmit(contentText: string) {
+    function handleReplySubmit(formData: FormData) {
+        const contentText = formData.get('content_markdown') as string;
         addReply(comment.id, contentText);
         showReplyForm = false;
     }
 
-    async function handleUpdateSubmit(newMarkdown: string) {
+    async function handleUpdateSubmit(formData: FormData) {
         try {
+            const newMarkdown = formData.get('content_markdown') as string
             const response = await apiFetch(`/api/comments/${comment.id}/edit`, {
                 method: "PATCH",
                 headers: {
@@ -49,6 +51,63 @@
             isEditing = false;
         } catch (error) {
             console.error('An error occurred while updating the comment:', error);
+        }
+    }
+
+    async function handleVote(voteType: 1 | -1) {
+        if (!currentUser) return;
+
+        // Store original state in case api call fail
+        const originalState = {
+            upvotes: comment.upvotes,
+            downvotes: comment.downvotes,
+            currentUserVote: comment.currentUserVote
+        };
+
+        const isTogglingOff = comment.current_user_vote == voteType;
+        const isSwitchingVote = comment.current_user_vote == -voteType;
+
+        if (isTogglingOff) {
+            // User unvoting
+            comment.current_user_vote = undefined;
+            if (voteType === 1) comment.upvotes--;
+            else comment.downvotes--;
+        } else if (isSwitchingVote) {
+            comment.current_user_vote = voteType;
+            if (voteType === 1) {
+                comment.upvotes++;
+                comment.downvotes--;
+            } else {
+                comment.downvotes++;
+                comment.upvotes--;
+            }
+        } else {
+            comment.current_user_vote = voteType;
+            if (voteType === 1) comment.upvotes++;
+            else comment.downvotes++;
+        }
+
+        try {
+            const response = await apiFetch(`/api/comments/${comment.id}/vote`, {
+                method: "POST",
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({vote_type: voteType}),
+            });
+
+            if (response.ok) {
+                const serverState = await response.json();
+                comment.upvotes = serverState.new_upvotes;
+                comment.downvotes = serverState.new_downvotes;
+                comment.current_user_vote = serverState.current_user_vote;
+            } else {
+                // If API fails, revert to the original state
+                Object.assign(comment, originalState);
+                console.error(response, 'Failed to vote');
+            }
+        } catch (err) {
+            // On network error, also revert
+            Object.assign(comment, originalState);
+            console.error('An error occurred while voting:', err);
         }
     }
 
@@ -121,7 +180,7 @@
     <div class="flex-1">
         {#if isEditing}
             <div class="mt-2">
-                <CommentForm submitText={handleUpdateSubmit}
+                <CommentForm submitComment={handleUpdateSubmit}
                              initialContent={comment.content_markdown}
                              submitLabel="Save"
                              {currentUser}
@@ -137,21 +196,29 @@
                 {@html sanitizedContent}
             </div>
 
-            <!-- {#if comment.imageUrl}
-                <img src={comment.imageUrl} alt="User content" class="mt-2 max-h-[250px] max-w-full rounded-lg"/>
-            {/if} -->
+            {#if comment.attachment_url}
+                <a href={comment.attachment_url} target="_blank" rel="noopener noreferrer">
+                    <img src={comment.attachment_url}
+                         alt="User content"
+                         class="mt-2 max-h-[250px] max-w-full rounded-lg object-contain"
+                    />
+                </a>
+            {/if}
 
             <div class="comment-actions mt-1 flex items-center gap-1">
-                <Button variant="ghost"
+                <Button onclick={() => handleVote(1)}
+                        variant="ghost"
                         class="text-sm bg-transparent text-gray-700 dark:text-gray-200 hover:bg-transparent dark:hover:bg-transparent"
                         size="sm">
                     {comment.upvotes}
-                    <ChevronUp/>
+                    <ChevronUp class="!w-5 !h-5"/>
                 </Button>
-                <Button variant="ghost"
+                <Button onclick={() => handleVote(-1)}
+                        variant="ghost"
                         class="text-sm bg-transparent text-gray-700 dark:text-gray-200 hover:bg-transparent dark:hover:bg-transparent"
                         size="sm">
-                    <ChevronDown/>
+                    {comment.downvotes}
+                    <ChevronDown class="!w-5 !h-5"/>
                 </Button>
                 {#if currentUser}
                     <Button variant="ghost"
@@ -163,6 +230,7 @@
                 {/if}
                 {#if isOwnerComment}
                     <Button variant="ghost"
+                            size="sm"
                             class="text-sm font-medium bg-transparent text-gray-700 dark:text-gray-200 hover:bg-transparent dark:hover:bg-transparent"
                             onclick={() => (isEditing = true)}
                     >
@@ -190,7 +258,7 @@
     {#if showReplyForm && !isEditing}
         <div class="mt-3 pl-12">
             <CommentForm
-                    submitText={handleReplySubmit}
+                    submitComment={handleReplySubmit}
                     placeholder={`Reply to ${comment.user.username}`}
                     submitLabel="Reply"
                     {currentUser}
@@ -200,8 +268,8 @@
 
     {#if comment.replies?.length > 0}
         <div class="mt-1 border-l-1 border-zinc-200 pl-2 ml-2">
-            {#each comment.replies as reply (reply.id)}
-                <CommentView {currentUser} comment={reply} {addReply} {onUpdate}/>
+            {#each comment.replies as reply, i (reply.id)}
+                <CommentView bind:comment={comment.replies[i]} {currentUser} {addReply} {onUpdate}/>
             {/each}
         </div>
     {/if}
