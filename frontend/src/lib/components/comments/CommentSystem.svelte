@@ -5,22 +5,32 @@
     import {apiFetch} from "$lib/store/auth";
     import type {User} from "$lib/store/auth"
 
-    let {seriesId, initialComments = [], currentUser = null} = $props<{
-        seriesId: number;
+    let {entityType, entityId, initialComments = [], currentUser = null} = $props<{
+        entityType: 'series' | 'chapters';
+        entityId: number;
         initialComments?: CommentType[];
         currentUser: User | null;
     }>();
 
     let comments = $state<CommentType[]>(initialComments);
 
+    function getEndpoint() {
+        if (entityType === 'series') {
+            return `/api/series/${entityId}/comments`;
+        } else {
+            return `/api/series/chapter/${entityId}/comments`;
+        }
+    }
+
     $effect(() => {
-        console.log(`Fetching comments for series ID: ${seriesId}`);
+        console.log(`Fetching comments for ${entityType} ID: ${entityId}`);
         fetchComments();
     });
 
     async function fetchComments() {
         try {
-            const response = await fetch(`/api/series/${seriesId}/comments`);
+            const endpoint = getEndpoint();
+            const response = await fetch(endpoint);
             if (response.ok) {
                 comments = await response.json();
             } else {
@@ -31,14 +41,13 @@
         }
     }
 
-    async function addTopLevelComment(formData: FormData) { // Terima FormData
+    async function addTopLevelComment(formData: FormData) {
         if (!currentUser) return;
         try {
-            // apiFetch sudah pintar menangani FormData
-            const response = await apiFetch(`/api/series/${seriesId}/comments`, {
+            const endpoint = getEndpoint();
+            const response = await apiFetch(endpoint, {
                 method: "POST",
-                // HAPUS 'Content-Type', browser akan set otomatis untuk FormData
-                body: formData // Langsung kirim FormData
+                body: formData
             });
 
             if (response.ok) {
@@ -115,7 +124,8 @@
 
         // This recursive function will search for the parent comment in the entire tree
         try {
-            const response = await apiFetch(`/api/series/${seriesId}/comments`, {
+            const endpoint = getEndpoint();
+            const response = await apiFetch(endpoint, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

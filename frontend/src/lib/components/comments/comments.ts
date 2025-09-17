@@ -13,5 +13,5 @@ export type CommentType = {
 	downvotes: number;
 	current_user_vote: number | null;
 	replies: CommentType[];
-	attachment_url?: string | null;
+	attachment_url?: string[] | null;
 };

@@ -33,13 +33,28 @@
     let textareaElement = $state<HTMLTextAreaElement | null>(null);
     let previewContainer = $state<HTMLElement | null>(null);
     let fileInputElement = $state<HTMLInputElement | null>(null);
-    let selectedFile = $state<File | null>(null);
-    let previewUrl = $state<string | null>(null);
+
+    type AttachedFile = { file: File; previewUrl: string; placeholder: string };
+    let attachedFiles = $state<AttachedFile[]>([]);
 
     const isLoggedIn = $derived(!!currentUser);
-    const previewComment = $derived(
-        parseAndSanitize(contentText),
-    )
+
+    const previewComment = $derived.by(() => {
+        let contentWithPreviews = contentText;
+
+        for (const attachment of attachedFiles) {
+            contentWithPreviews = contentWithPreviews.replaceAll(
+                attachment.placeholder,
+                `<img src="${attachment.previewUrl}" alt="${attachment.file.name}" class="max-h-40 rounded-md object-contain"/>`
+            );
+        }
+        console.log("LOG: HTML before sanitization:", contentWithPreviews);
+        const sanitizedHtml = parseAndSanitize(contentWithPreviews);
+
+        console.log("LOG: HTML after sanitization:", sanitizedHtml);
+
+        return sanitizedHtml;
+    });
 
     // Effect for spoiler
     $effect(() => {
@@ -51,17 +66,90 @@
         }
     });
 
-    // Effect for image preview
     $effect(() => {
-        if (selectedFile) {
-            const url = URL.createObjectURL(selectedFile);
-            previewUrl = url;
+        const currentPlaceholders = new Set(
+            contentText.match(/\[img:\d+]/g) || []
+        );
 
-            return () => {
-                URL.revokeObjectURL(url);
-            };
+        const newAttachedFiles = attachedFiles.filter((attachment) => {
+            if (currentPlaceholders.has(attachment.placeholder)) {
+                return true;
+            } else {
+                URL.revokeObjectURL(attachment.previewUrl);
+                return false;
+            }
+        });
+
+        if (newAttachedFiles.length !== attachedFiles.length) {
+            attachedFiles = newAttachedFiles;
         }
     });
+
+    function handleSend() {
+        if (!contentText.trim()) return;
+
+        const formData = new FormData();
+        formData.append('content_markdown', contentText);
+
+        attachedFiles.forEach((attachment, _index) => {
+            formData.append('media', attachment.file);
+        });
+
+        submitComment(formData);
+
+        // Reset state
+        contentText = '';
+        attachedFiles.forEach(att => URL.revokeObjectURL(att.previewUrl));
+        attachedFiles = [];
+    }
+
+    function handleSelectImage() {
+        fileInputElement?.click();
+    }
+
+    function handleFileSelected(event: Event) {
+        const target = event.target as HTMLInputElement;
+        const files = target.files;
+
+        if (files) {
+            for (const file of Array.from(files)) {
+                if (file.size > 5 * 1024 * 1024) {
+                    toast.warning('File size cannot exceed 5MB.', {
+                        position: "top-center",
+                        closeButton: false,
+                        duration: 3000,
+                    })
+                    return;
+                }
+                const newIndex = attachedFiles.length;
+                const placeholder = `[img:${newIndex}]`;
+                const newAttachment: AttachedFile = {
+                    file: file,
+                    previewUrl: URL.createObjectURL(file),
+                    placeholder: placeholder
+                };
+
+                attachedFiles.push(newAttachment);
+
+                insertTextAtCursor(placeholder);
+            }
+        }
+        if (target) target.value = '';
+    }
+
+    function insertTextAtCursor(text: string) {
+        if (!textareaElement) return;
+        const start = textareaElement.selectionStart;
+        const end = textareaElement.selectionEnd;
+        const currentText = contentText;
+
+        contentText = currentText.substring(0, start) + text + currentText.substring(end);
+
+        tick().then(() => {
+            textareaElement!.selectionStart = textareaElement!.selectionEnd = start + text.length;
+            textareaElement!.focus();
+        });
+    }
 
     // Make template wrap markdown
     async function wrapSelection(prefix: string, suffix: string) {
@@ -109,52 +197,6 @@
         textareaElement.setSelectionRange(finalSelectionStart, finalSelectionEnd);
     }
 
-    function handleSend() {
-        if (!contentText.trim() && !selectedFile) return;
-
-        // Gunakan FormData untuk mengirim data multipart
-        const formData = new FormData();
-        formData.append('content_markdown', contentText);
-
-        if (selectedFile) {
-            formData.append('attachment', selectedFile);
-        }
-
-        submitComment(formData);
-        contentText = '';
-        activeTab = 'write';
-        removeSelectedImage();
-    }
-
-    function handleSelectImage() {
-        fileInputElement?.click();
-    }
-
-    function handleFileSelected(event: Event) {
-        const target = event.target as HTMLInputElement;
-        const file = target.files?.[0];
-
-        if (file) {
-            if (file.size > 5 * 1024 * 1024) {
-                toast.warning('File size cannot exceed 5MB.', {
-                    position: "top-center",
-                    closeButton: false,
-                    duration: 3000,
-                })
-                return;
-            }
-            selectedFile = file;
-        }
-    }
-
-    function removeSelectedImage() {
-        selectedFile = null;
-        previewUrl = null;
-        if (fileInputElement) {
-            fileInputElement.value = '';
-        }
-    }
-
     function handleLoginClick() {
         const redirectTo = page.url.pathname;
         goto(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
@@ -189,28 +231,8 @@
                 <h4 class="text-sm font-semibold text-gray-500">
                     Preview
                 </h4>
-                <div class="flex flex-col gap-2">
-                    {#if contentText.trim()}
-                        <div bind:this={previewContainer}
-                             class="prose prose-a:text-blue-500 dark:prose-invert max-w-none wrap-normal">
-                            {@html previewComment}
-                        </div>
-                    {/if}
-
-                    {#if previewUrl}
-                        <div class="relative w-fit max-w-xs rounded-md">
-                            <img src={previewUrl} alt="Image preview" class="max-h-40 rounded-md object-contain"/>
-                            <Button
-                                    onclick={removeSelectedImage}
-                                    variant="destructive"
-                                    size="icon"
-                                    class="absolute -right-2 -top-2 h-6 w-6 rounded-full shadow-md"
-                                    aria-label="Remove image"
-                            >
-                                &times;
-                            </Button>
-                        </div>
-                    {/if}
+                <div class="prose prose-a:text-blue-500 prose-img:my-2 dark:prose-invert max-w-none wrap-normal">
+                    {@html previewComment}
                 </div>
             </div>
         {/if}
@@ -254,6 +276,7 @@
                         onchange={handleFileSelected}
                         accept="image/png, image/jpeg, image/gif"
                         class="hidden"
+                        multiple
                 />
                 <Button onclick={handleSelectImage}
                         variant="outline"

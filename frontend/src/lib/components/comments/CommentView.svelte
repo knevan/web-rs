@@ -23,7 +23,29 @@
     let targetUrl = $state('');
 
     const isOwnerComment = $derived(currentUser?.id === comment.user.id);
-    const sanitizedContent = $derived(comment.content_html);
+    // const sanitizedContent = $derived(comment.content_html);
+
+    const renderedContent = $derived.by(() => {
+        let finalHtml = comment.content_html;
+
+        // Check if there are attachment URLs and process them
+        if (comment.attachment_urls && comment.attachment_urls.length > 0) {
+            finalHtml = finalHtml.replace(/\[img:(\d+)]/g, (match: string, indexStr: string) => {
+                const index = parseInt(indexStr, 10);
+                if (comment.attachment_urls && comment.attachment_urls[index]) {
+                    const url = comment.attachment_urls[index];
+                    // Return an anchor tag wrapping an image for the attachment
+                    return `
+                        <a href="${url}" target="_blank" rel="noopener noreferrer">
+                           <img src="${url}" alt="User attachment ${index}" class="mt-2 max-h-[250px] max-w-full rounded-lg object-contain" />
+                        </a>
+                    `;
+                }
+                return match; // Return the original placeholder if URL not found
+            });
+        }
+        return finalHtml;
+    });
 
     function handleReplySubmit(formData: FormData) {
         const contentText = formData.get('content_markdown') as string;
@@ -193,17 +215,17 @@
                  onclick={handleLinkClick}
                  role="none"
                  class="prose prose-a:text-blue-500 mt-1 max-w-none dark:prose-invert">
-                {@html sanitizedContent}
+                {@html renderedContent}
             </div>
 
-            {#if comment.attachment_url}
+            <!-- {#if comment.attachment_url}
                 <a href={comment.attachment_url} target="_blank" rel="noopener noreferrer">
                     <img src={comment.attachment_url}
                          alt="User content"
                          class="mt-2 max-h-[250px] max-w-full rounded-lg object-contain"
                     />
                 </a>
-            {/if}
+            {/if} -->
 
             <div class="comment-actions mt-1 flex items-center gap-1">
                 <Button onclick={() => handleVote(1)}

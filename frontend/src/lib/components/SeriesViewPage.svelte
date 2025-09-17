@@ -559,7 +559,8 @@
                             Comments
                         </h2>
                         <CommentSystem
-                                seriesId={+mangaId}
+                                entityType="series"
+                                entityId={+mangaId}
                                 currentUser={$auth.user}
                         />
                     </div>

@@ -10,6 +10,7 @@
         seriesTitle: string;
         chapterTitle: string;
         chapterNumber: number;
+        chapterId: number;
         pages: string[];
         allChapters: { chapter_number: number, title: string }[];
         prevChapterNumber: number | null;
@@ -212,7 +213,8 @@
                 Comments
             </h2>
             <CommentSystem
-                    seriesId={+mangaId}
+                    entityType="chapters"
+                    entityId={chapterView.chapterId}
                     currentUser={$auth.user}
             />
         </div>
