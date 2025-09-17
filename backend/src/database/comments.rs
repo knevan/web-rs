@@ -81,7 +81,16 @@ impl DatabaseService {
                 FROM comment_votes cv
                 WHERE cv.comment_vote_id IN (SELECT id FROM comment_thread)
                 GROUP BY cv.comment_vote_id
-            )
+            ),
+            attachments_summary AS (
+            -- Aggregate all attachment URLs for each comment into a JSON array
+            SELECT
+                comment_id,
+                json_agg(file_url) as attachment_urls
+            FROM comment_attachments
+            WHERE comment_id IN (SELECT id FROM comment_thread)
+            GROUP BY comment_id
+        )
             SELECT
                 ct.id as "id!",
                 ct.parent_id,
@@ -94,12 +103,14 @@ impl DatabaseService {
                 up.avatar_url as "user_avatar_url",
                 COALESCE(vs.upvotes, 0) as "upvotes!",
                 COALESCE(vs.downvotes, 0) as "downvotes!",
-                cv.vote_type as "current_user_vote: _"
+                cv.vote_type as "current_user_vote: _",
+                ats.attachment_urls as "attachment_urls: _"
             FROM comment_thread ct
             JOIN users u ON ct.user_id = u.id
             LEFT JOIN user_profiles up ON u.id = up.user_id
             LEFT JOIN vote_summary vs ON ct.id = vs.comment_vote_id
             LEFT JOIN comment_votes cv ON ct.id = cv.comment_vote_id AND cv.user_id = $3
+            LEFT JOIN attachments_summary ats ON ct.id = ats.comment_id
             ORDER BY ct.created_at ASC
             "#,
             entity_type as _,
@@ -181,7 +192,15 @@ impl DatabaseService {
                 FROM comment_votes cv
                 WHERE cv.comment_vote_id = $1
                 GROUP BY cv.comment_vote_id
-            )
+            ),
+            attachments_summary AS (
+            SELECT
+                comment_id,
+                json_agg(file_url) as attachment_urls
+            FROM comment_attachments
+            WHERE comment_id = $1
+            GROUP BY comment_id
+        )
             SELECT
                 c.id as "id!",
                 c.parent_id,
@@ -194,12 +213,14 @@ impl DatabaseService {
                 up.avatar_url as "user_avatar_url",
                 COALESCE(vs.upvotes, 0) as "upvotes!",
                 COALESCE(vs.downvotes, 0) as "downvotes!",
-                cv.vote_type as "current_user_vote: _"
+                cv.vote_type as "current_user_vote: _",
+                ats.attachment_urls as "attachment_urls: _"
             FROM comments c
             JOIN users u ON c.user_id = u.id
             LEFT JOIN user_profiles up ON u.id = up.user_id
             LEFT JOIN vote_summary vs ON c.id = vs.comment_vote_id
             LEFT JOIN comment_votes cv ON c.id = cv.comment_vote_id AND cv.user_id = $2
+            LEFT JOIN attachments_summary ats ON c.id = ats.comment_id
             WHERE c.id = $1 AND c.deleted_at IS NULL
             "#,
             comment_id,
@@ -219,7 +240,14 @@ impl DatabaseService {
         entity_id: i32,
         content_markdown: &str,
         parent_id: Option<i64>,
+        attachment_keys: &[String],
     ) -> AnyhowResult<i64> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to start transaction")?;
+
         let content_html = self.process_comment_markdown(content_markdown)?;
 
         let new_comment_id = sqlx::query_scalar!(
@@ -235,9 +263,24 @@ impl DatabaseService {
             content_markdown,
             content_html
         )
-            .fetch_one(&self.pool)
+            .fetch_one(&mut *tx)
             .await
             .context("Failed to create new comments")?;
+
+        if !attachment_keys.is_empty() {
+            for key in attachment_keys {
+                sqlx::query!(
+                "INSERT INTO comment_attachments (comment_id, file_url) VALUES ($1, $2)",
+                new_comment_id,
+                key
+            )
+                    .execute(&mut *tx)
+                    .await
+                    .context("Failed to insert comment attachment")?;
+            }
+        }
+
+        tx.commit().await.context("Failed to commit transaction")?;
 
         Ok(new_comment_id)
     }

@@ -245,6 +245,8 @@ pub struct Comment {
     pub current_user_vote: Option<i16>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub replies: Vec<Comment>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attachment_urls: Option<Vec<String>>,
 }
 
 // Helper struct to map the flat comment result
@@ -262,6 +264,7 @@ struct CommentFlatRow {
     upvotes: i64,
     downvotes: i64,
     current_user_vote: Option<i16>,
+    attachment_urls: Option<serde_json::Value>,
 }
 
 impl From<CommentFlatRow> for Comment {
@@ -282,6 +285,9 @@ impl From<CommentFlatRow> for Comment {
             downvotes: row.downvotes,
             current_user_vote: row.current_user_vote,
             replies: Vec::new(),
+            attachment_urls: row
+                .attachment_urls
+                .and_then(|v| serde_json::from_value(v).ok()),
         }
     }
 }
@@ -293,7 +299,7 @@ pub struct CommentUser {
     pub avatar_url: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[sqlx(type_name = "comments_entity", rename_all = "snake_case")]
 pub enum CommentEntityType {
     Series,
@@ -304,6 +310,7 @@ pub enum CommentEntityType {
 pub struct NewCommentPayload {
     pub content_markdown: String,
     pub parent_id: Option<i64>,
+    pub attachments: Option<Vec<String>>,
 }
 
 // Payload for voting on a comment.
