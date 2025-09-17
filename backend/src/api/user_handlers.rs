@@ -33,7 +33,18 @@ pub async fn get_user_profile_handler(
     );
 
     match state.db_service.get_user_profile_details(user.id).await {
-        Ok(Some(profile)) => (StatusCode::OK, Json(profile)).into_response(),
+        Ok(Some(mut profile)) => {
+            if let Some(key) = &profile.avatar_url {
+                if !key.is_empty() {
+                    profile.avatar_url = Some(format!(
+                        "{}/{}",
+                        state.storage_client.domain_cdn_url(),
+                        key
+                    ));
+                }
+            }
+            (StatusCode::OK, Json(profile)).into_response()
+        }
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({ "message": "User profile not found"})),
@@ -166,16 +177,17 @@ pub async fn update_user_avatar_handler(
         // Upload to cloud storage
         return match state
             .storage_client
-            .upload_cover_image_file(
-                file_data,
-                &unique_image_key,
-                &content_type,
-            )
+            .upload_image_file(file_data, &unique_image_key, &content_type)
             .await
         {
-            Ok(url) => {
-                match state.db_service.update_user_avatar(user.id, &url).await {
-                    Ok(_) => (StatusCode::OK, Json(serde_json::json!({"status": "success", "url": url}))).into_response(),
+            Ok(key) => {
+                match state.db_service.update_user_avatar(user.id, &key).await {
+                    Ok(_) => {
+                        // Construct the public URL
+                        let public_url = format!("{}/{}", state.storage_client.domain_cdn_url(), key);
+
+                        (StatusCode::OK, Json(serde_json::json!({"status": "success", "url": public_url}))).into_response()
+                    },
                     Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"message": "Failed to save avatar URL."}))).into_response(),
                 }
             }

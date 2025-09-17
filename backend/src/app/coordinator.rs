@@ -144,7 +144,7 @@ pub async fn process_single_chapter(
 
                         // Upload to R2
                         match storage_client
-                            .upload_image_objects(
+                            .upload_image_series_objects(
                                 &object_key,
                                 avif_bytes,
                                 "image/avif",
