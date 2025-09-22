@@ -1,9 +1,9 @@
+use crate::api;
 use crate::builder::config_sites_watcher::config_sites_watcher;
 use crate::database::DatabaseService;
 use crate::database::storage::StorageClient;
 use crate::scraping::model::SitesConfig;
 use crate::task_workers::channels::{OnDemandChannels, setup_worker_channels};
-use crate::{api, builder};
 use arc_swap::ArcSwap;
 use axum::http::{HeaderValue, Method, header};
 use axum::{Router, serve};
@@ -98,14 +98,14 @@ pub async fn run(
     // Initialize the router and attach the authentication routes
     let app = Router::new()
         .merge(api::routes::routes())
-        .with_state(app_state)
         .layer(
             ServiceBuilder::new()
                 .layer(CompressionLayer::new())
                 // TODO: rate limiting
                 .layer(TimeoutLayer::new(Duration::from_secs(30)))
                 .layer(cors),
-        );
+        )
+        .with_state(app_state);
 
     println!("[STARTUP] Server started successfully!");
 
