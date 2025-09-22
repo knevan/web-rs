@@ -10,6 +10,7 @@ use axum_core::__private::tracing::error;
 use axum_core::response::{IntoResponse, Response};
 use axum_extra::extract::Multipart;
 use reqwest::StatusCode;
+use serde::de::{Deserializer, Error};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -774,6 +775,100 @@ pub async fn vote_on_comment_handler(
                 Json(serde_json::json!({"error": "Failed to vote on comment {}"})),
             )
                 .into_response()
+        }
+    }
+}
+
+pub async fn get_all_categories_handler(
+    State(state): State<AppState>,
+) -> Response {
+    match state.db_service.get_list_all_categories().await {
+        Ok(categories) => (StatusCode::OK, Json(categories)).into_response(),
+        Err(e) => {
+            error!("Failed to get list of all categories: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": "Could not retrieve categories."})),
+            )
+                .into_response()
+        }
+    }
+}
+
+fn deserialize_i32_vec<'de, D>(
+    deserializer: D,
+) -> Result<Option<Vec<i32>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    match s {
+        Some(s) if !s.is_empty() => {
+            let result: Result<Vec<i32>, _> = s
+                .split(',')
+                .map(str::trim)
+                .filter(|part| !part.is_empty())
+                .map(str::parse)
+                .collect();
+
+            match result {
+                Ok(v) if !v.is_empty() => Ok(Some(v)),
+                Ok(_) => Ok(None),
+                Err(e) => Err(Error::custom(e)),
+            }
+        }
+        _ => Ok(None),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BrowseParams {
+    #[serde(default = "default_page")]
+    page: u32,
+    #[serde(default = "default_pagesize")]
+    page_size: u32,
+    order_by: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_i32_vec")]
+    include: Option<Vec<i32>>,
+    #[serde(default, deserialize_with = "deserialize_i32_vec")]
+    exclude: Option<Vec<i32>>,
+}
+
+pub async fn browse_series_handler(
+    State(state): State<AppState>,
+    Query(params): Query<BrowseParams>,
+) -> Response {
+    let order_by = match params.order_by.as_deref() {
+        Some("new") => SeriesOrderBy::CreatedAt,
+        Some("updated") => SeriesOrderBy::UpdatedAt,
+        Some("views") => SeriesOrderBy::ViewsCount,
+        Some("rating") => SeriesOrderBy::Rating,
+        _ => SeriesOrderBy::UpdatedAt,
+    };
+
+    let include_ids = params.include.as_deref().unwrap_or(&[]);
+    let exclude_ids = params.exclude.as_deref().unwrap_or(&[]);
+
+    match state
+        .db_service
+        .browse_series_paginated_with_filters(
+            params.page,
+            params.page_size,
+            order_by,
+            include_ids,
+            exclude_ids,
+        )
+        .await
+    {
+        Ok(paginated_result) => {
+            (StatusCode::OK, Json(paginated_result)).into_response()
+        }
+        Err(e) => {
+            error!("Failed to browse_series: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": "Could not retrieve series."})),
+            ).into_response()
         }
     }
 }

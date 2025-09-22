@@ -5,12 +5,12 @@ use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool, Type};
 use std::fmt;
 use url::Url;
-use url::quirks::username;
 
 pub mod auth;
 pub mod chapters;
 pub mod comments;
 pub mod series;
+pub mod series_user_actions;
 pub mod storage;
 pub mod users;
 
@@ -181,6 +181,15 @@ impl SeriesDeletionImagekeys {
     }
 }
 
+// Order by field for fetching series list.
+#[derive(Debug, Clone)]
+pub enum SeriesOrderBy {
+    CreatedAt,
+    UpdatedAt,
+    ViewsCount,
+    Rating,
+}
+
 // Pagination parameters for fetching series list.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PaginatedResult<T> {
@@ -203,11 +212,19 @@ pub struct MostViewedSeries {
     pub view_count: Option<i64>,
 }
 
-// Order by field for fetching series list.
-#[derive(Debug, Clone)]
-pub enum SeriesOrderBy {
-    CreatedAt,
-    UpdatedAt,
+#[derive(Debug, FromRow, Serialize)]
+pub struct BrowseSeriesSearchResult {
+    pub id: i32,
+    pub title: String,
+    pub original_title: Option<String>,
+    pub description: String,
+    pub cover_image_url: String,
+    pub last_chapter_found_in_storage: Option<f32>,
+    pub updated_at: DateTime<Utc>,
+    #[sqlx(json)]
+    pub authors: serde_json::Value,
+    #[sqlx(json)]
+    pub categories: serde_json::Value,
 }
 
 #[derive(Debug, FromRow, Serialize)]
