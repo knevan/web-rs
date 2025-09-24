@@ -842,7 +842,7 @@ pub async fn browse_series_handler(
         Some("new") => SeriesOrderBy::CreatedAt,
         Some("updated") => SeriesOrderBy::UpdatedAt,
         Some("views") => SeriesOrderBy::ViewsCount,
-        Some("rating") => SeriesOrderBy::Rating,
+        Some("ratings") => SeriesOrderBy::Rating,
         _ => SeriesOrderBy::UpdatedAt,
     };
 

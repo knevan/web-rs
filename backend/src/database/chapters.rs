@@ -123,4 +123,21 @@ impl DatabaseService {
 
         Ok(urls)
     }
+
+    // Get chapters for a sepecific series
+    pub async fn get_chapters_by_series_id(
+        &self,
+        series_id: i32,
+    ) -> AnyhowResult<Vec<SeriesChapter>> {
+        let chapters = sqlx::query_as!(
+            SeriesChapter,
+            "SELECT id, series_id, chapter_number, title, source_url, created_at FROM series_chapters WHERE series_id = $1 ORDER BY chapter_number DESC",
+            series_id
+        )
+            .fetch_all(&self.pool)
+            .await
+            .context("Failed to query chapters by series ID with sqlx")?;
+
+        Ok(chapters)
+    }
 }

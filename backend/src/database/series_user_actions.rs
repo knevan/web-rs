@@ -495,14 +495,10 @@ impl DatabaseService {
                         s.cover_image_url,
                         s.updated_at,
                         s.last_chapter_found_in_storage,
-                        COALESCE(
-                            json_agg(DISTINCT a.name ORDER BY a.name) FILTER (WHERE a.id IS NOT NULL),
-                            '[]'::json
-                        ) as authors,
-                        COALESCE(
-                            json_agg(DISTINCT c.name ORDER BY c.name) FILTER (WHERE c.id IS NOT NULL),
-                            '[]'::json
-                        ) as categories,
+                        COALESCE(json_agg(DISTINCT a.name ORDER BY a.name) FILTER (WHERE a.id IS NOT NULL),
+                            '[]'::json) as authors,
+                        COALESCE(json_agg(DISTINCT c.name ORDER BY c.name) FILTER (WHERE c.id IS NOT NULL),
+                            '[]'::json) as categories,
                         COUNT(*) OVER () AS total_items
                     FROM
                         filtered_series fs
@@ -548,14 +544,10 @@ impl DatabaseService {
                         s.cover_image_url,
                         s.updated_at,
                         s.last_chapter_found_in_storage,
-                        COALESCE(
-                            json_agg(DISTINCT a.name ORDER BY a.name) FILTER (WHERE a.id IS NOT NULL),
-                            '[]'::json
-                        ) as authors,
-                        COALESCE(
-                            json_agg(DISTINCT c.name ORDER BY c.name) FILTER (WHERE c.id IS NOT NULL),
-                            '[]'::json
-                        ) as categories,
+                        COALESCE(json_agg(DISTINCT a.name ORDER BY a.name) FILTER (WHERE a.id IS NOT NULL),
+                            '[]'::json) as authors,
+                        COALESCE(json_agg(DISTINCT c.name ORDER BY c.name) FILTER (WHERE c.id IS NOT NULL),
+                            '[]'::json) as categories,
                         COUNT(*) OVER () AS total_items
                     FROM
                         filtered_series fs
@@ -593,14 +585,10 @@ impl DatabaseService {
                         s.cover_image_url,
                         s.updated_at,
                         s.last_chapter_found_in_storage,
-                        COALESCE(
-                            json_agg(DISTINCT a.name ORDER BY a.name) FILTER (WHERE a.id IS NOT NULL),
-                            '[]'::json
-                        ) as authors,
-                        COALESCE(
-                            json_agg(DISTINCT c.name ORDER BY c.name) FILTER (WHERE c.id IS NOT NULL),
-                            '[]'::json
-                        ) as categories,
+                        COALESCE(json_agg(DISTINCT a.name ORDER BY a.name) FILTER (WHERE a.id IS NOT NULL),
+                            '[]'::json) as authors,
+                        COALESCE(json_agg(DISTINCT c.name ORDER BY c.name) FILTER (WHERE c.id IS NOT NULL),
+                            '[]'::json) as categories,
                         COUNT(*) OVER () as total_items
                     FROM
                         series s
@@ -642,14 +630,10 @@ impl DatabaseService {
                         s.cover_image_url,
                         s.updated_at,
                         s.last_chapter_found_in_storage,
-                        COALESCE(
-                            json_agg(DISTINCT a.name ORDER BY a.name) FILTER (WHERE a.id IS NOT NULL),
-                            '[]'::json
-                        ) as authors,
-                        COALESCE(
-                            json_agg(DISTINCT c.name ORDER BY c.name) FILTER (WHERE c.id IS NOT NULL),
-                            '[]'::json
-                        ) as categories,
+                        COALESCE(json_agg(DISTINCT a.name ORDER BY a.name) FILTER (WHERE a.id IS NOT NULL),
+                            '[]'::json) as authors,
+                        COALESCE(json_agg(DISTINCT c.name ORDER BY c.name) FILTER (WHERE c.id IS NOT NULL),
+                            '[]'::json) as categories,
                         COUNT(*) OVER () as total_items
                     FROM
                         series s
