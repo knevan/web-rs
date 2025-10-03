@@ -151,8 +151,8 @@
     }
 </script>
 
-<div class="mx-auto my-2 max-w-4xl rounded-sm border border-zinc-200 p-1 font-sans sm:p-1 dark:border-zinc-700">
-    <div class="mb-1">
+<div class="font-sans mx-auto my-2 max-w-4xl rounded-sm border border-zinc-500 p-1  sm:p-1 dark:border-zinc-700">
+    <div class="mb-1 bg-slate-200/0">
         <CommentForm submitComment={addTopLevelComment} {currentUser}/>
     </div>
 

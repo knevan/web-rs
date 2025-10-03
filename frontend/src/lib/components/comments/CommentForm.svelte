@@ -228,7 +228,7 @@
     />
         {#if contentText}
             <div class="max-w-none rounded-md border border-dashed border-gray-300 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-800">
-                <h4 class="text-sm font-semibold text-gray-500">
+                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-200">
                     Preview
                 </h4>
                 <div class="prose prose-a:text-blue-500 prose-img:my-2 dark:prose-invert max-w-none wrap-normal">
@@ -242,7 +242,7 @@
                 <Button onclick={() => wrapSelection('**', '**')}
                         variant="outline"
                         size="iconLabel"
-                        class="font-bold"
+                        class="font-bold text-[#4a5568] dark:text-[#edf2f7]"
                         aria-label="Bold"
                 >
                     <Bold/>
@@ -250,7 +250,7 @@
                 <Button onclick={() => wrapSelection('*', '*')}
                         variant="outline"
                         size="iconLabel"
-                        class="italic"
+                        class="italic text-[#4a5568] dark:text-[#edf2f7]"
                         aria-label="Italic"
                 >
                     <Italic/>
@@ -258,8 +258,8 @@
                 <Button onclick={() => wrapSelection('[', '](url)')}
                         variant="outline"
                         size="iconLabel"
-                        class="italic"
-                        aria-label="Italic"
+                        class="text-[#4a5568] dark:text-[#edf2f7]"
+                        aria-label="Link"
                 >
                     <Link/>
                 </Button>
@@ -267,6 +267,7 @@
                         variant="outline"
                         size="iconLabel"
                         aria-label="Spoiler"
+                        class="text-[#4a5568] dark:text-[#edf2f7]"
                 >
                     <EyeClosed/>
                 </Button>
@@ -281,8 +282,8 @@
                 <Button onclick={handleSelectImage}
                         variant="outline"
                         size="iconLabel"
-                        class="italic"
-                        aria-label="Italic"
+                        class="text-[#4a5568] dark:text-[#edf2f7]"
+                        aria-label="Images"
                 >
                     <ImagePlus/>
                 </Button>

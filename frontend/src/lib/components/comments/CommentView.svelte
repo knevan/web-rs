@@ -214,18 +214,18 @@
             <div bind:this={contentContainer}
                  onclick={handleLinkClick}
                  role="none"
-                 class="prose prose-a:text-blue-500 mt-1 max-w-none dark:prose-invert">
+                 class="prose prose-a:text-blue-500 prose-img:mb-2 mt-1 max-w-none dark:prose-invert">
                 {@html renderedContent}
             </div>
 
-            <!-- {#if comment.attachment_url}
+            {#if comment.attachment_url}
                 <a href={comment.attachment_url} target="_blank" rel="noopener noreferrer">
                     <img src={comment.attachment_url}
                          alt="User content"
                          class="mt-2 max-h-[250px] max-w-full rounded-lg object-contain"
                     />
                 </a>
-            {/if} -->
+            {/if}
 
             <div class="comment-actions mt-1 flex items-center gap-1">
                 <Button onclick={() => handleVote(1)}

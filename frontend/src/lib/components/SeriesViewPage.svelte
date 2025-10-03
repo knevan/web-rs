@@ -68,7 +68,7 @@
         const rawStatus = mangaData?.series?.processing_status?.toLowerCase() || '';
 
         if (new Set(['pending', 'processing', 'available', 'ongoing']).has(rawStatus)) {
-            return {label: 'Ongoing', className: 'text-green-400'};
+            return {label: 'Ongoing', className: 'text-green-500'};
         }
 
         if (rawStatus === 'completed') {
@@ -337,25 +337,25 @@
         {:else if mangaData}
             <!-- Main Content -->
             <div>
-                <div class="bg-[#16213e] shadow-2xl rounded-none md:rounded-sm p-4 md:p-8 flex flex-col gap-8">
+                <div class="bg-gray-200/0 shadow-sm rounded-none md:rounded-sm p-4 md:p-8 flex flex-col gap-8">
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-7">
                         <div class="md:col-span-1 flex justify-center">
                             <img src={mangaData.series.cover_image_url} alt={mangaData.series.title}
-                                 class="w-full h-auto object-cover rounded-lg shadow-lg max-w-[200px] md:max-w-full"
-                                 style="max-height: 300px;" loading="lazy"/>
+                                 class="w-full h-auto object-cover rounded-lg shadow-lg max-w-[200px] md:max-w-full aspect-[2/3]"
+                                 style="max-height: 400px;" loading="lazy"/>
                         </div>
 
                         <div class="md:col-span-2 flex flex-col space-y-4">
                             <div class="space-y-2">
-                                <h1 class="text-xl md:text-xl font-medium text-white leading-tight">
+                                <h1 class="text-xl md:text-xl font-medium text-gray-800 dark:text-gray-200 leading-tight">
                                     {mangaData.series.title}
                                 </h1>
-                                <p class="text-sm md:text-sm text-gray-400 -mt-1">
+                                <p class="text-sm md:text-sm text-gray-800 dark:text-gray-200 -mt-1">
                                     {mangaData.series.original_title}
                                 </p>
-                                <p class="text-gray-400 text-sm">
+                                <p class="text-gray-800 dark:text-gray-200 text-sm">
                                     Author:
-                                    <span class="text-blue-300 text-sm">
+                                    <span class="text-blue-700 text-sm">
                                         {mangaData.authors?.join(', ') || 'Unknown'}
                                     </span>
                                 </p>
@@ -371,44 +371,44 @@
                                         "/>
                                     {/each}
                                 </div>
-                                <div class="text-white font-bold text-base md:text-lg">
+                                <div class="font-bold text-base md:text-lg text-gray-800 dark:text-gray-200">
                                     {averageRating.toFixed(1)}
                                 </div>
-                                <div class="text-gray-400 text-sm md:text-lg">
+                                <div class="text-gray-800 dark:text-gray-200 text-sm md:text-lg">
                                     ({formatCount(mangaData.series.total_ratings_count)})
                                 </div>
                             </div>
 
                             <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-1 p-2 bg-dark-secondary rounded-lg">
                                 <div class="text-center flex flex-col items-center gap-x-1">
-                                    <p class="text-md text-gray-400">Chapters</p>
-                                    <div class="text-xl font-bold text-white flex items-center justify-center gap-2">
+                                    <p class="text-md text-gray-800 dark:text-gray-200">Chapters</p>
+                                    <div class="text-xl font-bold text-gray-800 dark:text-gray-200 flex items-center justify-center gap-2">
                                         {chaptersCount}
                                     </div>
                                 </div>
                                 <div class="text-center flex flex-col items-center gap-x-1">
-                                    <p class="text-md text-gray-400">Views</p>
-                                    <div class="text-xl font-bold text-white flex items-center justify-center gap-2">
+                                    <p class="text-md text-gray-800 dark:text-gray-200">Views</p>
+                                    <div class="text-xl font-bold text-gray-800 dark:text-gray-200 flex items-center justify-center gap-2">
                                         {formatCount(mangaData.series.views_count)}
                                     </div>
                                 </div>
                                 <div class="text-center flex flex-col items-center gap-x-1">
-                                    <p class="text-md text-gray-400">Bookmarked</p>
-                                    <div class="text-xl font-bold text-white flex items-center justify-center gap-2">
+                                    <p class="text-md text-gray-800 dark:text-gray-200">Bookmarked</p>
+                                    <div class="text-xl font-bold text-gray-800 dark:text-gray-200 flex items-center justify-center gap-2">
                                         {formatCount(mangaData.series.bookmarks_count)}
                                     </div>
                                 </div>
                                 <div class="text-center flex flex-col items-center gap-x-1">
-                                    <p class="text-md text-gray-400">Status</p>
-                                    <div class="text-sm font-bold {displayStatus().className}">
+                                    <p class="text-md text-gray-800 dark:text-gray-200">Status</p>
+                                    <div class="text-sm font-bold text-gray-800 dark:text-gray-200 {displayStatus().className}">
                                         {displayStatus().label}
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="text-gray-400 text-sm">
+                            <div class="text-gray-800 dark:text-gray-200 text-sm">
                                 Last Update:
-                                <span class="text-gray-300">
+                                <span class="text-gray-800 dark:text-gray-200">
                                     {formatRelativeTime(mangaData.series.updated_at)}
                                 </span>
                             </div>
@@ -418,7 +418,7 @@
                                     <Button onclick={() => handleChapterClick(firstChapter.chapter_number)} size="lg"
                                             class="w-1/2 flex text-center cursor-pointer border border-transparent bg-blue-600 hover:bg-blue-700 text-white font-semibold py-6 px-5 rounded-lg transition-colors duration-300 shadow-md"
                                     >
-                                        <span class="text-base md:text-lg">
+                                        <span class="text-base md:text-lg ">
 											Read Chapter {firstChapter.chapter_number}
 										</span>
                                     </Button>
@@ -427,7 +427,7 @@
                                 {#if authState.isAuthenticated}
                                     <Button onclick={handleBookmarkSaveClick} size="lg"
                                             class={[
-                                                'w-1/2 text-center cursor-pointer border border-gray-400 bg-white/10 backdrop-blur-sm text-gray-200 hover:bg-white/20 font-semibold py-6 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2',
+                                                'w-1/2 text-center cursor-pointer border border-gray-400 bg-white/10 backdrop-blur-sm text-gray-800 dark:text-gray-200 hover:bg-white/20 font-semibold py-6 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2',
                                                 isBookmarked && '!bg-yellow-500 hover:!bg-yellow-600 !border-yellow-500'
                                             ]}
                                     >
@@ -437,21 +437,22 @@
                                     </Button>
                                 {:else}
                                     <Button onclick={handleLoginClick} size="lg"
-                                            class="w-1/2 text-center cursor-pointer border border-gray-400 bg-white/10 backdrop-blur-sm text-gray-200 hover:bg-white/20 font-semibold py-6 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2">
+                                            variant="outline"
+                                            class="w-1/2 text-center cursor-pointer border border-gray-400 bg-gray-700/20 dark:bg-white/10 backdrop-blur-sm text-gray-800 dark:text-gray-200 hover:bg-white/20 font-semibold py-6 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2">
                                         <span class="text-base md:text-lg">LOGIN</span>
                                     </Button>
                                 {/if}
                             </div>
                             {#if mangaData.categoryTags?.length > 0}
                                 <div class="space-y-3">
-                                    <h3 class="text-gray-300 font-semibold text-xl mt-2 text-center md:text-left">
+                                    <h3 class="text-gray-800 dark:text-gray-200 font-semibold text-xl mt-2 text-center md:text-left">
                                         Categories
                                     </h3>
                                     <div class="flex flex-wrap gap-2 mt-4">
                                         {#each mangaData.categoryTags as tag (tag.id)}
                                             <Badge onclick={() => handleCategoryClick(tag)}
                                                    role="button"
-                                                   class="px-3 py-1 text-sm font-medium rounded-full bg-[#0f3460] text-[#c0c0ff] transition-all duration-300 ease-in-out hover:bg-blue-600 hover:text-white hover:-translate-y-0.5">
+                                                   class="px-3 py-1 text-sm font-medium rounded-full bg-[#0f3460] text-white text-center transition-all duration-300 ease-in-out hover:bg-blue-600 hover:text-white hover:-translate-y-0.5">
                                                 {tag.name}
                                             </Badge>
                                         {/each}
@@ -461,11 +462,11 @@
                         </div>
                     </div>
                     {#if mangaData.series.description}
-                        <div class="space-y-2 pt-5 border-t border-gray-700/50">
-                            <h3 class="text-md font-semibold text-white">Description</h3>
+                        <div class="space-y-2 pt-4 border-t border-gray-700/40">
+                            <h3 class="text-md font-bold text-gray-800 dark:text-gray-200">Description</h3>
                             <p bind:this={descriptionElement}
                                class={[
-                                'text-gray-300 leading-relaxed transition-all duration-300',
+                                'text-gray-800 dark:text-gray-200 leading-relaxed transition-all duration-300',
                                 (isDescriptionOverflowing && !isDescriptionExpanded) && 'line-clamp-4'
                                ].filter(Boolean).join(' ')}
                             >
@@ -473,10 +474,10 @@
                             </p>
                             {#if isDescriptionOverflowing}
                                 <div class="flex justify-end">
-                                    <button onclick={() => isDescriptionExpanded = !isDescriptionExpanded}
+                                    <Button onclick={() => isDescriptionExpanded = !isDescriptionExpanded}
                                             class="text-blue-400 hover:text-blue-300 font-semibold text-sm">
                                         {isDescriptionExpanded ? 'Show Less' : 'Read More'}
-                                    </button>
+                                    </Button>
                                 </div>
                             {/if}
                         </div>
@@ -485,9 +486,9 @@
 
                 <!-- Chapter List Section -->
                 {#if sortedChapters.length > 0}
-                    <div class="bg-[#16213e] shadow-2xl rounded-none md:rounded-sm md:mt-1 p-4 md:p-8">
+                    <div class="bg-gray-200/0 shadow-sm rounded-none md:rounded-sm md:mt-1 p-4 md:p-8">
                         <div class="mb-6 p-4 bg-dark-secondary rounded-lg">
-                            <h3 class="text-base md:text-lg font-semibold text-white mb-2 text-center">
+                            <h3 class="text-base md:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2 text-center">
                                 {authState.isAuthenticated ? 'Rate this Series' : 'Rate this Series'}
                             </h3>
                             <div class="flex justify-center items-center gap-1 md:gap-2"
@@ -498,8 +499,10 @@
                             >
                                 {#each {length: 5} as _, i}
                                     {@const starValue = i + 1}
-                                    <button
+                                    <Button
                                             type="button"
+                                            size="iconLabel"
+                                            variant="ghost"
                                             onmouseenter={() => hoveredRating = starValue}
                                             onclick={() => handleRatingClick(starValue)}
                                             class="transition-transform duration-200 active:scale-125 hover:scale-125"
@@ -507,17 +510,17 @@
                                         <Star class="
                                              {(hoveredRating || userRating) >= starValue ? 'text-yellow-400' : 'text-gray-500'}
                                              {!authState.isAuthenticated ? 'opacity-50' : ''}
-                                             w-6 h-6 md:w-8 md:h-8 fill-current stroke-1"
+                                             !w-5 !h-5 md:w-6 md:h-6 fill-current stroke-1"
                                         />
-                                    </button>
+                                    </Button>
                                 {/each}
                             </div>
                         </div>
                         <div class="flex justify-between items-center mb-6">
-                            <h2 class="text-2xl font-bold text-white">
+                            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200">
                                 Chapters
                             </h2>
-                            <div class="text-sm text-gray-400">
+                            <div class="text-sm text-gray-800 dark:text-gray-2000">
                                 Latest: Chapter {sortedChapters[0]?.chapter_number}
                             </div>
                         </div>
@@ -526,20 +529,19 @@
                             <div class="grid gap-3 grid-cols-1 md:grid-cols-2">
                                 {#each sortedChapters as chapter}
                                     <button onclick={() => handleChapterClick(chapter.chapter_number)}
-                                            class="p-4 rounded-lg text-left cursor-pointer bg-[#1e293b] border-l-1 border-gray-600 transition-all duration-300 ease-in-out hover:bg-gray-700 hover:border-blue-500 hover:translate-x-2">
+                                            class="p-4 rounded-sm text-left cursor-pointer bg-gray-200/10 dark:bg-gray-200/5 border border-gray-300/90 ">
                                         <span class="flex justify-between items-center">
                                             <span class="flex flex-1 flex-col items-start">
-                                                <span class="font-semibold text-white">
+                                                <span class="font-semibold text-gray-800 dark:text-gray-200">
                                                     {#if chapter.title}
-                                                        <span class="text-gray-300">{chapter.title}</span>
+                                                        <span class="text-gray-800 dark:text-gray-200">{chapter.title}</span>
                                                     {/if}
                                                 </span>
-                                                <span class="text-sm text-gray-400">
+                                                <span class="text-sm text-gray-800 dark:text-gray-200">
                                                     {formatRelativeTime(chapter.created_at)}
                                                 </span>
                                             </span>
                                             <span class="text-blue-400">
-
                                             </span>
                                         </span>
                                     </button>
@@ -549,13 +551,13 @@
                     </div>
                 {:else}
                     <div class="text-center py-12">
-                        <p class="text-gray-400">No chapters available</p>
+                        <p class="text-gray-800 dark:text-gray-200">No chapters available</p>
                     </div>
                 {/if}
 
                 {#if mangaId}
-                    <div class="bg-[#16213e] shadow-2xl rounded-none md:rounded-sm md:mt-1 p-4 md:p-8">
-                        <h2 class="text-2xl font-bold mb-1 ml-1">
+                    <div class="bg-gray-200/0 shadow-2xl rounded-none md:rounded-sm md:mt-1 p-4 md:p-8">
+                        <h2 class="text-2xl font-bold mb-1 ml-1 text-gray-800 dark:text-gray-200">
                             Comments
                         </h2>
                         <CommentSystem
