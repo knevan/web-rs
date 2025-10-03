@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    WITH search_results AS (\n                        SELECT\n                            u.id,\n                            u.username,\n                            u.email,\n                            r.role_name,\n                            u.user_tsv\n                        FROM users u\n                        JOIN roles r ON u.role_id = r.id\n                        WHERE\n                            -- ILIKE for substring matches\n                            u.username ILIKE '%' || $3 || '%'\n                            OR u.email ILIKE '%' || $3 || '%'\n                            -- FTS for whole-word/prefix matches\n                            OR u.user_tsv @@ to_tsquery('simple', $4)\n                            -- fuzzy match filtering\n                            OR (u.username || ' ' || u.email) % $3\n                    ),\n                    ranked_results AS (\n                        SELECT\n                            *,\n                            CASE\n                                WHEN username ILIKE '%' || $3 || '%' OR email ILIKE '%' || $3 || '%' THEN 10\n                                WHEN user_tsv @@ to_tsquery('simple', $4) THEN 8\n                                ELSE 6\n                            END as search_rank,\n                            -- Calculate similarity score for ranking\n                            similarity(username || ' ' || email, $3) as sim_score\n                        FROM search_results\n                     ),\n                    total_count AS (\n                        SELECT COUNT(*) AS total FROM ranked_results WHERE search_rank > 0\n                    )\n                    SELECT\n                        rr.id,\n                        rr.username,\n                        rr.email,\n                        rr.role_name,\n                        tc.total as total_items\n                    FROM ranked_results rr\n                    CROSS JOIN total_count tc\n                    WHERE rr.search_rank > 0\n                    ORDER BY rr.search_rank DESC, rr.sim_score DESC, rr.id ASC\n                    LIMIT $1 OFFSET $2\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "role_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "total_items",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "172c20fbd5dc86fb2320ccb218652409751f86f3783c19b1e944618ee8b0b0e5"
+}

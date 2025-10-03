@@ -82,7 +82,7 @@ impl StorageClient {
      * `content_type` - The MIME type of the object (e.g., "image/avif").
      * The full public CDN URL to the uploaded object.
      */
-    pub async fn upload_image_objects(
+    pub async fn upload_image_series_objects(
         &self,
         key: &str,
         data: Vec<u8>,
@@ -179,10 +179,10 @@ impl StorageClient {
         Ok(())
     }
 
-    pub async fn upload_cover_image_file(
+    pub async fn upload_image_file(
         &self,
         file_bytes: Vec<u8>,
-        file_name: &str,
+        object_key: &str,
         content_type: &str,
     ) -> Result<String> {
         let body = ByteStream::from(file_bytes);
@@ -190,16 +190,14 @@ impl StorageClient {
         self.client
             .put_object()
             .bucket(&self.bucket_name)
-            .key(file_name)
+            .key(object_key)
             .body(body)
             .content_type(content_type)
             .send()
             .await
             .map_err(|e| anyhow!("Failed to upload file: {:?}", e))?;
 
-        let public_url = format!("{}/{}", self.domain_cdn_url, file_name);
-
-        Ok(public_url)
+        Ok(object_key.to_string())
     }
 
     // Helper function to extract storage object key from CDN URL

@@ -155,7 +155,7 @@ impl DatabaseService {
     pub async fn update_user_avatar(
         &self,
         user_id: i32,
-        avatar_url: &str,
+        avatar_key: &str,
     ) -> AnyhowResult<()> {
         sqlx::query!(
             r#"
@@ -163,7 +163,7 @@ impl DatabaseService {
             ON CONFLICT (user_id) DO UPDATE SET avatar_url = EXCLUDED.avatar_url
             "#,
             user_id,
-            avatar_url
+            avatar_key
         )
         .execute(&self.pool)
         .await

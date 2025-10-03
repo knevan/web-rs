@@ -65,7 +65,7 @@ pub async fn create_new_series_handler(
     };
 
     let fetch_new_series: Series = match db_service
-        .get_manga_series_by_id(new_series_id)
+        .get_series_by_id(new_series_id)
         .await
     {
         Ok(Some(series)) => series,
@@ -195,23 +195,28 @@ pub async fn upload_series_cover_image_handler(
         let unique_image_key =
             format!("cover-manga/{}.{}", Uuid::new_v4(), file_extension);
 
-        return match state
+        match state
             .storage_client
-            .upload_cover_image_file(
-                file_data,
-                &unique_image_key,
-                &content_type,
-            )
+            .upload_image_file(file_data, &unique_image_key, &content_type)
             .await
         {
-            Ok(url) => (
-                StatusCode::OK,
-                Json(UploadResponse {
-                    status: "success".to_string(),
-                    url,
-                }),
-            )
-                .into_response(),
+            Ok(key) => {
+                // Construct the public URL
+                let public_url = format!(
+                    "{}/{}",
+                    state.storage_client.domain_cdn_url(),
+                    &key
+                );
+
+                (
+                    StatusCode::OK,
+                    Json(UploadResponse {
+                        status: "success".to_string(),
+                        url: public_url,
+                    }),
+                )
+                    .into_response()
+            }
             Err(e) => {
                 eprintln!("Failed to upload cover image: {}", e);
                 (
@@ -219,13 +224,13 @@ pub async fn upload_series_cover_image_handler(
                     Json(serde_json::json!({"status": "error", "message": "Failed to upload cover image to storage"}))
                 ).into_response()
             }
-        };
-    }
-
-    (
+        }
+    } else {
+        (
         StatusCode::BAD_REQUEST,
         Json(serde_json::json!({"status": "error", "message": "No cover image file found"}))
     ).into_response()
+    }
 }
 
 #[derive(Deserialize)]
@@ -265,13 +270,13 @@ pub struct PaginatedResponse<T: Serialize> {
     total_items: i64,
 }
 
-pub async fn get_all_manga_series_handler(
+pub async fn get_all_series_handler(
     admin: AdminUser,
     State(state): State<AppState>,
     Query(pagination): Query<PaginationParams>,
 ) -> Response {
     println!(
-        "->> {:<12} - get_all_manga_series_handler - user: {}",
+        "->> {:<12} - get_all_series_handler - user: {}",
         "HANDLER", admin.0.username
     );
 

@@ -8,8 +8,9 @@ use url::Url;
 
 pub mod auth;
 pub mod chapters;
-pub mod db;
+pub mod comments;
 pub mod series;
+pub mod series_user_actions;
 pub mod storage;
 pub mod users;
 
@@ -65,7 +66,7 @@ impl fmt::Display for SeriesStatus {
     }
 }
 
-// Struct represents a manga series stored in the database.
+// Struct represents a series stored in the database.
 #[derive(Debug, Clone, FromRow, Serialize)]
 pub struct Series {
     pub id: i32,
@@ -88,6 +89,15 @@ pub struct Series {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, sqlx::Type, Serialize, Deserialize)]
+#[sqlx(type_name = "series_status", rename_all = "PascalCase")]
+pub enum ChapterStatus {
+    Processing,
+    Available,
+    NoImagesFound,
+    Error,
+}
+
 /// Struct represent chapter
 #[derive(Debug, FromRow, Serialize)]
 pub struct SeriesChapter {
@@ -95,6 +105,7 @@ pub struct SeriesChapter {
     pub series_id: i32,
     pub chapter_number: f32,
     pub title: Option<String>,
+    pub status: ChapterStatus,
     pub source_url: String,
     pub created_at: DateTime<Utc>,
 }
@@ -110,6 +121,7 @@ pub struct Users {
 }
 
 #[derive(Debug, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UserProfileDetails {
     pub username: String,
     pub email: String,
@@ -180,6 +192,15 @@ impl SeriesDeletionImagekeys {
     }
 }
 
+// Order by field for fetching series list.
+#[derive(Debug, Clone)]
+pub enum SeriesOrderBy {
+    CreatedAt,
+    UpdatedAt,
+    ViewsCount,
+    Rating,
+}
+
 // Pagination parameters for fetching series list.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PaginatedResult<T> {
@@ -202,11 +223,19 @@ pub struct MostViewedSeries {
     pub view_count: Option<i64>,
 }
 
-// Order by field for fetching series list.
-#[derive(Debug, Clone)]
-pub enum SeriesOrderBy {
-    CreatedAt,
-    UpdatedAt,
+#[derive(Debug, FromRow, Serialize)]
+pub struct BrowseSeriesSearchResult {
+    pub id: i32,
+    pub title: String,
+    pub original_title: Option<String>,
+    pub description: String,
+    pub cover_image_url: String,
+    pub last_chapter_found_in_storage: Option<f32>,
+    pub updated_at: DateTime<Utc>,
+    #[sqlx(json)]
+    pub authors: serde_json::Value,
+    #[sqlx(json)]
+    pub categories: serde_json::Value,
 }
 
 #[derive(Debug, FromRow, Serialize)]
@@ -227,6 +256,103 @@ pub struct LatestReleaseSeries {
     pub last_chapter_found_in_storage: Option<f32>,
     pub updated_at: DateTime<Utc>,
     pub chapter_title: Option<String>,
+}
+
+#[derive(Debug, FromRow, Serialize, Clone)]
+pub struct Comment {
+    pub id: i64,
+    pub parent_id: Option<i64>,
+    pub content_html: String,
+    pub content_markdown: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub user: CommentUser,
+    pub upvotes: i64,
+    pub downvotes: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_user_vote: Option<i16>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub replies: Vec<Comment>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attachment_urls: Option<Vec<String>>,
+}
+
+// Helper struct to map the flat comment result
+#[derive(Debug, FromRow)]
+struct CommentFlatRow {
+    id: i64,
+    parent_id: Option<i64>,
+    content_html: String,
+    content_markdown: String,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    user_id: i32,
+    user_username: String,
+    user_avatar_url: Option<String>,
+    upvotes: i64,
+    downvotes: i64,
+    current_user_vote: Option<i16>,
+    attachment_urls: Option<serde_json::Value>,
+}
+
+impl From<CommentFlatRow> for Comment {
+    fn from(row: CommentFlatRow) -> Self {
+        Comment {
+            id: row.id,
+            parent_id: row.parent_id,
+            content_html: row.content_html,
+            content_markdown: row.content_markdown,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            user: CommentUser {
+                id: row.user_id,
+                username: row.user_username,
+                avatar_url: row.user_avatar_url,
+            },
+            upvotes: row.upvotes,
+            downvotes: row.downvotes,
+            current_user_vote: row.current_user_vote,
+            replies: Vec::new(),
+            attachment_urls: row
+                .attachment_urls
+                .and_then(|v| serde_json::from_value(v).ok()),
+        }
+    }
+}
+
+#[derive(Debug, FromRow, Serialize, Clone)]
+pub struct CommentUser {
+    pub id: i32,
+    pub username: String,
+    pub avatar_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[sqlx(type_name = "comments_entity", rename_all = "snake_case")]
+pub enum CommentEntityType {
+    Series,
+    SeriesChapters,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NewCommentPayload {
+    pub content_markdown: String,
+    pub parent_id: Option<i64>,
+    pub attachments: Option<Vec<String>>,
+}
+
+// Payload for voting on a comment.
+#[derive(Debug, Deserialize)]
+pub struct VotePayload {
+    // 1 for upvote, -1 for downvote, 0 to remove vote
+    pub vote_type: i16,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CommentVoteResponse {
+    pub new_upvotes: i64,
+    pub new_downvotes: i64,
+    pub current_user_vote: Option<i16>,
 }
 
 // A helper function to extract a hostname from an optional URL string.

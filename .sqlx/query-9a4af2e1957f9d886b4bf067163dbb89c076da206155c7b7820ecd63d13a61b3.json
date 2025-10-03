@@ -1,0 +1,106 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH RECURSIVE comment_thread AS (\n                -- Anchor member: top-level comments\n                SELECT * FROM comments\n                WHERE comments_type = $1 AND comments_id = $2 AND parent_id IS NULL AND deleted_at IS NULL\n                UNION ALL\n                -- Recursive member: replies to comments already in the thread\n                SELECT c.*\n                FROM comments c\n                JOIN comment_thread ct ON c.parent_id = ct.id\n                WHERE c.deleted_at IS NULL\n            ),\n            vote_summary AS (\n                SELECT\n                    cv.comment_vote_id,\n                    COUNT(*) FILTER (WHERE cv.vote_type = 1) AS upvotes,\n                    COUNT(*) FILTER (WHERE cv.vote_type = -1) AS downvotes\n                FROM comment_votes cv\n                WHERE cv.comment_vote_id IN (SELECT id FROM comment_thread)\n                GROUP BY cv.comment_vote_id\n            ),\n            attachments_summary AS (\n            -- Aggregate all attachment URLs for each comment into a JSON array\n            SELECT\n                comment_id,\n                json_agg(file_url) as attachment_urls\n            FROM comment_attachments\n            WHERE comment_id IN (SELECT id FROM comment_thread)\n            GROUP BY comment_id\n        )\n            SELECT\n                ct.id as \"id!\",\n                ct.parent_id,\n                ct.content_html as \"content_html!\",\n                ct.content_user_markdown as \"content_markdown!\",\n                ct.created_at as \"created_at!\",\n                ct.updated_at as \"updated_at!\",\n                ct.user_id as \"user_id!\",\n                COALESCE(up.display_name, u.username) as \"user_username!\",\n                up.avatar_url as \"user_avatar_url\",\n                COALESCE(vs.upvotes, 0) as \"upvotes!\",\n                COALESCE(vs.downvotes, 0) as \"downvotes!\",\n                cv.vote_type as \"current_user_vote: _\",\n                ats.attachment_urls as \"attachment_urls: _\"\n            FROM comment_thread ct\n            JOIN users u ON ct.user_id = u.id\n            LEFT JOIN user_profiles up ON u.id = up.user_id\n            LEFT JOIN vote_summary vs ON ct.id = vs.comment_vote_id\n            LEFT JOIN comment_votes cv ON ct.id = cv.comment_vote_id AND cv.user_id = $3\n            LEFT JOIN attachments_summary ats ON ct.id = ats.comment_id\n            ORDER BY ct.created_at ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "parent_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "content_html!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "content_markdown!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "user_id!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "user_username!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "user_avatar_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "upvotes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "downvotes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "current_user_vote: _",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 12,
+        "name": "attachment_urls: _",
+        "type_info": "Json"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "comments_entity",
+            "kind": {
+              "Enum": [
+                "series",
+                "series_chapters"
+              ]
+            }
+          }
+        },
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      true,
+      null,
+      null,
+      false,
+      null
+    ]
+  },
+  "hash": "9a4af2e1957f9d886b4bf067163dbb89c076da206155c7b7820ecd63d13a61b3"
+}
