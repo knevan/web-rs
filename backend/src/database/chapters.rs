@@ -101,6 +101,34 @@ impl DatabaseService {
         }
     }
 
+    pub async fn update_chapter_status(
+        &self,
+        chapter_id: i32,
+        new_status: ChapterStatus,
+    ) -> AnyhowResult<u64> {
+        let result = sqlx::query!(
+            "UPDATE series_chapters SET status = $1 WHERE id = $2",
+            new_status as _,
+            chapter_id,
+        )
+        .execute(&self.pool)
+        .await;
+
+        match result {
+            Ok(res) => Ok(res.rows_affected()),
+            Err(e) => {
+                // Log error sqlx yang detail di sini
+                eprintln!(
+                    "[DB_ERROR] Failed to update chapter status for ID {}: {:?}",
+                    chapter_id, e
+                );
+                // Kembalikan error agar ? tetap berfungsi
+                Err(anyhow::anyhow!(e)
+                    .context("Failed to update status chapter"))
+            }
+        }
+    }
+
     pub async fn get_images_urls_for_chapter_series(
         &self,
         series_id: i32,
@@ -131,7 +159,13 @@ impl DatabaseService {
     ) -> AnyhowResult<Vec<SeriesChapter>> {
         let chapters = sqlx::query_as!(
             SeriesChapter,
-            "SELECT id, series_id, chapter_number, title, source_url, created_at FROM series_chapters WHERE series_id = $1 ORDER BY chapter_number DESC",
+            r#"
+            SELECT id, series_id, chapter_number, status AS "status: _",title, source_url, created_at
+            FROM series_chapters
+            WHERE series_id = $1
+            ORDER BY chapter_number
+            DESC
+            "#,
             series_id
         )
             .fetch_all(&self.pool)

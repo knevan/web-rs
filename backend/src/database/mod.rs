@@ -89,6 +89,15 @@ pub struct Series {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, sqlx::Type, Serialize, Deserialize)]
+#[sqlx(type_name = "series_status", rename_all = "PascalCase")]
+pub enum ChapterStatus {
+    Processing,
+    Available,
+    NoImagesFound,
+    Error,
+}
+
 /// Struct represent chapter
 #[derive(Debug, FromRow, Serialize)]
 pub struct SeriesChapter {
@@ -96,6 +105,7 @@ pub struct SeriesChapter {
     pub series_id: i32,
     pub chapter_number: f32,
     pub title: Option<String>,
+    pub status: ChapterStatus,
     pub source_url: String,
     pub created_at: DateTime<Utc>,
 }
@@ -111,6 +121,7 @@ pub struct Users {
 }
 
 #[derive(Debug, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UserProfileDetails {
     pub username: String,
     pub email: String,
