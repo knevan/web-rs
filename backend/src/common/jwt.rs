@@ -112,8 +112,8 @@ pub fn create_access_jwt(
     let now = Utc::now();
     let iat = now.timestamp() as usize;
 
-    // Access token valid for 15 minutes
-    let exp = (now + Duration::minutes(15)).timestamp() as usize;
+    // Access token valid for 30 minutes
+    let exp = (now + Duration::minutes(30)).timestamp() as usize;
 
     let claims = Claims {
         sub: user_id,

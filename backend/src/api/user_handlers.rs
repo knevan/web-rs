@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateProfilePayload {
     display_name: Option<String>,
     email: Option<String>,
@@ -34,14 +35,14 @@ pub async fn get_user_profile_handler(
 
     match state.db_service.get_user_profile_details(user.id).await {
         Ok(Some(mut profile)) => {
-            if let Some(key) = &profile.avatar_url {
-                if !key.is_empty() {
-                    profile.avatar_url = Some(format!(
-                        "{}/{}",
-                        state.storage_client.domain_cdn_url(),
-                        key
-                    ));
-                }
+            if let Some(key) = &profile.avatar_url
+                && !key.is_empty()
+            {
+                profile.avatar_url = Some(format!(
+                    "{}/{}",
+                    state.storage_client.domain_cdn_url(),
+                    key
+                ));
             }
             (StatusCode::OK, Json(profile)).into_response()
         }

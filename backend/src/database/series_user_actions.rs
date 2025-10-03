@@ -15,30 +15,20 @@ use sqlx::postgres::types::PgInterval;
 /// Highly efficient for this purpose.
 impl DatabaseService {
     pub async fn record_series_view(&self, series_id: i32) -> AnyhowResult<()> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .context("Failed to begin transaction.")?;
-
         sqlx::query!(
-            "INSERT INTO series_view_log (series_id) VALUES ($1)",
+            r#"
+            WITH log_view_insert AS (
+                INSERT INTO series_view_log (series_id) VALUES ($1)
+            )
+            UPDATE series
+            SET views_count = views_count + 1
+            WHERE id = $1
+            "#,
             series_id
         )
-        .execute(&mut *tx)
+        .execute(&self.pool)
         .await
         .context("Failed to record series view with sqlx")?;
-
-        // Increment the total view count
-        sqlx::query!(
-            "UPDATE series SET views_count = views_count + 1 WHERE id = $1",
-            series_id
-        )
-        .execute(&mut *tx)
-        .await
-        .context("Failed to increment series view count with sqlx")?;
-
-        tx.commit().await.context("Failed to commit transaction.")?;
 
         Ok(())
     }
