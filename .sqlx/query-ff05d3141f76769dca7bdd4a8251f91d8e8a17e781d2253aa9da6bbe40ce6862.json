@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, series_id, chapter_number, title, source_url, created_at FROM series_chapters WHERE series_id = $1 ORDER BY chapter_number DESC",
+  "query": "\n            SELECT id, series_id, chapter_number, status AS \"status: _\",title, source_url, created_at\n            FROM series_chapters\n            WHERE series_id = $1\n            ORDER BY chapter_number\n            DESC\n            ",
   "describe": {
     "columns": [
       {
@@ -20,16 +20,33 @@
       },
       {
         "ordinal": 3,
+        "name": "status: _",
+        "type_info": {
+          "Custom": {
+            "name": "chapter_status",
+            "kind": {
+              "Enum": [
+                "Processing",
+                "Available",
+                "NoImagesFound",
+                "Error"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
         "name": "title",
         "type_info": "Text"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "source_url",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
@@ -43,10 +60,11 @@
       false,
       false,
       false,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "8bbec9cdd3db30d9adcb52901231eb4ca7912724714ebd596befd58e5b066857"
+  "hash": "ff05d3141f76769dca7bdd4a8251f91d8e8a17e781d2253aa9da6bbe40ce6862"
 }
