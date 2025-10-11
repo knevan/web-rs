@@ -42,7 +42,7 @@ impl DatabaseService {
         &self,
         chapter_id: i32,
         image_order: i32,
-        image_url: &str, // This will be the R2/CDN Url
+        image_url: &str,
     ) -> AnyhowResult<i32> {
         let new_id = sqlx::query_scalar!(
                 "INSERT INTO chapter_images (chapter_id, image_order, image_url) VALUES ($1, $2, $3) RETURNING id",
