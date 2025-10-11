@@ -190,7 +190,8 @@ impl DatabaseService {
         Ok(())
     }
 
-    pub async fn get_paginated_user(
+    // Get paginated user search list for admin panel
+    pub async fn get_admin_paginated_user(
         &self,
         page: u32,
         page_size: u32,
@@ -203,48 +204,55 @@ impl DatabaseService {
         match search_query.filter(|q| !q.trim().is_empty()) {
             Some(search_match) => {
                 let search_match = search_match.trim();
+                let similarity_threshold = 0.20_f32;
 
-                let fts_query = search_match
-                    .split_whitespace()
-                    .filter(|word| !word.is_empty())
-                    .map(|word| format!("{}:*", word))
-                    .collect::<Vec<String>>()
-                    .join(" & ");
+                /*let fts_query = search_match
+                .split_whitespace()
+                .filter(|word| !word.is_empty())
+                .map(|word| format!("{}:*", word))
+                .collect::<Vec<String>>()
+                .join(" & ");*/
 
                 let records = sqlx::query!(
                     r#"
-                    WITH search_results AS (
+                    WITH base_search AS (
                         SELECT
                             u.id,
                             u.username,
                             u.email,
                             r.role_name,
-                            u.user_tsv
+                            -- Calculate similarity score for ranking
+                            similarity(u.username || ' ' || u.email, $3) AS sim_score
                         FROM users u
                         JOIN roles r ON u.role_id = r.id
                         WHERE
                             -- ILIKE for substring matches
-                            u.username ILIKE '%' || $3 || '%'
-                            OR u.email ILIKE '%' || $3 || '%'
-                            -- FTS for whole-word/prefix matches
-                            OR u.user_tsv @@ to_tsquery('simple', $4)
-                            -- fuzzy match filtering
-                            OR (u.username || ' ' || u.email) % $3
+                            (u.username ILIKE '%' || $3 || '%')
+                            OR
+                            (u.email ILIKE '%' || $3 || '%')
+                                -- FTS for whole-word/prefix matches
+                                -- OR u.user_tsv @@ to_tsquery('simple', $4)
+                                -- fuzzy match trigram filtering
+                            OR
+                            (
+                                (u.username || ' ' || u.email) % $3
+                                AND
+                                similarity(u.username || ' ' || u.email, $3) >= $4
+                            )
                     ),
                     ranked_results AS (
                         SELECT
                             *,
                             CASE
-                                WHEN username ILIKE '%' || $3 || '%' OR email ILIKE '%' || $3 || '%' THEN 10
-                                WHEN user_tsv @@ to_tsquery('simple', $4) THEN 8
+                                WHEN username ILIKE $3 OR email ILIKE $3 THEN 10
+                                WHEN username ILIKE '%' || $3 || '%' OR email ILIKE '%' || $3 || '%' THEN 8
+                                -- WHEN user_tsv @@ to_tsquery('simple', $4) THEN 8
                                 ELSE 6
-                            END as search_rank,
-                            -- Calculate similarity score for ranking
-                            similarity(username || ' ' || email, $3) as sim_score
-                        FROM search_results
+                            END as search_rank
+                        FROM base_search
                      ),
                     total_count AS (
-                        SELECT COUNT(*) AS total FROM ranked_results WHERE search_rank > 0
+                        SELECT COUNT(*) AS total FROM ranked_results
                     )
                     SELECT
                         rr.id,
@@ -254,14 +262,15 @@ impl DatabaseService {
                         tc.total as total_items
                     FROM ranked_results rr
                     CROSS JOIN total_count tc
-                    WHERE rr.search_rank > 0
+                    -- Order by the best rank, then by similarity, then by ID for stable sorting
                     ORDER BY rr.search_rank DESC, rr.sim_score DESC, rr.id ASC
-                    LIMIT $1 OFFSET $2
+                    LIMIT $1
+                    OFFSET $2
                     "#,
                     limit,
                     offset,
                     search_match,
-                    fts_query
+                    similarity_threshold
                 )
                     .fetch_all(&self.pool)
                     .await
