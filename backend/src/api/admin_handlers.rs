@@ -3,9 +3,9 @@ use crate::builder::startup::AppState;
 use crate::database::{NewSeriesData, Series, UpdateSeriesData};
 use crate::task_workers::repair_chapter_worker;
 use crate::task_workers::series_check_worker::SeriesCheckJob;
-use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
+use axum::Json;
 use axum_core::__private::tracing::error;
 use axum_core::response::{IntoResponse, Response};
 use axum_extra::extract::Multipart;
@@ -234,6 +234,7 @@ pub async fn upload_series_cover_image_handler(
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PaginationParams {
     #[serde(default = "default_page")]
     page: u32,
@@ -270,7 +271,7 @@ pub struct PaginatedResponse<T: Serialize> {
     total_items: i64,
 }
 
-pub async fn get_all_series_handler(
+pub async fn get_all_paginated_series_handler(
     admin: AdminUser,
     State(state): State<AppState>,
     Query(pagination): Query<PaginationParams>,
@@ -319,7 +320,7 @@ pub async fn get_all_series_handler(
     }
 }
 
-pub async fn get_all_users_handler(
+pub async fn get_all_paginated_users_handler(
     admin: AdminUser,
     State(state): State<AppState>,
     Query(pagination): Query<PaginationParams>,
@@ -331,7 +332,7 @@ pub async fn get_all_users_handler(
 
     match state
         .db_service
-        .get_paginated_user(
+        .get_admin_paginated_user(
             pagination.page,
             pagination.page_size,
             pagination.search.as_deref(),
