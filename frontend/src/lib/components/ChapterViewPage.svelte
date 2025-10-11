@@ -4,11 +4,13 @@
     import {Button} from "$lib/components/ui/button";
     import * as Select from '$lib/components/ui/select/index.js';
     import CommentSystem from "$lib/components/comments/CommentSystem.svelte";
+    import {auth} from "$lib/store/auth";
 
     interface ChapterViewData {
         seriesTitle: string;
         chapterTitle: string;
         chapterNumber: number;
+        chapterId: number;
         pages: string[];
         allChapters: { chapter_number: number, title: string }[];
         prevChapterNumber: number | null;
@@ -97,12 +99,13 @@
 <svelte:window onkeydown={handleKeydown}/>
 
 <header class="top-0 z-20 backdrop-blur-md border border-gray-700 shadow-lg mt-2">
-    <div class="max-w-7xl mx-auto md:px-4 pt-2">
+    <div class="max-w-7xl mx-auto md:px-2 pt-1">
         <div class="flex flex-col gap-1 pb-1">
             <div class="flex items-center gap-4">
                 <div class="pl-4">
                     <h1 class="text-lg font-bold truncate">{chapterView?.seriesTitle || 'Loading...'}</h1>
-                    <p class="text-sm text-gray-400 -mt-1 truncate">Chapter {chapterView?.chapterTitle || '...'}</p>
+                    <p class="text-sm text-gray-800 dark:text-gray-200 -mt-1 truncate">
+                        Chapter {chapterView?.chapterTitle || '...'}</p>
                 </div>
             </div>
 
@@ -209,7 +212,11 @@
             <h2 class="text-2xl font-bold mb-1 ml-1">
                 Comments
             </h2>
-            <CommentSystem/>
+            <CommentSystem
+                    entityType="chapters"
+                    entityId={chapterView.chapterId}
+                    currentUser={$auth.user}
+            />
         </div>
     {/if}
 </main>

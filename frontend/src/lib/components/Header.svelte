@@ -8,7 +8,7 @@
     import {UserCog} from "@lucide/svelte";
 </script>
 
-<header class="flex h-20 w-full items-center justify-between border-b-[3px] border-[--border] bg-[--background] px-4">
+<header class="flex h-20 w-full items-center justify-between border-b-[2px] border-[--border] bg-[--background] px-2">
     <div class="mx-auto flex w-full lg:max-w-5xl max-w-6xl items-center justify-between">
         <div class="flex items-center gap-6">
             <a href="/" aria-label="Home">
@@ -56,14 +56,14 @@
                 {/if}
             </button>
 
-            <div class="hidden md:flex items-center gap-6">
+            <div class="hidden md:flex items-center gap-5">
                 <!-- Conditionally render Sign In or Sign Out -->
                 {#if $auth.isAuthenticated}
                     <DropdownMenu.Root>
                         <DropdownMenu.Trigger class="cursor-pointer transition-colors hover:text-[--color-theme-1]">
                             <UserCog/>
                         </DropdownMenu.Trigger>
-                        <DropdownMenu.Content>
+                        <DropdownMenu.Content align="end">
                             <DropdownMenu.Label>My Account</DropdownMenu.Label>
                             <DropdownMenu.Separator/>
                             <DropdownMenu.Item>
@@ -88,52 +88,52 @@
                 {/if}
             </div>
 
-            <div class="flex md:hidden">
+            <div class="flex md:hidden gap-5">
                 <DropdownMenu.Root>
                     <DropdownMenu.Trigger class="cursor-pointer transition-colors hover:text-[--color-theme-1]">
                         <Menu/>
                     </DropdownMenu.Trigger>
-                    <DropdownMenu.Content>
+                    <DropdownMenu.Content align="end" alignOffset={-25}>
                         <DropdownMenu.Item>
                             <a href="/manga-updates" class="flex items-center w-full">
-                                <span>Manga Updates</span>
+                                <span class="text-base">Manga Updates</span>
                             </a>
                         </DropdownMenu.Item>
                         <DropdownMenu.Item>
                             <a href="/browse" class="flex items-center w-full">
-                                <span>Browse</span>
+                                <span class="text-base">Browse</span>
                             </a>
                         </DropdownMenu.Item>
                         {#if $auth.isAuthenticated && $auth.user?.role === 'admin'}
                             <DropdownMenu.Item>
                                 <a href="/admin-dashboard" class="flex items-center w-full">
                                     <UserCog class="mr-2 h-4 w-4"/>
-                                    <span>Admin Dashboard</span>
+                                    <span class="text-base">Admin Dashboard</span>
                                 </a>
                             </DropdownMenu.Item>
                         {/if}
                         <DropdownMenu.Separator/>
                         {#if $auth.isAuthenticated}
-                            <DropdownMenu.Label>My Account</DropdownMenu.Label>
+                            <DropdownMenu.Label class="text-base">My Account</DropdownMenu.Label>
                             <DropdownMenu.Item>
                                 <a href="/user/profiles" class="flex items-center w-full">
-                                    <span>User Setting</span>
+                                    <span class="text-base">User Setting</span>
                                 </a>
                             </DropdownMenu.Item>
                             <DropdownMenu.Item>
                                 <a href="/user/bookmark" class="flex items-center w-full">
-                                    <span>Bookmark Library</span>
+                                    <span class="text-base">Bookmark Library</span>
                                 </a>
                             </DropdownMenu.Item>
                             <DropdownMenu.Separator/>
                             <DropdownMenu.Item onclick={() => logout()} class="cursor-pointer flex items-center w-full">
-                                <span>Logout</span>
+                                <span class="text-base">Logout</span>
                             </DropdownMenu.Item>
                         {:else}
                             <DropdownMenu.Item>
                                 <a href="/login" class="flex items-center w-full">
                                     <UserPlus class="mr-2 h-4 w-4"/>
-                                    <span>Sign In</span>
+                                    <span class="text-base">Sign In</span>
                                 </a>
                             </DropdownMenu.Item>
                         {/if}

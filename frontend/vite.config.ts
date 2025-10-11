@@ -4,6 +4,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+	envDir: '../',
 	plugins: [tailwindcss(), sveltekit()],
 	server: {
 		port: 1998,
@@ -15,7 +16,7 @@ export default defineConfig({
 				// Necessary for virtual hosted sites.
 				changeOrigin: true,
 				secure: false,
-				// Do not rewrite the path. For example, '/api/auth/login' remains '/api/auth/login'.
+				// Do not rewrite the path. For example, '/api/api/login' remains '/api/api/login'.
 				rewrite: (path) => path.replace(/^\/api/, '/api')
 			}
 		}

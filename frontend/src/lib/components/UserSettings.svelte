@@ -100,7 +100,7 @@
             const formData = new FormData();
             formData.append('avatar', avatarFile!);
 
-            const response = await fetch('/api/user/avatar', {
+            const response = await apiFetch('/api/user/avatar', {
                 method: 'POST',
                 body: formData
             });
@@ -130,7 +130,7 @@
     async function handleProfileUpdate() {
         isProfileLoading = true;
         const profilePromise = async () => {
-            const response = await fetch('/api/user/profile', {
+            const response = await apiFetch('/api/user/profile', {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -173,7 +173,7 @@
         isPasswordLoading = true;
 
         const passwordPromise = async () => {
-            const response = await fetch('/api/user/password', {
+            const response = await apiFetch('/api/user/password', {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -211,7 +211,7 @@
             Change Profile Settings
         </h1>
         <p class="text-gray-800 dark:text-gray-200 mt-4 text-center text-xl">
-            Hello, <span class="font-bold text-xl">{$auth.user?.identifier ?? 'User'}</span>.
+            Hello, <span class="font-bold text-xl">{$auth.user?.username ?? 'User'}</span>.
         </p>
     </div>
 
