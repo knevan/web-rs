@@ -57,9 +57,9 @@ impl DatabaseService {
             new_password_hash,
             user_id
         )
-            .execute(&self.pool)
-            .await
-            .context("Failed to update user password hash")?;
+        .execute(&self.pool)
+        .await
+        .context("Failed to update user password hash")?;
 
         Ok(())
     }
@@ -74,10 +74,10 @@ impl DatabaseService {
             "SELECT user_id, expires_at FROM password_reset_tokens WHERE token = $1",
             token
         )
-            .fetch_optional(&self.pool)
-            .await
-            .context("Failed to get user by reset token")?
-            .map(|row| (row.user_id, row.expires_at));
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to get user by reset token")?
+        .map(|row| (row.user_id, row.expires_at));
 
         Ok(record)
     }
@@ -130,8 +130,8 @@ impl DatabaseService {
                 user_id,
                 name
             )
-                .execute(&mut *tx)
-                .await
+            .execute(&mut *tx)
+            .await
             .context("Failed to update user profile")?;
         }
 
@@ -183,7 +183,7 @@ impl DatabaseService {
             new_password_hash,
             user_id
         )
-            .execute(&self.pool)
+        .execute(&self.pool)
         .await
         .context("Failed to update user profile")?;
 
@@ -206,13 +206,6 @@ impl DatabaseService {
                 let search_match = search_match.trim();
                 let similarity_threshold = 0.20_f32;
 
-                /*let fts_query = search_match
-                .split_whitespace()
-                .filter(|word| !word.is_empty())
-                .map(|word| format!("{}:*", word))
-                .collect::<Vec<String>>()
-                .join(" & ");*/
-
                 let records = sqlx::query!(
                     r#"
                     WITH base_search AS (
@@ -230,8 +223,6 @@ impl DatabaseService {
                             (u.username ILIKE '%' || $3 || '%')
                             OR
                             (u.email ILIKE '%' || $3 || '%')
-                                -- FTS for whole-word/prefix matches
-                                -- OR u.user_tsv @@ to_tsquery('simple', $4)
                                 -- fuzzy match trigram filtering
                             OR
                             (

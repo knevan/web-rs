@@ -1,4 +1,5 @@
-use axum::{Json, http::StatusCode};
+use axum::Json;
+use axum::http::StatusCode;
 use axum_core::response::{IntoResponse, Response};
 
 // Custom error type definition
@@ -30,9 +31,7 @@ impl IntoResponse for AuthError {
             AuthError::TokenCreation => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create token")
             }
-            AuthError::InvalidToken => {
-                (StatusCode::UNAUTHORIZED, "Invalid token")
-            }
+            AuthError::InvalidToken => (StatusCode::UNAUTHORIZED, "Invalid token"),
             AuthError::InvalidRefreshToken => {
                 (StatusCode::UNAUTHORIZED, "Invalid refresh token")
             }
