@@ -1,14 +1,12 @@
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use rand::Rng;
-use std::time::Duration;
 use tokio::time::sleep;
 use url::Url;
 
 // Converts a relative URL string to an absolute URL string, given a base URL.
-pub fn to_absolute_url(
-    base_url_str: &str,
-    relative_url_str: &str,
-) -> Result<String> {
+pub fn to_absolute_url(base_url_str: &str, relative_url_str: &str) -> Result<String> {
     let base_url = Url::parse(base_url_str)
         .with_context(|| format!("Base URL not valid: {}", base_url_str))?;
 

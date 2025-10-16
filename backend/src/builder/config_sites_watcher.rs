@@ -1,11 +1,13 @@
-use crate::scraping::model::SitesConfig;
+use std::path::Path;
+use std::sync::Arc;
+use std::time::Duration;
+
 use arc_swap::ArcSwap;
 use notify::Error;
 use notify_debouncer_full::notify::{EventKind, RecursiveMode};
 use notify_debouncer_full::{DebouncedEvent, new_debouncer};
-use std::path::Path;
-use std::sync::Arc;
-use std::time::Duration;
+
+use crate::scraping::model::SitesConfig;
 
 pub async fn config_sites_watcher(
     config_path: String,

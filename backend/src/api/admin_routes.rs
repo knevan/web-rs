@@ -1,13 +1,12 @@
-use axum::routing::{delete, get, patch, post};
 use axum::Router;
+use axum::routing::{delete, get, patch, post};
 
 use crate::api::admin_handlers::{
-    create_category_tag_handler, create_new_series_handler,
-    delete_category_tag_handler, delete_series_handler,
-    get_all_paginated_series_handler, get_all_paginated_users_handler,
-    get_list_category_tags_handler, get_series_category_tags_handler,
-    repair_chapter_handler, update_existing_series_handler,
-    upload_series_cover_image_handler,
+    create_category_tag_handler, create_new_series_handler, delete_category_tag_handler,
+    delete_series_handler, get_all_paginated_series_handler,
+    get_all_paginated_users_handler, get_list_category_tags_handler,
+    get_series_category_tags_handler, repair_chapter_handler,
+    update_existing_series_handler, upload_series_cover_image_handler,
 };
 use crate::builder::startup::AppState;
 

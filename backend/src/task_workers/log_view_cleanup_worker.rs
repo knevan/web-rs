@@ -1,5 +1,6 @@
-use crate::database::DatabaseService;
 use std::time::Duration;
+
+use crate::database::DatabaseService;
 
 pub async fn run_log_view_cleanup_worker(db_service: DatabaseService) {
     println!("[WORKER] Log view cleanup worker started");
@@ -17,10 +18,7 @@ pub async fn run_log_view_cleanup_worker(db_service: DatabaseService) {
         match db_service.cleanup_old_view_logs().await {
             Ok(deleted_rows) => {
                 if deleted_rows > 0 {
-                    println!(
-                        "[WORKER] Cleaned up {} old log view entries",
-                        deleted_rows
-                    );
+                    println!("[WORKER] Cleaned up {} old log view entries", deleted_rows);
                 } else {
                     println!("[WORKER] No old log view entries to clean up");
                 }

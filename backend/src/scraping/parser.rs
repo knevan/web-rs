@@ -1,10 +1,12 @@
-use crate::common::utils;
-use crate::scraping::model::SiteScrapingConfig;
+use std::collections::HashMap;
+
 use anyhow::Result;
 use regex::Regex;
 use scraper::{Element, ElementRef, Html, Selector};
-use std::collections::HashMap;
 use url::Url;
+
+use crate::common::utils;
+use crate::scraping::model::SiteScrapingConfig;
 
 #[derive(Debug, Clone)]
 pub struct ChapterInfo {
@@ -23,8 +25,8 @@ pub struct ChapterParser {
 impl ChapterParser {
     // Creates a new parser instance with compiled configurations
     pub fn new(config: SiteScrapingConfig) -> Result<Self> {
-        let chapter_link_selector =
-            Selector::parse(&config.chapter_link_selector).map_err(|e| {
+        let chapter_link_selector = Selector::parse(&config.chapter_link_selector)
+            .map_err(|e| {
                 anyhow::anyhow!(
                     "Invalid CSS selector for image {}: {:?}",
                     &config.image_selector_on_chapter_page,
@@ -63,17 +65,13 @@ impl ChapterParser {
                 return Ok(None);
             }
 
-            let abs_url =
-                utils::to_absolute_url(series_page_url, trimmed_href)?;
-            let title =
-                link_element.text().collect::<String>().trim().to_string();
+            let abs_url = utils::to_absolute_url(series_page_url, trimmed_href)?;
+            let title = link_element.text().collect::<String>().trim().to_string();
 
             // Find the chapter number using a prioritized strategy
-            if let Some(number) = self.find_chapter_number_with_strategies(
-                link_element,
-                &abs_url,
-                &title,
-            ) {
+            if let Some(number) =
+                self.find_chapter_number_with_strategies(link_element, &abs_url, &title)
+            {
                 return Ok(Some(ChapterInfo {
                     url: abs_url,
                     number,
@@ -84,11 +82,7 @@ impl ChapterParser {
     }
 
     // Helper function to extract number from regex match
-    fn extract_number_from_regex(
-        &self,
-        regex: &Regex,
-        input: &str,
-    ) -> Option<f32> {
+    fn extract_number_from_regex(&self, regex: &Regex, input: &str) -> Option<f32> {
         regex
             .captures(input)
             .and_then(|captures| captures.get(1))
@@ -111,8 +105,7 @@ impl ChapterParser {
         // Helper closure to parse a string capture into f32
         let parse_match = |s: &str| s.parse::<f32>().ok();
 
-        if let Some(attr_name) =
-            &self.config.chapter_number_data_attribute_on_parent
+        if let Some(attr_name) = &self.config.chapter_number_data_attribute_on_parent
             && !attr_name.is_empty()
         {
             // Simple loop on `parent_element`
@@ -196,8 +189,7 @@ impl ChapterParser {
         }
 
         // Collect unique chapters from the map
-        let mut chapters: Vec<ChapterInfo> =
-            chapter_map.into_values().collect();
+        let mut chapters: Vec<ChapterInfo> = chapter_map.into_values().collect();
 
         // Sort chapters by their number to ensure correct processing order
         chapters.sort_by(|a, b| {
@@ -223,16 +215,14 @@ pub fn extract_image_urls_from_html_content(
     );
     let document = Html::parse_document(html_content);
 
-    let image_element_selector = Selector::parse(
-        &config.image_selector_on_chapter_page,
-    )
-    .map_err(|e| {
-        anyhow::anyhow!(
-            "Invalid CSS selector for image {}: {:?}",
-            &config.image_selector_on_chapter_page,
-            e
-        )
-    })?;
+    let image_element_selector = Selector::parse(&config.image_selector_on_chapter_page)
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "Invalid CSS selector for image {}: {:?}",
+                &config.image_selector_on_chapter_page,
+                e
+            )
+        })?;
 
     let mut image_urls = Vec::new();
 
@@ -250,18 +240,15 @@ pub fn extract_image_urls_from_html_content(
 
     for img_element in document.select(&image_element_selector) {
         // Try primary attribute first
-        let maybe_url = try_resolve_url(
-            img_element.value().attr(&config.image_url_attribute),
-        )
-        // If primary fail, iterate through other fallback and use the one that works
-        .or_else(|| {
-            config
-                .image_url_fallback_attributes
-                .iter()
-                .find_map(|attr| {
-                    try_resolve_url(img_element.value().attr(attr))
-                })
-        });
+        let maybe_url =
+            try_resolve_url(img_element.value().attr(&config.image_url_attribute))
+                // If primary fail, iterate through other fallback and use the one that works
+                .or_else(|| {
+                    config
+                        .image_url_fallback_attributes
+                        .iter()
+                        .find_map(|attr| try_resolve_url(img_element.value().attr(attr)))
+                });
 
         if let Some(url_to_add) = maybe_url {
             // Ensure no duplicate URLs are added. For images, order is important
