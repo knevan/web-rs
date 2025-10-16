@@ -1,21 +1,20 @@
+use axum::extract::State;
+use axum::http::StatusCode;
+use axum::Json;
+use axum_core::__private::tracing::error;
+use axum_extra::extract::cookie::{Cookie, SameSite};
+use axum_extra::extract::CookieJar;
+use chrono::{Duration, Utc};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
 use crate::api::extractor::AuthenticatedUser;
 use crate::builder::startup::AppState;
 use crate::common::email_service::send_password_reset_email;
 use crate::common::error::AuthError;
 use crate::common::hashing::{hash_password, verify_password};
-use crate::common::jwt::{
-    RefreshClaims, create_access_jwt, create_refresh_jwt,
-};
+use crate::common::jwt::{create_access_jwt, create_refresh_jwt, RefreshClaims};
 use crate::database::DatabaseService;
-use axum::Json;
-use axum::extract::State;
-use axum::http::StatusCode;
-use axum_core::__private::tracing::error;
-use axum_extra::extract::CookieJar;
-use axum_extra::extract::cookie::{Cookie, SameSite};
-use chrono::{Duration, Utc};
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 #[derive(Serialize)]
 pub struct GenericMessageResponse {
@@ -91,14 +90,11 @@ pub async fn login_handler(
         })?
         .ok_or(AuthError::WrongCredentials)?;
 
-    let is_password_valid = verify_password(
-        &payload.password,
-        &user.password_hash,
-    )
-    .map_err(|_| {
-        error!("Password verification failed for user {}", user.username);
-        AuthError::WrongCredentials
-    })?;
+    let is_password_valid = verify_password(&payload.password, &user.password_hash)
+        .map_err(|_| {
+            error!("Password verification failed for user {}", user.username);
+            AuthError::WrongCredentials
+        })?;
 
     if !is_password_valid {
         return Err(AuthError::WrongCredentials);
@@ -106,8 +102,7 @@ pub async fn login_handler(
 
     let role_name = get_role_name(db_service, user.role_id).await?;
 
-    let access_token =
-        create_access_jwt(user.username.clone(), role_name.clone())?;
+    let access_token = create_access_jwt(user.username.clone(), role_name.clone())?;
     let refresh_token = create_refresh_jwt(user.username.clone())?;
 
     // Set cookie
@@ -184,8 +179,7 @@ pub async fn refresh_token_handler(
 
     let role_name = get_role_name(&state.db_service, user.role_id).await?;
 
-    let new_access_token =
-        create_access_jwt(claims.sub.clone(), role_name.clone())?;
+    let new_access_token = create_access_jwt(claims.sub.clone(), role_name.clone())?;
 
     let new_access_cookie = Cookie::build(("token", new_access_token))
         .path("/")
@@ -270,11 +264,7 @@ pub async fn forgot_password_handler(
         // Store reset token in the database
         state
             .db_service
-            .create_password_reset_token(
-                user.id,
-                &unique_reset_token,
-                expired_at,
-            )
+            .create_password_reset_token(user.id, &unique_reset_token, expired_at)
             .await
             .map_err(|_| AuthError::InternalServerError)?;
 
@@ -328,10 +318,7 @@ pub async fn reset_password_handler(
         .map_err(|_| AuthError::InvalidCredentials)?;
 
     db_service
-        .update_user_password_hash_after_reset_password(
-            user_id,
-            &hashed_password,
-        )
+        .update_user_password_hash_after_reset_password(user_id, &hashed_password)
         .await
         .map_err(|_| AuthError::InternalServerError)?;
 
@@ -400,8 +387,8 @@ pub async fn register_new_user_handler(
     }
 
     // Hash the password before storing it in the database
-    let hashed_password = hash_password(&payload.password)
-        .map_err(|_| AuthError::InternalServerError)?;
+    let hashed_password =
+        hash_password(&payload.password).map_err(|_| AuthError::InternalServerError)?;
 
     // Get the ID for the default 'user' role.
     let user_role_id = db_service
@@ -453,8 +440,7 @@ pub async fn realtime_check_username_handler(
     if payload.username.trim().len() < 4 {
         let response = CheckUsernameResponse {
             available: false,
-            message: "Username should be at least 4 characters long"
-                .to_string(),
+            message: "Username should be at least 4 characters long".to_string(),
         };
         return (StatusCode::BAD_REQUEST, Json(response));
     }
@@ -483,9 +469,8 @@ pub async fn realtime_check_username_handler(
             );
             let response = CheckUsernameResponse {
                 available: false,
-                message:
-                    "Error checking username availability. Please try again"
-                        .to_string(),
+                message: "Error checking username availability. Please try again"
+                    .to_string(),
             };
             (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
         }

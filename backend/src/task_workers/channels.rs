@@ -1,3 +1,9 @@
+use std::sync::Arc;
+
+use arc_swap::ArcSwap;
+use reqwest::Client;
+use tokio::sync::mpsc;
+
 use crate::database::DatabaseService;
 use crate::database::storage::StorageClient;
 use crate::scraping::model::SitesConfig;
@@ -11,10 +17,6 @@ use crate::task_workers::repair_chapter_worker::{
 use crate::task_workers::series_check_worker::{
     SeriesCheckJob, run_series_check_scheduler, run_series_check_worker,
 };
-use arc_swap::ArcSwap;
-use reqwest::Client;
-use std::sync::Arc;
-use tokio::sync::mpsc;
 
 #[derive(Clone)]
 pub struct OnDemandChannels {
@@ -29,8 +31,7 @@ pub fn setup_worker_channels(
     sites_config: Arc<ArcSwap<SitesConfig>>,
 ) -> OnDemandChannels {
     // Check series worker channels
-    let (series_check_tx, series_check_rx) =
-        async_channel::bounded::<SeriesCheckJob>(16);
+    let (series_check_tx, series_check_rx) = async_channel::bounded::<SeriesCheckJob>(16);
 
     tokio::spawn(run_series_check_scheduler(
         db_service.clone(),

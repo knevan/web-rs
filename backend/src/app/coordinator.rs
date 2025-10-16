@@ -1,7 +1,8 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use reqwest::Client;
 use slug::slugify;
-use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tokio::task;
 
@@ -69,8 +70,7 @@ pub async fn process_single_chapter(
     config: &SiteScrapingConfig,
     db_service: &DatabaseService,
 ) -> Result<Option<f32>> {
-    let convert_chapter_number =
-        chapter_info.number.to_string().replace('.', "-");
+    let convert_chapter_number = chapter_info.number.to_string().replace('.', "-");
 
     let consistent_title = format!("{}-eng", convert_chapter_number);
 
@@ -92,8 +92,7 @@ pub async fn process_single_chapter(
         chapter_info.number, chapter_id
     );
 
-    let html_content =
-        fetcher::fetch_html(http_client, &chapter_info.url).await?;
+    let html_content = fetcher::fetch_html(http_client, &chapter_info.url).await?;
 
     // Pause before start processing images
     random_sleep_time(1, 3).await;
@@ -134,21 +133,17 @@ pub async fn process_single_chapter(
             //random_sleep_time(1, 2).await;
 
             // The processing pipeline: fetch -> encode -> upload
-            let image_bytes = match fetcher::fetch_image_bytes(
-                &http_client,
-                &img_url,
-            )
-            .await
-            {
-                Ok(bytes) => bytes,
-                Err(e) => {
-                    eprintln!(
-                        "[COORDINATOR-TASK][Ch:{}/Img:{}] Failed to fetch {}: {}",
-                        chapter_number_str, index, img_url, e
-                    );
-                    return (index, Err(anyhow::anyhow!("Fetch failed")));
-                }
-            };
+            let image_bytes =
+                match fetcher::fetch_image_bytes(&http_client, &img_url).await {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        eprintln!(
+                            "[COORDINATOR-TASK][Ch:{}/Img:{}] Failed to fetch {}: {}",
+                            chapter_number_str, index, img_url, e
+                        );
+                        return (index, Err(anyhow::anyhow!("Fetch failed")));
+                    }
+                };
 
             let avif_bytes = match task::spawn_blocking(move || {
                 image_encoding::covert_image_bytes_to_avif(&image_bytes)
@@ -157,10 +152,7 @@ pub async fn process_single_chapter(
             {
                 Ok(Ok(bytes)) => bytes,
                 Ok(Err(e)) => {
-                    return (
-                        index,
-                        Err(anyhow::anyhow!("Encoding failed: {}", e)),
-                    );
+                    return (index, Err(anyhow::anyhow!("Encoding failed: {}", e)));
                 }
                 Err(e) => {
                     return (
@@ -179,11 +171,7 @@ pub async fn process_single_chapter(
 
             // Upload to R2
             if let Err(e) = storage_client
-                .upload_image_series_objects(
-                    &object_key,
-                    avif_bytes,
-                    "image/avif",
-                )
+                .upload_image_series_objects(&object_key, avif_bytes, "image/avif")
                 .await
             {
                 eprintln!("[TASK] Failed to upload to R2: {}", e);
@@ -211,10 +199,7 @@ pub async fn process_single_chapter(
             }
             // Task panicked
             Err(join_err) => {
-                eprintln!(
-                    "[COORDINATOR] Processing task panicked: {}",
-                    join_err
-                );
+                eprintln!("[COORDINATOR] Processing task panicked: {}", join_err);
             }
         }
     }
@@ -226,11 +211,7 @@ pub async fn process_single_chapter(
     for (original_index, key_to_save) in &successful_uploads {
         // Save CDN object key to the database if successful
         if db_service
-            .add_chapter_images(
-                chapter_id,
-                (*original_index + 1) as i32,
-                key_to_save,
-            )
+            .add_chapter_images(chapter_id, (*original_index + 1) as i32, key_to_save)
             .await
             .is_err()
         {

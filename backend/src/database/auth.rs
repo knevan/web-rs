@@ -16,13 +16,11 @@ impl DatabaseService {
         &self,
         role_name: &str,
     ) -> AnyhowResult<Option<i32>> {
-        let role_id = sqlx::query_scalar!(
-            "SELECT id FROM roles WHERE role_name = $1",
-            role_name,
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .context("Failed to get role ID by name")?;
+        let role_id =
+            sqlx::query_scalar!("SELECT id FROM roles WHERE role_name = $1", role_name,)
+                .fetch_optional(&self.pool)
+                .await
+                .context("Failed to get role ID by name")?;
 
         Ok(role_id)
     }
@@ -31,13 +29,11 @@ impl DatabaseService {
         &self,
         role_id: i32,
     ) -> AnyhowResult<Option<String>> {
-        let role_name = sqlx::query_scalar!(
-            "SELECT role_name FROM roles WHERE id = $1",
-            role_id,
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .context("Failed to get role name by ID")?;
+        let role_name =
+            sqlx::query_scalar!("SELECT role_name FROM roles WHERE id = $1", role_id,)
+                .fetch_optional(&self.pool)
+                .await
+                .context("Failed to get role name by ID")?;
 
         Ok(role_name)
     }
@@ -61,17 +57,11 @@ impl DatabaseService {
         Ok(())
     }
 
-    pub async fn delete_password_reset_token(
-        &self,
-        token: &str,
-    ) -> AnyhowResult<()> {
-        sqlx::query!(
-            "DELETE FROM password_reset_tokens WHERE token = $1",
-            token
-        )
-        .execute(&self.pool)
-        .await
-        .context("Failed to delete password reset token")?;
+    pub async fn delete_password_reset_token(&self, token: &str) -> AnyhowResult<()> {
+        sqlx::query!("DELETE FROM password_reset_tokens WHERE token = $1", token)
+            .execute(&self.pool)
+            .await
+            .context("Failed to delete password reset token")?;
 
         Ok(())
     }
