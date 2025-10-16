@@ -1,6 +1,3 @@
-use crate::api::extractor::AuthenticatedUser;
-use crate::builder::startup::AppState;
-use crate::common::hashing::hash_password;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -10,6 +7,10 @@ use axum_extra::extract::Multipart;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use crate::api::extractor::AuthenticatedUser;
+use crate::builder::startup::AppState;
+use crate::common::hashing::hash_password;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,11 +39,8 @@ pub async fn get_user_profile_handler(
             if let Some(key) = &profile.avatar_url
                 && !key.is_empty()
             {
-                profile.avatar_url = Some(format!(
-                    "{}/{}",
-                    state.storage_client.domain_cdn_url(),
-                    key
-                ));
+                profile.avatar_url =
+                    Some(format!("{}/{}", state.storage_client.domain_cdn_url(), key));
             }
             (StatusCode::OK, Json(profile)).into_response()
         }
@@ -80,11 +78,7 @@ pub async fn update_user_profile_handler(
     // Call db to perform partial update
     match state
         .db_service
-        .update_partial_user_profile(
-            user.id,
-            payload.display_name,
-            payload.email,
-        )
+        .update_partial_user_profile(user.id, payload.display_name, payload.email)
         .await
     {
         Ok(_) => (
@@ -114,11 +108,13 @@ pub async fn update_user_password_setting_handler(
 
     let hashed_password = match hash_password(&payload.new_password) {
         Ok(hashed) => hashed,
-        Err(_) => return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"message": "Failed to process password."})),
-        )
-            .into_response(),
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"message": "Failed to process password."})),
+            )
+                .into_response();
+        }
     };
 
     match state
@@ -128,14 +124,16 @@ pub async fn update_user_password_setting_handler(
     {
         Ok(_) => (
             StatusCode::OK,
-            Json(
-                serde_json::json!({"message": "Password updated successfully"}),
-            ),
+            Json(serde_json::json!({"message": "Password updated successfully"})),
         )
             .into_response(),
         Err(e) => {
             error!("DB error updating password: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"message": "Could not update password."}))).into_response()
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"message": "Could not update password."})),
+            )
+                .into_response()
         }
     }
 }
@@ -157,7 +155,9 @@ pub async fn update_user_avatar_handler(
             Ok(bytes) => bytes.to_vec(),
             Err(e) => return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"message": format!("Failed to read file: {}", e)})),
+                Json(
+                    serde_json::json!({"message": format!("Failed to read file: {}", e)}),
+                ),
             )
                 .into_response(),
         };
@@ -185,24 +185,33 @@ pub async fn update_user_avatar_handler(
                 match state.db_service.update_user_avatar(user.id, &key).await {
                     Ok(_) => {
                         // Construct the public URL
-                        let public_url = format!("{}/{}", state.storage_client.domain_cdn_url(), key);
+                        let public_url =
+                            format!("{}/{}", state.storage_client.domain_cdn_url(), key);
 
                         (StatusCode::OK, Json(serde_json::json!({"status": "success", "url": public_url}))).into_response()
-                    },
-                    Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"message": "Failed to save avatar URL."}))).into_response(),
+                    }
+                    Err(_) => (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(
+                            serde_json::json!({"message": "Failed to save avatar URL."}),
+                        ),
+                    )
+                        .into_response(),
                 }
             }
             Err(e) => {
                 error!("Error updating user avatar: {}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"message": "Failed to upload avatar."}))).into_response()
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({"message": "Failed to upload avatar."})),
+                )
+                    .into_response()
             }
         };
     }
     (
         StatusCode::BAD_REQUEST,
-        Json(
-            serde_json::json!({"message": "No avatar file found in request."}),
-        ),
+        Json(serde_json::json!({"message": "No avatar file found in request."})),
     )
         .into_response()
 }
@@ -236,7 +245,11 @@ pub async fn add_bookmark_series_handler(
     user: AuthenticatedUser,
     Path(series_id): Path<i32>,
 ) -> Response {
-    match state.db_service.add_bookmarked_series(user.id, series_id).await {
+    match state
+        .db_service
+        .add_bookmarked_series(user.id, series_id)
+        .await
+    {
         Ok(_) => (
             StatusCode::OK,
             Json(serde_json::json!({"status": "success", "message": "Add Bookmark"})),
@@ -259,7 +272,11 @@ pub async fn delete_bookmark_series_handler(
     user: AuthenticatedUser,
     Path(series_id): Path<i32>,
 ) -> Response {
-    match state.db_service.delete_bookmarked_series(user.id, series_id).await {
+    match state
+        .db_service
+        .delete_bookmarked_series(user.id, series_id)
+        .await
+    {
         Ok(_) => (
             StatusCode::OK,
             Json(serde_json::json!({"status": "success", "message": "Remove Bookmark"})),
@@ -317,11 +334,12 @@ pub async fn get_user_bookmark_library_handler(
             let response_list = bookmarked_series_list
                 .into_iter()
                 .map(|series| {
-                    let latest_chapter_info = series
-                        .last_chapter_found_in_storage
-                        .map(|chapter_num| LatestChapterInfo {
-                            chapter_number: chapter_num,
-                            title: series.chapter_title,
+                    let latest_chapter_info =
+                        series.last_chapter_found_in_storage.map(|chapter_num| {
+                            LatestChapterInfo {
+                                chapter_number: chapter_num,
+                                title: series.chapter_title,
+                            }
                         });
 
                     BookmarkSeriesResponse {

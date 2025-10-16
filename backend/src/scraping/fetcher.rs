@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
-use backon::Retryable;
-use backon::{BackoffBuilder, ExponentialBuilder};
+use backon::{BackoffBuilder, ExponentialBuilder, Retryable};
 use bytes::Bytes;
 use reqwest::Client;
 
@@ -60,10 +59,11 @@ where
     // This closure captures all the variables it needs (client, url, processor)
     let operation = || async {
         // This can fail due to: DNS resolution, connection refused, timeouts, etc.
-        let response =
-            client.get(url).send().await.with_context(|| {
-                format!("Failed to send request to {}", url)
-            })?;
+        let response = client
+            .get(url)
+            .send()
+            .await
+            .with_context(|| format!("Failed to send request to {}", url))?;
 
         // Check if HTTP status indicates success (2xx) `Ok`
         // `error_for_status()` will convert a 4xx or 5xx status code into an `Errors`.
@@ -107,9 +107,10 @@ pub async fn fetch_html(client: &Client, url: &str) -> Result<String> {
     // Call generic fetch function with binary-specific processor
     fetch_with_retry(client, url, |response| async {
         // This can fail if: response is not valid UTF-8, connection drops during read
-        response.text().await.with_context(|| {
-            format!("Failed to read response body from {}", url)
-        })
+        response
+            .text()
+            .await
+            .with_context(|| format!("Failed to read response body from {}", url))
     })
     .await
 }
@@ -121,9 +122,10 @@ pub async fn fetch_image_bytes(client: &Client, url: &str) -> Result<Bytes> {
     // Call generic fetch function with binary-specific processor
     fetch_with_retry(client, url, |response| async {
         // This preserves the exact binary data without any text conversion
-        response.bytes().await.with_context(|| {
-            format!("Failed to read bytes from response of {}", url)
-        })
+        response
+            .bytes()
+            .await
+            .with_context(|| format!("Failed to read bytes from response of {}", url))
     })
     .await
 }
