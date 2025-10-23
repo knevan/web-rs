@@ -7,6 +7,7 @@ use tokio::sync::mpsc;
 use crate::database::DatabaseService;
 use crate::database::storage::StorageClient;
 use crate::scraping::model::SitesConfig;
+use crate::task_workers::delete_password_reset_token_worker::run_cleanup_password_reset_token_worker;
 use crate::task_workers::delete_series_worker::{
     run_deletion_scheduler, run_deletion_worker,
 };
@@ -51,7 +52,7 @@ pub fn setup_worker_channels(
         ));
     }
 
-    // Deletion worker channels
+    // Delete series worker channels
     let (deletion_tx, deletion_rx) = mpsc::channel(16);
 
     tokio::spawn(run_deletion_scheduler(db_service.clone(), deletion_tx));
@@ -62,7 +63,7 @@ pub fn setup_worker_channels(
         deletion_rx,
     ));
 
-    // Repair worker channels
+    // Repair chapter series worker channels
     let (repair_tx, repair_rx) = mpsc::channel::<RepairChapterMsg>(16);
     tokio::spawn(run_repair_chapter_worker(
         repair_rx,
@@ -72,8 +73,11 @@ pub fn setup_worker_channels(
         sites_config.clone(),
     ));
 
-    // Log View Cleanup worker
+    // Series Log View cleanup worker
     tokio::spawn(run_log_view_cleanup_worker(db_service.clone()));
+
+    // Passowrd reset token cleanup worker
+    tokio::spawn(run_cleanup_password_reset_token_worker(db_service.clone()));
 
     OnDemandChannels {
         repair_tx,
