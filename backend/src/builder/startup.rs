@@ -1,22 +1,25 @@
+use std::env;
+use std::sync::Arc;
+use std::time::Duration;
+
+use arc_swap::ArcSwap;
+use axum::http::{HeaderValue, Method, header};
+use axum::{Router, serve};
+use lettre::AsyncSmtpTransport;
+use reqwest::Client;
+use tokio::net::TcpListener;
+use tokio::signal;
+use tower::ServiceBuilder;
+use tower_http::compression::CompressionLayer;
+use tower_http::cors::CorsLayer;
+use tower_http::timeout::TimeoutLayer;
+
 use crate::api;
 use crate::builder::config_sites_watcher::config_sites_watcher;
 use crate::database::DatabaseService;
 use crate::database::storage::StorageClient;
 use crate::scraping::model::SitesConfig;
 use crate::task_workers::channels::{OnDemandChannels, setup_worker_channels};
-use arc_swap::ArcSwap;
-use axum::http::{HeaderValue, Method, header};
-use axum::{Router, serve};
-use lettre::AsyncSmtpTransport;
-use reqwest::Client;
-use std::env;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::net::TcpListener;
-use tokio::signal;
-use tower::ServiceBuilder;
-use tower_http::timeout::TimeoutLayer;
-use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 
 // Type definition for Mailer
 pub type Mailer = AsyncSmtpTransport<lettre::Tokio1Executor>;

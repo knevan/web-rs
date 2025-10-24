@@ -1,11 +1,13 @@
+use std::convert::Infallible;
+
+use axum::extract::FromRequestParts;
+use axum::http::request::Parts;
+use axum_core::__private::tracing::error;
+
 use crate::builder::startup::AppState;
 use crate::common::error::AuthError;
 use crate::common::jwt::Claims;
 use crate::database::Users;
-use axum::extract::FromRequestParts;
-use axum::http::request::Parts;
-use axum_core::__private::tracing::error;
-use std::convert::Infallible;
 
 pub struct AuthenticatedUser {
     pub id: i32,
@@ -51,8 +53,7 @@ impl FromRequestParts<AppState> for OptionalAuthenticatedUser {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let user_result =
-            AuthenticatedUser::from_request_parts(parts, state).await;
+        let user_result = AuthenticatedUser::from_request_parts(parts, state).await;
 
         // If extraction is successful, wrap it in Some.
         // we treat it as None instead of rejecting the request.

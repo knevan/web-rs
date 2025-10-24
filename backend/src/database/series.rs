@@ -1,5 +1,5 @@
 use super::*;
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 
 /// Macros `sqlx::query!`
 /// For DML operations (INSERT, UPDATE, DELETE) or SELECTs,
@@ -206,16 +206,18 @@ impl DatabaseService {
     ) -> AnyhowResult<Option<Series>> {
         let series = sqlx::query_as!(
             Series,
-            r#"SELECT id, title, original_title, description, cover_image_url, current_source_url,
-       source_website_host, views_count, bookmarks_count, total_rating_score, total_ratings_count, last_chapter_found_in_storage,
-       processing_status as "processing_status: SeriesStatus",
-       check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at
-       FROM series WHERE id = $1"#,
+            r#"
+            SELECT id, title, original_title, description, cover_image_url, current_source_url,
+            source_website_host, views_count, bookmarks_count, total_rating_score, total_ratings_count,
+            last_chapter_found_in_storage, processing_status as "processing_status: SeriesStatus",
+            check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at
+            FROM series WHERE id = $1
+            "#,
             id
         )
             .fetch_optional(&self.pool)
             .await
-            .context("Failed to query series by ID with sqlx")?; // Handles cases where no row is found
+            .context("Failed to query series by ID with sqlx")?;
         Ok(series)
     }
 
@@ -225,11 +227,13 @@ impl DatabaseService {
     ) -> AnyhowResult<Option<Series>> {
         let series = sqlx::query_as!(
             Series,
-            r#"SELECT id, title, original_title, description, cover_image_url, current_source_url,
-            source_website_host, views_count, bookmarks_count, total_rating_score, total_ratings_count, last_chapter_found_in_storage,
-            processing_status as "processing_status: SeriesStatus",
+            r#"
+            SELECT id, title, original_title, description, cover_image_url, current_source_url,
+            source_website_host, views_count, bookmarks_count, total_rating_score, total_ratings_count,
+            last_chapter_found_in_storage, processing_status as "processing_status: SeriesStatus",
             check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at
-            FROM series WHERE title = $1"#,
+            FROM series WHERE title = $1
+            "#,
             title
         )
             .fetch_optional(&self.pool)
@@ -275,7 +279,7 @@ impl DatabaseService {
         Ok(categories)
     }
 
-    // Get paginated series list for admin
+    // Get series search list for admin panel
     pub async fn get_admin_paginated_series(
         &self,
         page: u32,
@@ -304,45 +308,102 @@ impl DatabaseService {
             total_items: Option<i64>,
         }
 
-        let record_list = sqlx::query_as!(
-            QueryResult,
-            r#"
-            SELECT
-                sr.id,
-                sr.title,
-                sr.original_title,
-                sr.description,
-                sr.cover_image_url,
-                sr.current_source_url,
-                sr.updated_at,
-                sr.processing_status as "processing_status: SeriesStatus",
-                COALESCE(
-                    json_agg(a.name) FILTER (WHERE a.id IS NOT NULL),
-                    '[]'::json
-                ) as "authors!",
-                COUNT(*) OVER () as total_items
-            FROM
-                series sr
-            LEFT JOIN
-                series_authors sa ON sr.id = sa.series_id
-            LEFT JOIN
-                authors a ON sa.author_id = a.id
-            WHERE
-                ($3::TEXT IS NULL OR sr.title_tsv @@ plainto_tsquery('english', $3))
-            GROUP BY
-                sr.id
-            ORDER BY
-                sr.updated_at DESC
-            LIMIT $1
-            OFFSET $2
-            "#,
-            limit,
-            offset,
-            search_query
+        let record_list = match search_query.filter(|q| !q.trim().is_empty()) {
+            Some(search_match) => {
+                let search_match = search_match.trim();
+                let similarity_threshold = 0.20_f32;
+
+                sqlx::query_as!(
+                QueryResult,
+                r#"
+                WITH base_search AS (
+                    SELECT
+                        s.id, s.title, s.original_title, s.description, s.cover_image_url,
+                        s.current_source_url, s.updated_at, s.processing_status,
+                        -- Calculate similarity score for ranking
+                        similarity(s.title, $3) as sim_score
+                    FROM series s
+                    WHERE
+                        s.title ILIKE '%' || $3 || '%'
+                    OR
+                        (s.title % $3 AND similarity(s.title, $3) >= $4)
+                ),
+                ranked_results AS (
+                    SELECT
+                        *,
+                        CASE
+                            WHEN title ILIKE $3 THEN 10
+                            WHEN title ILIKE $3 || '%' THEN 8
+                            WHEN title ILIKE '%' || $3 || '%' THEN 6
+                            ELSE 4
+                        END as search_rank
+                    FROM base_search
+                ),
+                total_count AS (
+                    SELECT COUNT(*) AS total FROM ranked_results
+                )
+                SELECT
+                    rr.id, rr.title, rr.original_title, rr.description,
+                    rr.cover_image_url, rr.current_source_url, rr.updated_at,
+                    rr.processing_status as "processing_status: SeriesStatus",
+                    -- Aggregate author names into a JSON array for each series
+                    COALESCE(
+                        json_agg(a.name) FILTER (WHERE a.id IS NOT NULL),
+                        '[]'::json
+                    ) AS "authors!",
+                    tc.total as total_items
+                FROM ranked_results rr
+                CROSS JOIN total_count tc
+                LEFT JOIN series_authors sa ON rr.id = sa.series_id
+                LEFT JOIN authors a ON sa.author_id = a.id
+                GROUP BY
+                    rr.id, rr.title, rr.original_title, rr.description, rr.cover_image_url,
+                    rr.current_source_url, rr.updated_at, rr.processing_status,
+                    rr.search_rank, rr.sim_score, tc.total
+                -- Order by the best rank, then by similarity, then by ID for stable sorting
+                ORDER BY rr.search_rank DESC, rr.sim_score DESC, rr.id ASC
+                LIMIT $1
+                OFFSET $2
+                "#,
+                    limit,
+                    offset,
+                    search_match,
+                    similarity_threshold,
         )
-            .fetch_all(&self.pool)
-            .await
-            .context("Failed to query all series")?;
+                    .fetch_all(&self.pool)
+                    .await
+                    .context("Failed to query all series")
+            }
+            None => {
+                // No search - simple pagination
+                sqlx::query_as!(
+                    QueryResult,
+                    r#"
+                    SELECT
+                        s.id, s.title, s.original_title, s.description, s.cover_image_url,
+                        s.current_source_url, s.updated_at,
+                        s.processing_status as "processing_status: SeriesStatus",
+                        COALESCE(
+                            json_agg(a.name) FILTER (WHERE a.id IS NOT NULL),
+                            '[]'::json
+                        ) as "authors!",
+                        COUNT(*) OVER () as total_items
+                    FROM
+                        series s
+                    LEFT JOIN series_authors sa ON s.id = sa.series_id
+                    LEFT JOIN authors a ON sa.author_id = a.id
+                    GROUP BY s.id
+                    ORDER BY s.updated_at DESC
+                    LIMIT $1 OFFSET $2
+                    "#,
+                    limit,
+                    offset
+                )
+                    .fetch_all(&self.pool)
+                    .await
+                    .context("Failed to get paginated series without search")
+            }
+        }?;
 
         let total_items = record_list
             .first()

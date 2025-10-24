@@ -1,7 +1,8 @@
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use rand::seq::IndexedRandom;
 use reqwest::{Client, Error as ReqwestError, Proxy};
-use std::time::Duration;
 
 // List of User-Agent strings to be chosen randomly.
 const USER_AGENT: &[&str] = &[

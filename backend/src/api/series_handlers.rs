@@ -1,9 +1,3 @@
-use crate::api::extractor::{AuthenticatedUser, OptionalAuthenticatedUser};
-use crate::builder::startup::AppState;
-use crate::database::{
-    CategoryTag, Comment, CommentEntityType, Series, SeriesChapter,
-    SeriesOrderBy, VotePayload,
-};
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum_core::__private::tracing::error;
@@ -13,6 +7,13 @@ use reqwest::StatusCode;
 use serde::de::{Deserializer, Error};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use crate::api::extractor::{AuthenticatedUser, OptionalAuthenticatedUser};
+use crate::builder::startup::AppState;
+use crate::database::{
+    CategoryTag, Comment, CommentEntityType, Series, SeriesChapter, SeriesOrderBy,
+    VotePayload,
+};
 
 #[derive(Deserialize)]
 pub struct MostViewedParams {
@@ -113,9 +114,7 @@ pub async fn fetch_series_details_by_id_handler(
     (StatusCode::OK, Json(response_data)).into_response()
 }
 
-pub async fn fetch_new_series_handler(
-    State(state): State<AppState>,
-) -> Response {
+pub async fn fetch_new_series_handler(State(state): State<AppState>) -> Response {
     match state
         .db_service
         .get_public_series_paginated(1, 20, SeriesOrderBy::CreatedAt)
@@ -155,15 +154,10 @@ pub async fn fetch_updated_series_chapter_handler(
 ) -> Response {
     match state
         .db_service
-        .get_latest_release_series_chapter_paginated(
-            params.page,
-            params.page_size,
-        )
+        .get_latest_release_series_chapter_paginated(params.page, params.page_size)
         .await
     {
-        Ok(paginated_result) => {
-            (StatusCode::OK, Json(paginated_result)).into_response()
-        }
+        Ok(paginated_result) => (StatusCode::OK, Json(paginated_result)).into_response(),
         Err(e) => {
             error!("Error fetching updated series: {}", e);
             (
@@ -209,8 +203,11 @@ pub async fn fetch_chapter_details_handler(
     // Get series title
     let series = match series_result {
         Ok(Some(s)) => s,
-        _ => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"status": "error", "message": "Series not found."})),
-        ).into_response(),
+        _ => return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"status": "error", "message": "Series not found."})),
+        )
+            .into_response(),
     };
 
     // Get chapter images list
@@ -233,9 +230,8 @@ pub async fn fetch_chapter_details_handler(
     // Get all chapters for the series and find current, next and previous chapters
     let all_chapters = match all_chapters_result {
         Ok(mut chaps) => {
-            chaps.sort_by(|a, b| {
-                a.chapter_number.partial_cmp(&b.chapter_number).unwrap()
-            });
+            chaps
+                .sort_by(|a, b| a.chapter_number.partial_cmp(&b.chapter_number).unwrap());
             chaps
         }
         Err(e) => {
@@ -338,9 +334,7 @@ pub async fn rate_series_handler(
     if !(1..=5).contains(&payload.rating) {
         return (
             StatusCode::BAD_REQUEST,
-            Json(
-                serde_json::json!({"error": "Rating must be between 1 and 5"}),
-            ),
+            Json(serde_json::json!({"error": "Rating must be between 1 and 5"})),
         )
             .into_response();
     }
@@ -414,7 +408,8 @@ pub async fn get_series_comment_handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": "Failed to get comments for series"})),
-            ).into_response()
+            )
+                .into_response()
         }
     }
 }
@@ -453,7 +448,8 @@ pub async fn get_chapter_comment_handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": "Failed to get comment for chapter"})),
-            ).into_response()
+            )
+                .into_response()
         }
     }
 }
@@ -473,9 +469,7 @@ async fn new_comment_submission_handler(
     while let Ok(Some(field)) = multipart.next_field().await {
         if let Some(field_name) = field.name() {
             match field_name {
-                "content_markdown" => {
-                    content_markdown = field.text().await.ok()
-                }
+                "content_markdown" => content_markdown = field.text().await.ok(),
                 "parent_id" => {
                     if let Ok(text) = field.text().await {
                         parent_id = text.parse::<i64>().ok();
@@ -491,11 +485,7 @@ async fn new_comment_submission_handler(
                         if data.len() > 5 * 1024 * 1024 {
                             return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"message": "File size exceeds 5MB"}))).into_response();
                         }
-                        attachment_data.push((
-                            data.to_vec(),
-                            file_name,
-                            content_type,
-                        ));
+                        attachment_data.push((data.to_vec(), file_name, content_type));
                     }
                 }
                 _ => (),
@@ -517,12 +507,8 @@ async fn new_comment_submission_handler(
             .and_then(std::ffi::OsStr::to_str)
             .unwrap_or("");
 
-        let unique_key = format!(
-            "comments/{}/{}.{}",
-            user.id,
-            Uuid::new_v4(),
-            file_extension
-        );
+        let unique_key =
+            format!("comments/{}/{}.{}", user.id, Uuid::new_v4(), file_extension);
 
         if let Err(e) = state
             .storage_client
@@ -530,7 +516,11 @@ async fn new_comment_submission_handler(
             .await
         {
             error!("Failed to upload comment attachment: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Failed to upload file attachment"}))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Failed to upload file attachment"})),
+            )
+                .into_response();
         }
         attachment_keys.push(unique_key);
     }
@@ -659,7 +649,7 @@ pub async fn upload_comment_attachments_handler(
             return (
                 StatusCode::BAD_REQUEST,
                 Json(serde_json::json!({"message": "File size cannot exceed 5MB"})),
-                )
+            )
                 .into_response();
         }
 
@@ -668,20 +658,17 @@ pub async fn upload_comment_attachments_handler(
             .and_then(std::ffi::OsStr::to_str)
             .unwrap_or("");
 
-        let unique_image_key = format!(
-            "comments/{}/{}.{}",
-            user.id,
-            Uuid::new_v4(),
-            file_extension
-        );
+        let unique_image_key =
+            format!("comments/{}/{}.{}", user.id, Uuid::new_v4(), file_extension);
 
         match state
             .storage_client
             .upload_image_file(file_data, &unique_image_key, &content_type)
             .await
         {
-            Ok(url) => (StatusCode::OK, Json(serde_json::json!({"url": url})))
-                .into_response(),
+            Ok(url) => {
+                (StatusCode::OK, Json(serde_json::json!({"url": url}))).into_response()
+            }
             Err(e) => {
                 error!("Failed to upload comment attachment: {}", e);
                 (
@@ -694,9 +681,7 @@ pub async fn upload_comment_attachments_handler(
     } else {
         (
             StatusCode::BAD_REQUEST,
-            Json(
-                serde_json::json!({"message": "No file found in the request."}),
-            ),
+            Json(serde_json::json!({"message": "No file found in the request."})),
         )
             .into_response()
     }
@@ -737,9 +722,13 @@ pub async fn update_existing_comment_handler(
                     .into_response(),
             }
         }
-        Ok(None) => {
-            (StatusCode::NOT_FOUND, Json(serde_json::json!({"message": "Comment not found or permission denied"}))).into_response()
-        }
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(
+                serde_json::json!({"message": "Comment not found or permission denied"}),
+            ),
+        )
+            .into_response(),
         Err(e) => {
             error!(
                 "Failed to update existing comment with id {}: {}",
@@ -765,9 +754,7 @@ pub async fn vote_on_comment_handler(
         .vote_on_comment(comment_id, user.id, payload.vote_type)
         .await
     {
-        Ok(response_data) => {
-            (StatusCode::OK, Json(response_data)).into_response()
-        }
+        Ok(response_data) => (StatusCode::OK, Json(response_data)).into_response(),
         Err(e) => {
             error!("Failed to vote on comment {}: {}", comment_id, e);
             (
@@ -779,9 +766,7 @@ pub async fn vote_on_comment_handler(
     }
 }
 
-pub async fn get_all_categories_handler(
-    State(state): State<AppState>,
-) -> Response {
+pub async fn get_all_categories_handler(State(state): State<AppState>) -> Response {
     match state.db_service.get_list_all_categories().await {
         Ok(categories) => (StatusCode::OK, Json(categories)).into_response(),
         Err(e) => {
@@ -795,9 +780,7 @@ pub async fn get_all_categories_handler(
     }
 }
 
-fn deserialize_i32_vec<'de, D>(
-    deserializer: D,
-) -> Result<Option<Vec<i32>>, D::Error>
+fn deserialize_i32_vec<'de, D>(deserializer: D) -> Result<Option<Vec<i32>>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -860,9 +843,7 @@ pub async fn browse_series_handler(
         )
         .await
     {
-        Ok(paginated_result) => {
-            (StatusCode::OK, Json(paginated_result)).into_response()
-        }
+        Ok(paginated_result) => (StatusCode::OK, Json(paginated_result)).into_response(),
         Err(e) => {
             error!("Failed to browse_series: {}", e);
             (

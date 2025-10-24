@@ -1,13 +1,14 @@
-use super::*;
+use std::collections::{HashMap, HashSet};
+
 use ammonia::Builder;
 use anyhow::anyhow;
 use once_cell::sync::Lazy;
 use pulldown_cmark::{Options, Parser, html};
 use regex::Regex;
-use std::collections::{HashMap, HashSet};
 
-static SPOILER_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\|\|(.*?)\|\|").unwrap());
+use super::*;
+
+static SPOILER_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\|\|(.*?)\|\|").unwrap());
 
 impl DatabaseService {
     // Helper function to transform a flat list of comments into a nested tree structure.
@@ -181,7 +182,7 @@ impl DatabaseService {
         comment_id: i64,
         current_user_id: Option<i32>,
     ) -> AnyhowResult<Option<Comment>> {
-        let comment_row:Option<CommentFlatRow> = sqlx::query_as!(
+        let comment_row: Option<CommentFlatRow> = sqlx::query_as!(
             CommentFlatRow,
             r#"
             WITH vote_summary AS (
@@ -226,9 +227,9 @@ impl DatabaseService {
             comment_id,
             current_user_id
         )
-            .fetch_optional(&self.pool)
-            .await
-            .context("Failed to fetch comment by its id")?;
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to fetch comment by its id")?;
 
         Ok(comment_row.map(Comment::from))
     }
@@ -291,8 +292,7 @@ impl DatabaseService {
         user_id: i32,
         new_content_markdown: &str,
     ) -> AnyhowResult<Option<String>> {
-        let new_content_html =
-            self.process_comment_markdown(new_content_markdown)?;
+        let new_content_html = self.process_comment_markdown(new_content_markdown)?;
 
         let updated_html = sqlx::query_scalar!(
             r#"
@@ -348,9 +348,9 @@ impl DatabaseService {
                 comment_id,
                 user_id
             )
-                .execute(&mut *tx)
-                .await
-                .context("Failed to delete comment")?;
+            .execute(&mut *tx)
+            .await
+            .context("Failed to delete comment")?;
             final_user_vote = None;
         } else {
             // New vote or changing vote
