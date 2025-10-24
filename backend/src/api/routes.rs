@@ -4,18 +4,10 @@ use axum::routing::{get, patch, post};
 use crate::api::admin_routes::admin_routes;
 use crate::api::auth_handlers::{
     forgot_password_handler, login_handler, logout_handler, protected_handler,
-    realtime_check_username_handler, refresh_token_handler, register_new_user_handler,
+    realtime_check_username_handler, refresh_access_token_handler, register_new_user_handler,
     reset_password_handler,
 };
-use crate::api::series_handlers::{
-    browse_series_handler, fetch_chapter_details_handler,
-    fetch_most_viewed_series_handler, fetch_new_series_handler,
-    fetch_series_details_by_id_handler, fetch_updated_series_chapter_handler,
-    get_all_categories_handler, get_chapter_comment_handler, get_series_comment_handler,
-    post_chapter_comment_handler, post_series_comment_handler, rate_series_handler,
-    record_series_view_handler, update_existing_comment_handler,
-    upload_comment_attachments_handler, vote_on_comment_handler,
-};
+use crate::api::series_handlers::{browse_series_handler, fetch_chapter_details_handler, fetch_most_viewed_series_handler, fetch_new_series_handler, fetch_series_details_by_id_handler, fetch_updated_series_chapter_handler, get_all_categories_handler, get_chapter_comment_handler, get_series_comment_handler, post_chapter_comment_handler, post_series_comment_handler, rate_series_handler, record_series_view_handler, update_existing_comment_handler, upload_comment_attachments_handler, user_search_series_handler, vote_on_comment_handler};
 use crate::api::user_handlers::{
     add_bookmark_series_handler, delete_bookmark_series_handler,
     get_bookmark_status_current_user_handler, get_user_bookmark_library_handler,
@@ -28,8 +20,8 @@ pub fn routes() -> Router<AppState> {
     // Route for user auth api
     let auth_api_routes = Router::new()
         .route("/login", post(login_handler))
-        .route("/register", post(register_new_user_handler))
-        .route("/refresh", post(refresh_token_handler))
+        .route("/register-new-user", post(register_new_user_handler))
+        .route("/refresh-access-token", post(refresh_access_token_handler))
         .route("/logout", post(logout_handler))
         .route("/user", post(protected_handler))
         .route("/check-username", post(realtime_check_username_handler))
@@ -59,6 +51,7 @@ pub fn routes() -> Router<AppState> {
         )
         .route("/series/tags", get(get_all_categories_handler))
         .route("/series/browse", get(browse_series_handler))
+        .route("/series/search", get(user_search_series_handler))
         .route(
             "/series/details/{id}",
             get(fetch_series_details_by_id_handler),
