@@ -17,11 +17,10 @@ pub fn to_absolute_url(base_url_str: &str, relative_url_str: &str) -> Result<Str
         )
     })?;
 
-    Ok(absolute_url.into()) // .into() is equivalent to .to_string() for Url
+    Ok(absolute_url.into())
 }
 
-/// Pauses execution asynchronously for a random duration between `min_secs` and `max_secs`.
-/// If `min_secs` is greater than or equal to `max_secs`, it sleeps for `min_secs`.
+/// If `min_secs` is greater than or equal to `max_secs`, it sleeps for `min_secs`
 pub async fn random_sleep_time(min_secs: u64, max_secs: u64) {
     let sleep_duration_seconds = if min_secs >= max_secs {
         min_secs

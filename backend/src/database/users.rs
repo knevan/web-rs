@@ -12,19 +12,20 @@ use super::*;
 /// For queries returning a single value (one row, one column).
 /// Highly efficient for this purpose.
 impl DatabaseService {
+    /// Fetch user by username or email
     pub async fn get_user_by_identifier(
         &self,
         identifier: &str,
     ) -> AnyhowResult<Option<Users>> {
         let user = sqlx::query_as!(
             Users,
-                // Check both column email and username
                 "SELECT id, username, email, password_hash, role_id FROM users WHERE email = $1 OR username = $1",
                 identifier,
             ).fetch_optional(&self.pool).await.context("Failed to get user by identifier")?;
         Ok(user)
     }
 
+    /// Create new user
     pub async fn create_user(
         &self,
         username: &str,
@@ -46,42 +47,6 @@ impl DatabaseService {
         Ok(new_user_id)
     }
 
-    // Update password hash for a given user ID.
-    pub async fn update_user_password_hash_after_reset_password(
-        &self,
-        user_id: i32,
-        new_password_hash: &str,
-    ) -> AnyhowResult<()> {
-        sqlx::query!(
-            "UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2",
-            new_password_hash,
-            user_id
-        )
-        .execute(&self.pool)
-        .await
-        .context("Failed to update user password hash")?;
-
-        Ok(())
-    }
-
-    // Retrieves a user's ID and token expiration time by the reset token.
-    // Returns a tuple of (user_id, expires_at) if token is found
-    pub async fn get_user_by_reset_token(
-        &self,
-        token: &str,
-    ) -> AnyhowResult<Option<(i32, DateTime<Utc>)>> {
-        let record = sqlx::query!(
-            "SELECT user_id, expires_at FROM password_reset_tokens WHERE token = $1",
-            token
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .context("Failed to get user by reset token")?
-        .map(|row| (row.user_id, row.expires_at));
-
-        Ok(record)
-    }
-
     // Fetch user profiles data by id
     pub async fn get_user_profile_details(
         &self,
@@ -101,9 +66,9 @@ impl DatabaseService {
             "#,
             user_id
         )
-        .fetch_optional(&self.pool)
-        .await
-        .context("Failed to get user profile details")?;
+            .fetch_optional(&self.pool)
+            .await
+            .context("Failed to get user profile details")?;
 
         Ok(profile)
     }
@@ -130,9 +95,9 @@ impl DatabaseService {
                 user_id,
                 name
             )
-            .execute(&mut *tx)
-            .await
-            .context("Failed to update user profile")?;
+                .execute(&mut *tx)
+                .await
+                .context("Failed to update user profile")?;
         }
 
         if let Some(mail) = email {
@@ -141,9 +106,9 @@ impl DatabaseService {
                 mail,
                 user_id
             )
-            .execute(&mut *tx)
-            .await
-            .context("Failed to update user profile")?;
+                .execute(&mut *tx)
+                .await
+                .context("Failed to update user profile")?;
         }
 
         tx.commit().await.context("Failed to commit transaction")?;
@@ -165,9 +130,9 @@ impl DatabaseService {
             user_id,
             avatar_key
         )
-        .execute(&self.pool)
-        .await
-        .context("Failed to update avatar user profile")?;
+            .execute(&self.pool)
+            .await
+            .context("Failed to update avatar user profile")?;
 
         Ok(())
     }
@@ -183,13 +148,13 @@ impl DatabaseService {
             new_password_hash,
             user_id
         )
-        .execute(&self.pool)
-        .await
-        .context("Failed to update user profile")?;
+            .execute(&self.pool)
+            .await
+            .context("Failed to update user profile")?;
 
         Ok(())
     }
-
+    
     // Get paginated user search list for admin panel
     pub async fn get_admin_paginated_user(
         &self,
@@ -329,4 +294,41 @@ impl DatabaseService {
             }
         }
     }
+
+    // Retrieves a user's ID and token expiration time by the reset token.
+    // Returns a tuple of (user_id, expires_at) if token is found
+    pub async fn get_user_by_reset_token(
+        &self,
+        token: &str,
+    ) -> AnyhowResult<Option<(i32, DateTime<Utc>)>> {
+        let record = sqlx::query!(
+            "SELECT user_id, expires_at FROM password_reset_tokens WHERE token = $1",
+            token
+        )
+            .fetch_optional(&self.pool)
+            .await
+            .context("Failed to get user by reset token")?
+            .map(|row| (row.user_id, row.expires_at));
+
+        Ok(record)
+    }
+
+    // Update password hash for a given user ID
+    pub async fn update_user_password_hash_after_reset_password(
+        &self,
+        user_id: i32,
+        new_password_hash: &str,
+    ) -> AnyhowResult<()> {
+        sqlx::query!(
+            "UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2",
+            new_password_hash,
+            user_id
+        )
+            .execute(&self.pool)
+            .await
+            .context("Failed to update user password hash")?;
+
+        Ok(())
+    }
+
 }

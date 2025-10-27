@@ -20,16 +20,13 @@ impl Default for ArgonConfig {
     }
 }
 
-/// Hashes a password using Argon2id.
-/// Returns the full hash string which includes the salt and parameters.
+/// Hashes a password
+/// Returns the full hash string which includes the salt and parameters
 pub fn hash_password(password: &str) -> Result<String, PwHashError> {
-    // Get password bytes
     let password_bytes = password.as_bytes();
 
-    // Generate random salt
     let salt = SaltString::generate(&mut OsRng);
 
-    // Define the argon2 parameters
     let config = ArgonConfig::default();
 
     let params = Params::new(
@@ -40,22 +37,17 @@ pub fn hash_password(password: &str) -> Result<String, PwHashError> {
     )
     .map_err(|_| PwHashError::ParamNameInvalid)?;
 
-    // Create the Argon2 instance with parameters
     let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
 
-    // Hash the password and return the resulting string
     Ok(argon2.hash_password(password_bytes, &salt)?.to_string())
 }
 
 /// Verifies a password against a stored Argon2 hash
 pub fn verify_password(password: &str, stored_hash: &str) -> Result<bool, PwHashError> {
-    // Get password bytes
     let password_bytes = password.as_bytes();
 
-    // Parse the hash string from the database
     let parsed_hash = PasswordHash::new(stored_hash)?;
 
-    // Verify the password.
     let verification_result =
         Argon2::default().verify_password(password_bytes, &parsed_hash);
 
