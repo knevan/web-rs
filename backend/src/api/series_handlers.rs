@@ -7,7 +7,6 @@ use reqwest::StatusCode;
 use serde::de::{Deserializer, Error};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
 use crate::api::extractor::{AuthenticatedUser, OptionalAuthenticatedUser};
 use crate::builder::startup::AppState;
 use crate::database::{
@@ -132,13 +131,12 @@ pub async fn fetch_new_series_handler(State(state): State<AppState>) -> Response
 }
 
 #[derive(Deserialize)]
-pub struct PaginationParams {
+#[serde(rename_all = "camelCase")]
+pub struct SeriesPaginationParams {
     #[serde(default = "default_page")]
     page: u32,
     #[serde(default = "default_pagesize")]
     page_size: u32,
-    #[serde(default)]
-    search: Option<String>,
 }
 
 fn default_page() -> u32 {
@@ -150,7 +148,7 @@ fn default_pagesize() -> u32 {
 
 pub async fn fetch_updated_series_chapter_handler(
     State(state): State<AppState>,
-    Query(params): Query<PaginationParams>,
+    Query(params): Query<SeriesPaginationParams>,
 ) -> Response {
     match state
         .db_service
@@ -849,6 +847,29 @@ pub async fn browse_series_handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"status": "error", "message": "Could not retrieve series."})),
+            ).into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct UserSearchParams {
+    search: String,
+}
+
+pub async fn user_search_series_handler (
+    State(state): State<AppState>,
+    Query(params): Query<UserSearchParams>
+) -> Response {
+    match state.db_service.user_search_paginated_series(&params.search).await {
+        Ok(series) => {
+            (StatusCode::OK, Json(series)).into_response()
+        },
+        Err(e) => {
+            error!("Failed to search series: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "message": "Could not search series."})),
             ).into_response()
         }
     }
