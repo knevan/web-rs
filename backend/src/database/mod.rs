@@ -1,9 +1,10 @@
+use std::fmt;
+
 use anyhow::{Context, Result as AnyhowResult};
 use chrono::{DateTime, Utc};
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool, Type};
-use std::fmt;
 use url::Url;
 
 pub mod auth;
@@ -110,33 +111,6 @@ pub struct SeriesChapter {
     pub created_at: DateTime<Utc>,
 }
 
-/// Strcuct represents a user record fetched from the database
-#[derive(Debug, FromRow)]
-pub struct Users {
-    pub id: i32,
-    pub username: String,
-    pub email: String,
-    pub password_hash: String,
-    pub role_id: i32,
-}
-
-#[derive(Debug, FromRow, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserProfileDetails {
-    pub username: String,
-    pub email: String,
-    pub display_name: Option<String>,
-    pub avatar_url: Option<String>,
-}
-
-#[derive(Debug, FromRow, Serialize)]
-pub struct UserWithRole {
-    pub id: i32,
-    pub username: String,
-    pub email: String,
-    pub role_name: String,
-}
-
 #[derive(Debug)]
 pub struct NewSeriesData<'a> {
     pub title: &'a str,
@@ -201,6 +175,12 @@ pub enum SeriesOrderBy {
     Rating,
 }
 
+#[derive(Debug, FromRow, Serialize, Deserialize)]
+pub struct CategoryTag {
+    pub id: i32,
+    pub name: String,
+}
+
 // Pagination parameters for fetching series list.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PaginatedResult<T> {
@@ -208,19 +188,32 @@ pub struct PaginatedResult<T> {
     pub total_items: i64,
 }
 
-#[derive(Debug, FromRow, Serialize, Deserialize)]
-pub struct CategoryTag {
-    pub id: i32,
-    pub name: String,
-}
-
-// Most viewed series data for the public API.
-#[derive(Debug, FromRow, Serialize)]
-pub struct MostViewedSeries {
+// User Search Paginated Series Struct
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct UserSearchPaginatedSeries {
     pub id: i32,
     pub title: String,
+    pub original_title: Option<String>,
     pub cover_image_url: String,
-    pub view_count: Option<i64>,
+    pub last_chapter_found_in_storage: Option<f32>,
+    pub updated_at: DateTime<Utc>,
+    #[sqlx(json)]
+    pub authors: serde_json::Value,
+}
+
+// Latest Release Series Struct
+#[derive(Debug, Serialize, FromRow)]
+pub struct LatestReleaseSeries {
+    pub id: i32,
+    pub title: String,
+    pub original_title: Option<String>,
+    #[sqlx(json)]
+    pub authors: serde_json::Value,
+    pub cover_image_url: String,
+    pub description: String,
+    pub last_chapter_found_in_storage: Option<f32>,
+    pub updated_at: DateTime<Utc>,
+    pub chapter_title: Option<String>,
 }
 
 #[derive(Debug, FromRow, Serialize)]
@@ -238,6 +231,15 @@ pub struct BrowseSeriesSearchResult {
     pub categories: serde_json::Value,
 }
 
+// Most viewed series data for the public API.
+#[derive(Debug, FromRow, Serialize)]
+pub struct MostViewedSeries {
+    pub id: i32,
+    pub title: String,
+    pub cover_image_url: String,
+    pub view_count: Option<i64>,
+}
+
 #[derive(Debug, FromRow, Serialize)]
 pub struct BookmarkedSeries {
     pub id: i32,
@@ -248,16 +250,34 @@ pub struct BookmarkedSeries {
     pub chapter_title: Option<String>,
 }
 
-#[derive(Debug, Serialize, FromRow)]
-pub struct LatestReleaseSeries {
+/// Strcuct represents a user record fetched from the database
+#[derive(Debug, FromRow)]
+pub struct Users {
     pub id: i32,
-    pub title: String,
-    pub cover_image_url: String,
-    pub last_chapter_found_in_storage: Option<f32>,
-    pub updated_at: DateTime<Utc>,
-    pub chapter_title: Option<String>,
+    pub username: String,
+    pub email: String,
+    pub password_hash: String,
+    pub role_id: i32,
 }
 
+#[derive(Debug, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserProfileDetails {
+    pub username: String,
+    pub email: String,
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+}
+
+#[derive(Debug, FromRow, Serialize)]
+pub struct UserWithRole {
+    pub id: i32,
+    pub username: String,
+    pub email: String,
+    pub role_name: String,
+}
+
+// Comment struct
 #[derive(Debug, FromRow, Serialize, Clone)]
 pub struct Comment {
     pub id: i64,

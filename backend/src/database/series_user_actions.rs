@@ -1,9 +1,10 @@
-use super::*;
 use anyhow::Context;
 use sqlx::postgres::types::PgInterval;
 
+use super::*;
+
 /// Macros `sqlx::query!`
-/// For DML operations (INSERT, UPDATE, DELETE) or SELECTs,
+/// For DML operations (INSERT, UPDATE, DELETE) or SELECT,
 /// where you're manually processing generic `sqlx::Row`s (anonymous struct).
 ///
 /// Macros `sqlx::query_as!`
@@ -33,6 +34,7 @@ impl DatabaseService {
         Ok(())
     }
 
+    // fetch most viewed series
     pub async fn fetch_most_viewed_series(
         &self,
         period: &str,
@@ -123,9 +125,9 @@ impl DatabaseService {
             "UPDATE series SET bookmarks_count = bookmarks_count + 1 WHERE id = $1",
             series_id
         )
-            .execute(&mut *tx)
-            .await
-            .context("Failed to update bookmarked series view with sqlx")?;
+        .execute(&mut *tx)
+        .await
+        .context("Failed to update bookmarked series view with sqlx")?;
 
         tx.commit().await.context("Failed to commit transaction.")?;
 
@@ -161,7 +163,7 @@ impl DatabaseService {
             )
                 .execute(&mut *tx)
                 .await
-                .context("Failed to decrement serues bookmark count with sqlx")?;
+                .context("Failed to decrement series bookmark count with sqlx")?;
         }
 
         tx.commit().await.context("Failed to commit transaction.")?;
@@ -239,8 +241,8 @@ impl DatabaseService {
             user_id,
             series_id
         )
-            .fetch_optional(&mut *tx)
-            .await?;
+        .fetch_optional(&mut *tx)
+        .await?;
 
         sqlx::query!(
             r#"INSERT INTO series_ratings (series_id, user_id, rating) VALUES ($1, $2, $3)
@@ -356,7 +358,11 @@ impl DatabaseService {
         struct QueryResult {
             id: i32,
             title: String,
+            original_title: Option<String>,
+            #[sqlx(json)]
+            authors: serde_json::Value,
             cover_image_url: String,
+            description: String,
             last_chapter_found_in_storage: Option<f32>,
             updated_at: DateTime<Utc>,
             chapter_title: Option<String>,
@@ -369,18 +375,28 @@ impl DatabaseService {
             SELECT
                 s.id,
                 s.title,
+                s.original_title,
+                s.description,
                 s.cover_image_url,
                 s.updated_at,
                 s.last_chapter_found_in_storage,
                 sc.title as chapter_title,
+                COALESCE(json_agg(DISTINCT a.name ORDER BY a.name) FILTER (WHERE a.id IS NOT NULL),
+                    '[]'::json) as authors,
                 COUNT(*) OVER () as total_items
             FROM
                 series s
             LEFT JOIN
                 series_chapters sc ON s.id = sc.series_id
                 AND s.last_chapter_found_in_storage = sc.chapter_number
+            LEFT JOIN 
+                    series_authors sa ON s.id = sa.series_id
+            LEFT JOIN 
+                    authors a ON sa.author_id = a.id
             WHERE
                 s.updated_at >= NOW() - interval '7 days'
+            GROUP BY
+                s.id, sc.title
             ORDER BY
                 s.updated_at DESC
             LIMIT $1
@@ -389,9 +405,9 @@ impl DatabaseService {
             limit,
             offset
         )
-        .fetch_all(&self.pool)
-        .await
-        .context("Failed to query latest release series")?;
+            .fetch_all(&self.pool)
+            .await
+            .context("Failed to query latest release series")?;
 
         let total_items = records
             .first()
@@ -402,6 +418,9 @@ impl DatabaseService {
             .map(|r| LatestReleaseSeries {
                 id: r.id,
                 title: r.title,
+                original_title: r.original_title,
+                authors: r.authors,
+                description: r.description,
                 cover_image_url: r.cover_image_url,
                 last_chapter_found_in_storage: r.last_chapter_found_in_storage,
                 updated_at: r.updated_at,
@@ -415,6 +434,7 @@ impl DatabaseService {
         })
     }
 
+    // Paginated fetching of browse series with/without filters
     pub async fn browse_series_paginated_with_filters(
         &self,
         page: u32,
@@ -673,6 +693,66 @@ impl DatabaseService {
         })
     }
 
+    // Paginated fetching of user search series
+    pub async fn user_search_paginated_series (
+        &self,
+        search_query: &str,
+    ) -> AnyhowResult<Vec<UserSearchPaginatedSeries>> {
+        let trimmed_query = search_query.trim();
+
+        if trimmed_query.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        const LIMIT: i64 = 25;
+        const SIMILARITY_THRESHOLD: f32 = 0.20;
+
+        let search_list = sqlx::query_as!(
+            UserSearchPaginatedSeries,
+            r#"
+            SELECT
+                s.id,
+                s.title,
+                s.original_title,
+                s.cover_image_url,
+                s.last_chapter_found_in_storage,
+                s.updated_at,
+                COALESCE(json_agg(DISTINCT a.name ORDER BY a.name) FILTER (WHERE a.id IS NOT NULL),
+                            '[]'::json) as authors
+            FROM series s
+            LEFT JOIN series_authors sa ON s.id = sa.series_id
+            LEFT JOIN authors a ON sa.author_id = a.id
+            WHERE
+                (
+                    s.title ILIKE '%' || $1 || '%'
+                    OR (s.title % $1 AND similarity(s.title, $1) >= $2)
+                )
+                OR
+                (
+                    s.original_title IS NOT NULL AND (
+                        s.original_title ILIKE '%' || $1 || '%'
+                        OR (s.original_title % $1 AND similarity(s.original_title, $1) >= $2)
+                    )
+                )
+            GROUP BY s.id
+            ORDER BY GREATEST(
+                     similarity(s.title, $1),
+                     similarity(COALESCE(s.original_title, ''), $1)
+            ) DESC
+            LIMIT $3
+            "#,
+            trimmed_query,
+            SIMILARITY_THRESHOLD,
+            LIMIT,
+        )
+            .fetch_all(&self.pool)
+            .await
+            .context("User failed to search series")?;
+
+        Ok(search_list)
+    }
+
+    // Query helper for delete old view logs
     pub async fn cleanup_old_view_logs(&self) -> AnyhowResult<u64> {
         let retention_interval = PgInterval {
             months: 1,
@@ -684,9 +764,9 @@ impl DatabaseService {
             "DELETE FROM series_view_log WHERE viewed_at < NOW() - $1::interval",
             retention_interval as _
         )
-            .execute(&self.pool)
-            .await
-            .context("Failed to cleanup old view logs with sqlx")?;
+        .execute(&self.pool)
+        .await
+        .context("Failed to cleanup old view logs with sqlx")?;
 
         Ok(result.rows_affected())
     }
