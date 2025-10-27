@@ -8,13 +8,13 @@ use serde::Deserialize;
 /// Configuration for scraping a specific website.
 #[derive(Deserialize, Clone, Debug)]
 pub struct SiteScrapingConfig {
-    pub chapter_link_selector: String, // CSS selector for chapter links on the series page
-    pub chapter_number_from_url_regex: Option<String>, // Regex to extract chapter number from chapter URL
-    pub chapter_number_from_text_regex: Option<String>, // Regex to extract chapter number from link text
-    pub chapter_number_data_attribute_on_parent: Option<String>, // Data attribute on parent element for chapter number
-    pub image_selector_on_chapter_page: String, // CSS selector for image elements on chapter page
-    pub image_url_attribute: String, // Primary attribute to get image URL ("src", "data-src")
-    pub image_url_fallback_attributes: Vec<String>, // Fallback attributes if primary fails
+    pub chapter_link_selector: String,                              // CSS selector for chapter links on the series page
+    pub chapter_number_from_url_regex: Option<String>,              // Regex to extract chapter number from chapter URL
+    pub chapter_number_from_text_regex: Option<String>,             // Regex to extract chapter number from link text
+    pub chapter_number_data_attribute_on_parent: Option<String>,    // Data attribute on parent element for chapter number
+    pub image_selector_on_chapter_page: String,                     // CSS selector for image elements on chapter page
+    pub image_url_attribute: String,                                // Primary attribute to get image URL ("src", "data-src")
+    pub image_url_fallback_attributes: Vec<String>,                 // Fallback attributes if primary fails
     pub chapter_order: String,
     // Consider adding delay configurations here:
     // pub delay_after_chapter_page_fetch_ms: Option<u64>,

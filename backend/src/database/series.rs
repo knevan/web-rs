@@ -1,5 +1,6 @@
+use anyhow::{Context, anyhow};
+
 use super::*;
-use anyhow::{anyhow, Context};
 
 /// Macros `sqlx::query!`
 /// For DML operations (INSERT, UPDATE, DELETE) or SELECTs,
@@ -13,10 +14,7 @@ use anyhow::{anyhow, Context};
 /// For queries returning a single value (one row, one column).
 /// Highly efficient for this purpose.
 impl DatabaseService {
-    pub async fn add_new_series(
-        &self,
-        data: &NewSeriesData<'_>,
-    ) -> AnyhowResult<i32> {
+    pub async fn add_new_series(&self, data: &NewSeriesData<'_>) -> AnyhowResult<i32> {
         let mut tx = self
             .pool
             .begin()
@@ -26,7 +24,8 @@ impl DatabaseService {
         let host = get_host_from_url(Some(data.source_url));
 
         let new_series_id = sqlx::query_scalar!(
-            r#"INSERT INTO series
+            r#"
+            INSERT INTO series
             (title, original_title, description, cover_image_url, current_source_url, source_website_host, check_interval_minutes)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id"#,
@@ -131,13 +130,10 @@ impl DatabaseService {
         .context("Failed to update series with sqlx")?;
 
         if let Some(author_names) = data.authors {
-            sqlx::query!(
-                "DELETE FROM series_authors WHERE series_id = $1",
-                series_id
-            )
-            .execute(&mut *tx)
-            .await
-            .context("Failed to delete existing authors for series")?;
+            sqlx::query!("DELETE FROM series_authors WHERE series_id = $1", series_id)
+                .execute(&mut *tx)
+                .await
+                .context("Failed to delete existing authors for series")?;
 
             for name in author_names {
                 let author_id = sqlx::query_scalar!(
@@ -156,10 +152,7 @@ impl DatabaseService {
                 )
                 .fetch_one(&mut *tx)
                 .await
-                .context(format!(
-                    "Failed to find or create author: {}",
-                    name
-                ))?;
+                .context(format!("Failed to find or create author: {}", name))?;
 
                 sqlx::query!(
                     "INSERT INTO series_authors (series_id, author_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
@@ -200,10 +193,7 @@ impl DatabaseService {
         Ok(result.rows_affected())
     }
 
-    pub async fn get_series_by_id(
-        &self,
-        id: i32,
-    ) -> AnyhowResult<Option<Series>> {
+    pub async fn get_series_by_id(&self, id: i32) -> AnyhowResult<Option<Series>> {
         let series = sqlx::query_as!(
             Series,
             r#"
@@ -221,10 +211,7 @@ impl DatabaseService {
         Ok(series)
     }
 
-    pub async fn get_series_by_title(
-        &self,
-        title: &str,
-    ) -> AnyhowResult<Option<Series>> {
+    pub async fn get_series_by_title(&self, title: &str) -> AnyhowResult<Option<Series>> {
         let series = sqlx::query_as!(
             Series,
             r#"
@@ -399,9 +386,9 @@ impl DatabaseService {
                     limit,
                     offset
                 )
-                    .fetch_all(&self.pool)
-                    .await
-                    .context("Failed to get paginated series without search")
+                .fetch_all(&self.pool)
+                .await
+                .context("Failed to get paginated series without search")
             }
         }?;
 
@@ -442,9 +429,9 @@ impl DatabaseService {
             new_status as _,
             series_id,
         )
-            .execute(&self.pool)
-            .await
-            .context("Failed to update series processing status with sqlx")?;
+        .execute(&self.pool)
+        .await
+        .context("Failed to update series processing status with sqlx")?;
 
         Ok(result.rows_affected())
     }
@@ -473,13 +460,9 @@ impl DatabaseService {
         new_next_checked_at: Option<DateTime<Utc>>,
     ) -> AnyhowResult<u64> {
         // First, get the series data asynchronously.
-        let series =
-            self.get_series_by_id(series_id).await?.ok_or_else(|| {
-                anyhow!(
-                    "Series with id {} not found for schedule update",
-                    series_id
-                )
-            })?;
+        let series = self.get_series_by_id(series_id).await?.ok_or_else(|| {
+            anyhow!("Series with id {} not found for schedule update", series_id)
+        })?;
 
         // Calculate the next check time if not provided
         let final_next_checked_at = new_next_checked_at.unwrap_or_else(|| {
@@ -488,8 +471,7 @@ impl DatabaseService {
             // Add a random +- 5 minutes jitter to avoid all series checking at the exact same time
             let random_jitter = rng.random_range(-300..=300);
             let actual_interval_secs = (base_interval * 60) + random_jitter;
-            Utc::now()
-                + chrono::Duration::seconds(actual_interval_secs.max(300))
+            Utc::now() + chrono::Duration::seconds(actual_interval_secs.max(300))
         });
 
         let final_status = new_status.unwrap_or(series.processing_status);
@@ -520,10 +502,7 @@ impl DatabaseService {
         Ok(result.rows_affected())
     }
 
-    pub async fn get_series_chapters_count(
-        &self,
-        series_id: i32,
-    ) -> AnyhowResult<i64> {
+    pub async fn get_series_chapters_count(&self, series_id: i32) -> AnyhowResult<i64> {
         let count = sqlx::query_scalar!(
             "SELECT COUNT(*) FROM series_chapters WHERE series_id = $1",
             series_id
@@ -572,10 +551,7 @@ impl DatabaseService {
         }))
     }
 
-    pub async fn delete_series_by_id(
-        &self,
-        series_id: i32,
-    ) -> AnyhowResult<u64> {
+    pub async fn delete_series_by_id(&self, series_id: i32) -> AnyhowResult<u64> {
         let mut tx = self
             .pool
             .begin()
@@ -611,19 +587,15 @@ impl DatabaseService {
         .context("Failed to delete series chapters")?;
 
         // Delete all author link records
-        sqlx::query!(
-            "DELETE FROM series_authors WHERE series_id = $1",
-            series_id
-        )
-        .execute(&mut *tx)
-        .await
-        .context("Failed to delete series-authors links")?;
+        sqlx::query!("DELETE FROM series_authors WHERE series_id = $1", series_id)
+            .execute(&mut *tx)
+            .await
+            .context("Failed to delete series-authors links")?;
 
-        let result =
-            sqlx::query!("DELETE FROM series WHERE id = $1", series_id)
-                .execute(&mut *tx)
-                .await
-                .context("Failed to delete series")?;
+        let result = sqlx::query!("DELETE FROM series WHERE id = $1", series_id)
+            .execute(&mut *tx)
+            .await
+            .context("Failed to delete series")?;
 
         tx.commit()
             .await
@@ -632,10 +604,7 @@ impl DatabaseService {
         Ok(result.rows_affected())
     }
 
-    pub async fn mark_series_for_deletion(
-        &self,
-        series_id: i32,
-    ) -> AnyhowResult<u64> {
+    pub async fn mark_series_for_deletion(&self, series_id: i32) -> AnyhowResult<u64> {
         let result = sqlx::query!(
             "UPDATE series SET processing_status = $1,
                   updated_at = NOW() WHERE id = $2 AND processing_status NOT IN ($3, $4)",
@@ -644,16 +613,14 @@ impl DatabaseService {
             SeriesStatus::PendingDeletion as _,
             SeriesStatus::Deleting as _,
         )
-            .execute(&self.pool)
-            .await
-            .context("Failed to mark series for deletion with sqlx")?;
+        .execute(&self.pool)
+        .await
+        .context("Failed to mark series for deletion with sqlx")?;
 
         Ok(result.rows_affected())
     }
 
-    pub async fn find_and_lock_series_for_check(
-        &self,
-    ) -> AnyhowResult<Option<Series>> {
+    pub async fn find_and_lock_series_for_check(&self) -> AnyhowResult<Option<Series>> {
         let series = sqlx::query_as!(
             Series,
             r#"
@@ -718,10 +685,7 @@ impl DatabaseService {
         Ok(series)
     }
 
-    pub async fn create_category_tag(
-        &self,
-        name: &str,
-    ) -> AnyhowResult<CategoryTag> {
+    pub async fn create_category_tag(&self, name: &str) -> AnyhowResult<CategoryTag> {
         let category = sqlx::query_as!(
             CategoryTag,
             "INSERT INTO categories (name) VALUES ($1) RETURNING id, name",
@@ -743,14 +707,11 @@ impl DatabaseService {
         Ok(result.rows_affected())
     }
 
-    pub async fn get_list_all_categories(
-        &self,
-    ) -> AnyhowResult<Vec<CategoryTag>> {
-        let categories =
-            sqlx::query_as!(CategoryTag, "SELECT id, name FROM categories")
-                .fetch_all(&self.pool)
-                .await
-                .context("Failed to list all categories with sqlx")?;
+    pub async fn get_list_all_categories(&self) -> AnyhowResult<Vec<CategoryTag>> {
+        let categories = sqlx::query_as!(CategoryTag, "SELECT id, name FROM categories")
+            .fetch_all(&self.pool)
+            .await
+            .context("Failed to list all categories with sqlx")?;
 
         Ok(categories)
     }
