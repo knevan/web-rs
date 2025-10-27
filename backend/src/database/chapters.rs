@@ -31,9 +31,9 @@ impl DatabaseService {
             title,
             source_url,
         )
-            .fetch_one(&self.pool)
-            .await
-            .context("Failed to add chapter with sqlx")?;
+        .fetch_one(&self.pool)
+        .await
+        .context("Failed to add chapter with sqlx")?;
 
         Ok(new_id)
     }
@@ -45,11 +45,14 @@ impl DatabaseService {
         image_url: &str,
     ) -> AnyhowResult<i32> {
         let new_id = sqlx::query_scalar!(
-                "INSERT INTO chapter_images (chapter_id, image_order, image_url) VALUES ($1, $2, $3) RETURNING id",
+            "INSERT INTO chapter_images (chapter_id, image_order, image_url) VALUES ($1, $2, $3) RETURNING id",
             chapter_id,
             image_order,
             image_url,
-            ).fetch_one(&self.pool).await.context("Failed to add chapter image with sqlx")?;
+            )
+            .fetch_one(&self.pool)
+            .await
+            .context("Failed to add chapter image with sqlx")?;
 
         Ok(new_id)
     }
@@ -71,9 +74,9 @@ impl DatabaseService {
             series_id,
             chapter_number,
         )
-            .fetch_optional(&mut *tx) // Run query inside transaction
-            .await
-            .context("Failed to get chapter ID to delete")?;
+        .fetch_optional(&mut *tx) // Run query inside transaction
+        .await
+        .context("Failed to get chapter ID to delete")?;
 
         if let Some(chapter_id) = chapter_id_to_delete {
             sqlx::query!(
@@ -84,13 +87,11 @@ impl DatabaseService {
             .await
             .context("Failed to delete chapter images")?;
 
-            let result = sqlx::query!(
-                "DELETE FROM series_chapters WHERE id = $1",
-                chapter_id
-            )
-            .execute(&mut *tx)
-            .await
-            .context("Failed to delete chapter")?;
+            let result =
+                sqlx::query!("DELETE FROM series_chapters WHERE id = $1", chapter_id)
+                    .execute(&mut *tx)
+                    .await
+                    .context("Failed to delete chapter")?;
 
             // If transaction was successful, commit it
             tx.commit().await.context("Failed to commit transaction")?;
@@ -123,8 +124,7 @@ impl DatabaseService {
                     chapter_id, e
                 );
                 // Kembalikan error agar ? tetap berfungsi
-                Err(anyhow::anyhow!(e)
-                    .context("Failed to update status chapter"))
+                Err(anyhow::anyhow!(e).context("Failed to update status chapter"))
             }
         }
     }
