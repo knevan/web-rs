@@ -1,9 +1,9 @@
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::Json;
 use axum_core::__private::tracing::error;
-use axum_extra::extract::cookie::{Cookie, SameSite};
 use axum_extra::extract::CookieJar;
+use axum_extra::extract::cookie::{Cookie, SameSite};
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -13,7 +13,7 @@ use crate::builder::startup::AppState;
 use crate::common::email_service::send_password_reset_email;
 use crate::common::error::AuthError;
 use crate::common::hashing::{hash_password, verify_password};
-use crate::common::jwt::{create_access_jwt, create_refresh_jwt, RefreshClaims};
+use crate::common::jwt::{RefreshClaims, create_access_jwt, create_refresh_jwt};
 use crate::database::DatabaseService;
 
 #[derive(Serialize)]
