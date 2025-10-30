@@ -8,13 +8,9 @@ use crate::database::DatabaseService;
 use crate::database::storage::StorageClient;
 use crate::scraping::model::SitesConfig;
 use crate::task_workers::delete_password_reset_token_worker::run_cleanup_password_reset_token_worker;
-use crate::task_workers::delete_series_worker::{
-    run_deletion_scheduler, run_deletion_worker,
-};
+use crate::task_workers::delete_series_worker::{run_deletion_scheduler, run_deletion_worker};
 use crate::task_workers::log_view_cleanup_worker::run_log_view_cleanup_worker;
-use crate::task_workers::repair_chapter_worker::{
-    RepairChapterMsg, run_repair_chapter_worker,
-};
+use crate::task_workers::repair_chapter_worker::{RepairChapterMsg, run_repair_chapter_worker};
 use crate::task_workers::series_check_worker::{
     SeriesCheckJob, run_series_check_scheduler, run_series_check_worker,
 };
