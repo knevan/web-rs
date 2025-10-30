@@ -230,10 +230,7 @@ impl DatabaseService {
     }
 
     // Get authors for a sepecific series
-    pub async fn get_authors_by_series_id(
-        &self,
-        series_id: i32,
-    ) -> AnyhowResult<Vec<String>> {
+    pub async fn get_authors_by_series_id(&self, series_id: i32) -> AnyhowResult<Vec<String>> {
         let authors_name = sqlx::query_scalar!(
             r#"SELECT a.name FROM authors a
             JOIN series_authors sa ON a.id = sa.author_id
@@ -301,8 +298,8 @@ impl DatabaseService {
                 let similarity_threshold = 0.20_f32;
 
                 sqlx::query_as!(
-                QueryResult,
-                r#"
+                    QueryResult,
+                    r#"
                 WITH base_search AS (
                     SELECT
                         s.id, s.title, s.original_title, s.description, s.cover_image_url,
@@ -356,10 +353,10 @@ impl DatabaseService {
                     offset,
                     search_match,
                     similarity_threshold,
-        )
-                    .fetch_all(&self.pool)
-                    .await
-                    .context("Failed to query all series")
+                )
+                .fetch_all(&self.pool)
+                .await
+                .context("Failed to query all series")
             }
             None => {
                 // No search - simple pagination
@@ -437,10 +434,7 @@ impl DatabaseService {
     }
 
     // Called only if there's new valid content (new chapter)
-    pub async fn update_series_new_content_timestamp(
-        &self,
-        series_id: i32,
-    ) -> AnyhowResult<u64> {
+    pub async fn update_series_new_content_timestamp(&self, series_id: i32) -> AnyhowResult<u64> {
         let result = sqlx::query!(
             "UPDATE series SET updated_at = NOW() WHERE id = $1",
             series_id,
@@ -460,9 +454,10 @@ impl DatabaseService {
         new_next_checked_at: Option<DateTime<Utc>>,
     ) -> AnyhowResult<u64> {
         // First, get the series data asynchronously.
-        let series = self.get_series_by_id(series_id).await?.ok_or_else(|| {
-            anyhow!("Series with id {} not found for schedule update", series_id)
-        })?;
+        let series = self
+            .get_series_by_id(series_id)
+            .await?
+            .ok_or_else(|| anyhow!("Series with id {} not found for schedule update", series_id))?;
 
         // Calculate the next check time if not provided
         let final_next_checked_at = new_next_checked_at.unwrap_or_else(|| {
@@ -652,9 +647,7 @@ impl DatabaseService {
         Ok(series)
     }
 
-    pub async fn find_and_lock_series_for_job_deletion(
-        &self,
-    ) -> AnyhowResult<Option<Series>> {
+    pub async fn find_and_lock_series_for_job_deletion(&self) -> AnyhowResult<Option<Series>> {
         // If the row is already locked by another transaction,
         // it will skip it and look for the next row.
         let series = sqlx::query_as!(

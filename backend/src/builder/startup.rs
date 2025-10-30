@@ -72,8 +72,8 @@ pub async fn run(
     };
 
     // CORS Configuration
-    let frontend_origin = env::var("FRONTEND_ORIGIN")
-        .unwrap_or_else(|_| "http://localhost:1998".to_string());
+    let frontend_origin =
+        env::var("FRONTEND_ORIGIN").unwrap_or_else(|_| "http://localhost:1998".to_string());
 
     let cors = CorsLayer::new()
         .allow_methods([

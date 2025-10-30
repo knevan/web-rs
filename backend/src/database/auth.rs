@@ -13,29 +13,21 @@ use super::*;
 /// Highly efficient for this purpose.
 impl DatabaseService {
     /// Fetch user role id by name
-    pub async fn get_role_id_by_name(
-        &self,
-        role_name: &str,
-    ) -> AnyhowResult<Option<i32>> {
-        let role_id =
-            sqlx::query_scalar!("SELECT id FROM roles WHERE role_name = $1", role_name,)
-                .fetch_optional(&self.pool)
-                .await
-                .context("Failed to get role ID by name")?;
+    pub async fn get_role_id_by_name(&self, role_name: &str) -> AnyhowResult<Option<i32>> {
+        let role_id = sqlx::query_scalar!("SELECT id FROM roles WHERE role_name = $1", role_name,)
+            .fetch_optional(&self.pool)
+            .await
+            .context("Failed to get role ID by name")?;
 
         Ok(role_id)
     }
 
     /// Fetch user role name by id
-    pub async fn get_role_name_by_id(
-        &self,
-        role_id: i32,
-    ) -> AnyhowResult<Option<String>> {
-        let role_name =
-            sqlx::query_scalar!("SELECT role_name FROM roles WHERE id = $1", role_id,)
-                .fetch_optional(&self.pool)
-                .await
-                .context("Failed to get role name by ID")?;
+    pub async fn get_role_name_by_id(&self, role_id: i32) -> AnyhowResult<Option<String>> {
+        let role_name = sqlx::query_scalar!("SELECT role_name FROM roles WHERE id = $1", role_id,)
+            .fetch_optional(&self.pool)
+            .await
+            .context("Failed to get role name by ID")?;
 
         Ok(role_name)
     }
@@ -53,9 +45,9 @@ impl DatabaseService {
             token,
             expires_at
         )
-            .execute(&self.pool)
-            .await
-            .context("Failed to create password reset token")?;
+        .execute(&self.pool)
+        .await
+        .context("Failed to create password reset token")?;
 
         Ok(())
     }

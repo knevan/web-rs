@@ -22,10 +22,7 @@ pub struct GenericMessageResponse {
 }
 
 // Helper function to get role name string from role id
-async fn get_role_name(
-    db_service: &DatabaseService,
-    role_id: i32,
-) -> Result<String, AuthError> {
+async fn get_role_name(db_service: &DatabaseService, role_id: i32) -> Result<String, AuthError> {
     db_service
         .get_role_name_by_id(role_id)
         .await
@@ -124,7 +121,6 @@ pub async fn register_new_user_handler(
     Ok((StatusCode::CREATED, Json(response)))
 }
 
-
 // Struct for Responses
 #[derive(Serialize)]
 pub struct UserData {
@@ -176,8 +172,8 @@ pub async fn login_handler(
         })?
         .ok_or(AuthError::WrongCredentials)?;
 
-    let is_password_valid = verify_password(&payload.password, &user.password_hash)
-        .map_err(|_| {
+    let is_password_valid =
+        verify_password(&payload.password, &user.password_hash).map_err(|_| {
             error!("Password verification failed for user {}", user.username);
             AuthError::WrongCredentials
         })?;
@@ -404,8 +400,8 @@ pub async fn reset_password_handler(
         return Err(AuthError::InvalidToken);
     }
 
-    let hashed_password = hash_password(&payload.new_password)
-        .map_err(|_| AuthError::InternalServerError)?;
+    let hashed_password =
+        hash_password(&payload.new_password).map_err(|_| AuthError::InternalServerError)?;
 
     db_service
         .update_user_password_hash_after_reset_password(user_id, &hashed_password)
@@ -475,8 +471,7 @@ pub async fn realtime_check_username_handler(
             );
             let response = CheckUsernameResponse {
                 available: false,
-                message: "Error checking username availability. Please try again"
-                    .to_string(),
+                message: "Error checking username availability. Please try again".to_string(),
             };
             (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
         }
