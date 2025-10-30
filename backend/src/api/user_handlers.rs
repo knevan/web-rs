@@ -1,8 +1,9 @@
-use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use axum::Json;
 use axum_core::__private::tracing::error;
 use axum_core::response::{IntoResponse, Response};
+use axum_extra::extract::multipart::Field;
 use axum_extra::extract::Multipart;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -141,6 +142,21 @@ pub async fn update_user_password_setting_handler(
     }
 }
 
+// Helper function extract field bytes from multipart
+pub async fn extract_field_data(field: Field) -> Result<Vec<u8>, Response> {
+    match field.bytes().await {
+        Ok(bytes) => Ok(bytes.to_vec()),
+        Err(e) => {
+            error!("Failed to read bytes from multipart field: {}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"message": format!("Failed to read file: {}", e)})),
+            )
+                .into_response())
+        }
+    }
+}
+
 // Upload and update user avatar
 pub async fn update_user_avatar_handler(
     State(state): State<AppState>,
@@ -175,7 +191,7 @@ pub async fn update_user_avatar_handler(
         // Upload to cloud storage
         return match state
             .storage_client
-            .upload_image_file(file_data, &unique_image_key, &content_type)
+            .upload_image_file(file_data_bytes, &unique_image_key, &content_type)
             .await
         {
             Ok(key) => {
@@ -285,7 +301,9 @@ pub async fn delete_bookmark_series_handler(
             error!("DB error fetching user bookmarks: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"status": "error", "message": "Could not remove bookmark"})),
+                Json(
+                    serde_json::json!({"status": "error", "message": "Could not remove bookmark"}),
+                ),
             )
                 .into_response()
         }
@@ -312,7 +330,9 @@ pub async fn get_bookmark_status_current_user_handler(
             error!("DB error fetching user bookmarks: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"status": "error", "message": "Could not fetch bookmarks"})),
+                Json(
+                    serde_json::json!({"status": "error", "message": "Could not fetch bookmarks"}),
+                ),
             )
                 .into_response()
         }

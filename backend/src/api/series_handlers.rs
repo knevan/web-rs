@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::api::extractor::{AuthenticatedUser, OptionalAuthenticatedUser};
+use crate::api::user_handlers::extract_field_data;
 use crate::builder::startup::AppState;
 use crate::database::{
     CategoryTag, Comment, CommentEntityType, Series, SeriesChapter, SeriesOrderBy, VotePayload,
@@ -634,15 +635,9 @@ pub async fn upload_comment_attachments_handler(
 
         let file_name = field.file_name().unwrap_or("").to_string();
 
-        let file_data = match field.bytes().await {
-            Ok(bytes) => bytes.to_vec(),
-            Err(e) => {
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({"message": format!("Failed to read file: {}", e)})),
-                )
-                    .into_response();
-            }
+        let file_data = match extract_field_data(field).await {
+            Ok(data) => data,
+            Err(response) => return response,
         };
 
         const MAX_FILE_SIZE: usize = 5 * 1024 * 1024;
