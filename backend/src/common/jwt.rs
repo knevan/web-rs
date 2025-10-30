@@ -1,18 +1,18 @@
-use crate::common::error::AuthError;
-use axum::{extract::FromRequestParts, http::request::Parts};
-use axum_extra::extract::CookieJar;
-use chrono::{Duration, Utc};
-use jsonwebtoken::{
-    Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode,
-};
-use serde::{Deserialize, Serialize};
 use std::env;
 use std::sync::LazyLock;
 
+use axum::extract::FromRequestParts;
+use axum::http::request::Parts;
+use axum_extra::extract::CookieJar;
+use chrono::{Duration, Utc};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use serde::{Deserialize, Serialize};
+
+use crate::common::error::AuthError;
+
 // Secret key for JWT signing and encryption
 static KEYS: LazyLock<Keys> = LazyLock::new(|| {
-    let secret_key =
-        env::var("JWT_SECRET_KEY").expect("JWT_SECRET_KEY must be set");
+    let secret_key = env::var("JWT_SECRET_KEY").expect("JWT_SECRET_KEY must be set");
     Keys::new(secret_key.as_bytes())
 });
 
@@ -54,10 +54,7 @@ where
     S: Send + Sync,
 {
     type Rejection = AuthError;
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &S,
-    ) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         // Extract cookie jar from request
         let jar = CookieJar::from_request_parts(parts, state).await.unwrap();
 
@@ -82,33 +79,25 @@ where
     S: Send + Sync,
 {
     type Rejection = AuthError;
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &S,
-    ) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let jar = CookieJar::from_request_parts(parts, state).await.unwrap();
 
-        let refresh_token_cookie =
-            jar.get("refresh-token").ok_or(AuthError::InvalidToken)?;
+        let refresh_token_cookie = jar.get("refresh-token").ok_or(AuthError::InvalidToken)?;
         let refresh_token = refresh_token_cookie.value();
 
         // Decode token with HS512 Algorithm
         let mut validation = Validation::default();
         validation.algorithms = vec![Algorithm::HS512];
 
-        let token_data =
-            decode::<RefreshClaims>(refresh_token, &KEYS.decoding, &validation)
-                .map_err(|_| AuthError::InvalidToken)?;
+        let token_data = decode::<RefreshClaims>(refresh_token, &KEYS.decoding, &validation)
+            .map_err(|_| AuthError::InvalidToken)?;
 
         Ok(token_data.claims)
     }
 }
 
 /// Create jwt token for a given user ID and role (access token)
-pub fn create_access_jwt(
-    user_id: String,
-    role: String,
-) -> Result<String, AuthError> {
+pub fn create_access_jwt(user_id: String, role: String) -> Result<String, AuthError> {
     let now = Utc::now();
     let iat = now.timestamp() as usize;
 
