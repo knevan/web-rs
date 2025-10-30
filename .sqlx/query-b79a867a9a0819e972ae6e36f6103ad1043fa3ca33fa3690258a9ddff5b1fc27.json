@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                s.id,\n                s.title,\n                s.original_title,\n                s.description,\n                s.cover_image_url,\n                s.updated_at,\n                s.last_chapter_found_in_storage,\n                sc.title as chapter_title,\n                COALESCE(json_agg(DISTINCT a.name ORDER BY a.name) FILTER (WHERE a.id IS NOT NULL),\n                    '[]'::json) as authors,\n                COUNT(*) OVER () as total_items\n            FROM\n                series s\n            LEFT JOIN\n                series_chapters sc ON s.id = sc.series_id\n                AND s.last_chapter_found_in_storage = sc.chapter_number\n            LEFT JOIN\n                    series_authors sa ON s.id = sa.series_id\n            LEFT JOIN\n                    authors a ON sa.author_id = a.id\n            WHERE\n                s.updated_at >= NOW() - interval '7 days'\n            GROUP BY\n                s.id, sc.title\n            ORDER BY\n                s.updated_at DESC\n            LIMIT $1\n            OFFSET $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "original_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "cover_image_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "last_chapter_found_in_storage",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 7,
+        "name": "chapter_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "authors",
+        "type_info": "Json"
+      },
+      {
+        "ordinal": 9,
+        "name": "total_items",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "b79a867a9a0819e972ae6e36f6103ad1043fa3ca33fa3690258a9ddff5b1fc27"
+}
