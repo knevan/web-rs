@@ -1,0 +1,98 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                WITH base_search AS (\n                    SELECT\n                        s.id, s.title, s.original_title, s.description, s.cover_image_url,\n                        s.current_source_url, s.updated_at, s.processing_status,\n                        -- Calculate similarity score for ranking\n                        similarity(s.title, $3) as sim_score\n                    FROM series s\n                    WHERE\n                        s.title ILIKE '%' || $3 || '%'\n                    OR\n                        (s.title % $3 AND similarity(s.title, $3) >= $4)\n                ),\n                ranked_results AS (\n                    SELECT\n                        *,\n                        CASE\n                            WHEN title ILIKE $3 THEN 10\n                            WHEN title ILIKE $3 || '%' THEN 8\n                            WHEN title ILIKE '%' || $3 || '%' THEN 6\n                            ELSE 4\n                        END as search_rank\n                    FROM base_search\n                ),\n                total_count AS (\n                    SELECT COUNT(*) AS total FROM ranked_results\n                )\n                SELECT\n                    rr.id, rr.title, rr.original_title, rr.description,\n                    rr.cover_image_url, rr.current_source_url, rr.updated_at,\n                    rr.processing_status as \"processing_status: SeriesStatus\",\n                    -- Aggregate author names into a JSON array for each series\n                    COALESCE(\n                        json_agg(a.name) FILTER (WHERE a.id IS NOT NULL),\n                        '[]'::json\n                    ) AS \"authors!\",\n                    tc.total as total_items\n                FROM ranked_results rr\n                CROSS JOIN total_count tc\n                LEFT JOIN series_authors sa ON rr.id = sa.series_id\n                LEFT JOIN authors a ON sa.author_id = a.id\n                GROUP BY\n                    rr.id, rr.title, rr.original_title, rr.description, rr.cover_image_url,\n                    rr.current_source_url, rr.updated_at, rr.processing_status,\n                    rr.search_rank, rr.sim_score, tc.total\n                -- Order by the best rank, then by similarity, then by ID for stable sorting\n                ORDER BY rr.search_rank DESC, rr.sim_score DESC, rr.id ASC\n                LIMIT $1\n                OFFSET $2\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "original_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "cover_image_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "current_source_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "processing_status: SeriesStatus",
+        "type_info": {
+          "Custom": {
+            "name": "series_status",
+            "kind": {
+              "Enum": [
+                "Pending",
+                "Processing",
+                "Available",
+                "Ongoing",
+                "Completed",
+                "Hiatus",
+                "Discontinued",
+                "Error",
+                "Pending Deletion",
+                "Deleting",
+                "Deletion Failed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "authors!",
+        "type_info": "Json"
+      },
+      {
+        "ordinal": 9,
+        "name": "total_items",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Float4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "94da781695a6e7c66075bc0a9cd1a8ce40cec0c66360799140513477a84b87bb"
+}
