@@ -64,8 +64,7 @@ pub async fn update_user_profile_handler(
 ) -> Response {
     // Validate email uniqueness if its being changed
     if let Some(ref email) = payload.email
-        && let Ok(Some(existing_user)) =
-            state.db_service.get_user_by_identifier(email).await
+        && let Ok(Some(existing_user)) = state.db_service.get_user_by_identifier(email).await
         && existing_user.id != user.id
     {
         return (
@@ -103,7 +102,11 @@ pub async fn update_user_password_setting_handler(
     Json(payload): Json<UpdatePasswordPayload>,
 ) -> Response {
     if payload.new_password.len() < 8 {
-        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"message": "Password must be at least 8 characters long."}))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"message": "Password must be at least 8 characters long."})),
+        )
+            .into_response();
     }
 
     let hashed_password = match hash_password(&payload.new_password) {
@@ -151,15 +154,9 @@ pub async fn update_user_avatar_handler(
             .to_string();
         let file_name = field.file_name().unwrap_or("unknown.jpg").to_string();
 
-        let file_data = match field.bytes().await {
-            Ok(bytes) => bytes.to_vec(),
-            Err(e) => return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(
-                    serde_json::json!({"message": format!("Failed to read file: {}", e)}),
-                ),
-            )
-                .into_response(),
+        let file_data_bytes = match extract_field_data(field).await {
+            Ok(data) => data,
+            Err(response) => return response,
         };
 
         let file_extension = std::path::Path::new(&file_name)
@@ -188,13 +185,15 @@ pub async fn update_user_avatar_handler(
                         let public_url =
                             format!("{}/{}", state.storage_client.domain_cdn_url(), key);
 
-                        (StatusCode::OK, Json(serde_json::json!({"status": "success", "url": public_url}))).into_response()
+                        (
+                            StatusCode::OK,
+                            Json(serde_json::json!({"status": "success", "url": public_url})),
+                        )
+                            .into_response()
                     }
                     Err(_) => (
                         StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(
-                            serde_json::json!({"message": "Failed to save avatar URL."}),
-                        ),
+                        Json(serde_json::json!({"message": "Failed to save avatar URL."})),
                     )
                         .into_response(),
                 }
@@ -335,12 +334,12 @@ pub async fn get_user_bookmark_library_handler(
                 .into_iter()
                 .map(|series| {
                     let latest_chapter_info =
-                        series.last_chapter_found_in_storage.map(|chapter_num| {
-                            LatestChapterInfo {
+                        series
+                            .last_chapter_found_in_storage
+                            .map(|chapter_num| LatestChapterInfo {
                                 chapter_number: chapter_num,
                                 title: series.chapter_title,
-                            }
-                        });
+                            });
 
                     BookmarkSeriesResponse {
                         id: series.id,

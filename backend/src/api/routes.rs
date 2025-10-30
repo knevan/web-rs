@@ -7,12 +7,19 @@ use crate::api::auth_handlers::{
     realtime_check_username_handler, refresh_access_token_handler, register_new_user_handler,
     reset_password_handler,
 };
-use crate::api::series_handlers::{browse_series_handler, fetch_chapter_details_handler, fetch_most_viewed_series_handler, fetch_new_series_handler, fetch_series_details_by_id_handler, fetch_updated_series_chapter_handler, get_all_categories_handler, get_chapter_comment_handler, get_series_comment_handler, post_chapter_comment_handler, post_series_comment_handler, rate_series_handler, record_series_view_handler, update_existing_comment_handler, upload_comment_attachments_handler, user_search_series_handler, vote_on_comment_handler};
+use crate::api::series_handlers::{
+    browse_series_handler, fetch_chapter_details_handler, fetch_most_viewed_series_handler,
+    fetch_new_series_handler, fetch_series_details_by_id_handler,
+    fetch_updated_series_chapter_handler, get_all_categories_handler, get_chapter_comment_handler,
+    get_series_comment_handler, post_chapter_comment_handler, post_series_comment_handler,
+    rate_series_handler, record_series_view_handler, update_existing_comment_handler,
+    upload_comment_attachments_handler, user_search_series_handler, vote_on_comment_handler,
+};
 use crate::api::user_handlers::{
     add_bookmark_series_handler, delete_bookmark_series_handler,
     get_bookmark_status_current_user_handler, get_user_bookmark_library_handler,
-    get_user_profile_handler, update_user_avatar_handler,
-    update_user_password_setting_handler, update_user_profile_handler,
+    get_user_profile_handler, update_user_avatar_handler, update_user_password_setting_handler,
+    update_user_profile_handler,
 };
 use crate::builder::startup::AppState;
 

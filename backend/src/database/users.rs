@@ -13,10 +13,7 @@ use super::*;
 /// Highly efficient for this purpose.
 impl DatabaseService {
     /// Fetch user by username or email
-    pub async fn get_user_by_identifier(
-        &self,
-        identifier: &str,
-    ) -> AnyhowResult<Option<Users>> {
+    pub async fn get_user_by_identifier(&self, identifier: &str) -> AnyhowResult<Option<Users>> {
         let user = sqlx::query_as!(
             Users,
                 "SELECT id, username, email, password_hash, role_id FROM users WHERE email = $1 OR username = $1",
@@ -66,9 +63,9 @@ impl DatabaseService {
             "#,
             user_id
         )
-            .fetch_optional(&self.pool)
-            .await
-            .context("Failed to get user profile details")?;
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to get user profile details")?;
 
         Ok(profile)
     }
@@ -95,9 +92,9 @@ impl DatabaseService {
                 user_id,
                 name
             )
-                .execute(&mut *tx)
-                .await
-                .context("Failed to update user profile")?;
+            .execute(&mut *tx)
+            .await
+            .context("Failed to update user profile")?;
         }
 
         if let Some(mail) = email {
@@ -106,9 +103,9 @@ impl DatabaseService {
                 mail,
                 user_id
             )
-                .execute(&mut *tx)
-                .await
-                .context("Failed to update user profile")?;
+            .execute(&mut *tx)
+            .await
+            .context("Failed to update user profile")?;
         }
 
         tx.commit().await.context("Failed to commit transaction")?;
@@ -117,11 +114,7 @@ impl DatabaseService {
     }
 
     // Update user avatar
-    pub async fn update_user_avatar(
-        &self,
-        user_id: i32,
-        avatar_key: &str,
-    ) -> AnyhowResult<()> {
+    pub async fn update_user_avatar(&self, user_id: i32, avatar_key: &str) -> AnyhowResult<()> {
         sqlx::query!(
             r#"
             INSERT INTO user_profiles (user_id, avatar_url) VALUES ($1, $2)
@@ -130,9 +123,9 @@ impl DatabaseService {
             user_id,
             avatar_key
         )
-            .execute(&self.pool)
-            .await
-            .context("Failed to update avatar user profile")?;
+        .execute(&self.pool)
+        .await
+        .context("Failed to update avatar user profile")?;
 
         Ok(())
     }
@@ -148,13 +141,13 @@ impl DatabaseService {
             new_password_hash,
             user_id
         )
-            .execute(&self.pool)
-            .await
-            .context("Failed to update user profile")?;
+        .execute(&self.pool)
+        .await
+        .context("Failed to update user profile")?;
 
         Ok(())
     }
-    
+
     // Get paginated user search list for admin panel
     pub async fn get_admin_paginated_user(
         &self,
@@ -305,10 +298,10 @@ impl DatabaseService {
             "SELECT user_id, expires_at FROM password_reset_tokens WHERE token = $1",
             token
         )
-            .fetch_optional(&self.pool)
-            .await
-            .context("Failed to get user by reset token")?
-            .map(|row| (row.user_id, row.expires_at));
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to get user by reset token")?
+        .map(|row| (row.user_id, row.expires_at));
 
         Ok(record)
     }
@@ -324,11 +317,10 @@ impl DatabaseService {
             new_password_hash,
             user_id
         )
-            .execute(&self.pool)
-            .await
-            .context("Failed to update user password hash")?;
+        .execute(&self.pool)
+        .await
+        .context("Failed to update user password hash")?;
 
         Ok(())
     }
-
 }

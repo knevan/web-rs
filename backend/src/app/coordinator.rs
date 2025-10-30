@@ -97,11 +97,8 @@ pub async fn process_single_chapter(
     // Pause before start processing images
     random_sleep_time(1, 3).await;
 
-    let image_urls = parser::extract_image_urls_from_html_content(
-        &html_content,
-        &chapter_info.url,
-        config,
-    )?;
+    let image_urls =
+        parser::extract_image_urls_from_html_content(&html_content, &chapter_info.url, config)?;
 
     let total_image_found = image_urls.len();
 
@@ -133,17 +130,16 @@ pub async fn process_single_chapter(
             //random_sleep_time(1, 2).await;
 
             // The processing pipeline: fetch -> encode -> upload
-            let image_bytes =
-                match fetcher::fetch_image_bytes(&http_client, &img_url).await {
-                    Ok(bytes) => bytes,
-                    Err(e) => {
-                        eprintln!(
-                            "[COORDINATOR-TASK][Ch:{}/Img:{}] Failed to fetch {}: {}",
-                            chapter_number_str, index, img_url, e
-                        );
-                        return (index, Err(anyhow::anyhow!("Fetch failed")));
-                    }
-                };
+            let image_bytes = match fetcher::fetch_image_bytes(&http_client, &img_url).await {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    eprintln!(
+                        "[COORDINATOR-TASK][Ch:{}/Img:{}] Failed to fetch {}: {}",
+                        chapter_number_str, index, img_url, e
+                    );
+                    return (index, Err(anyhow::anyhow!("Fetch failed")));
+                }
+            };
 
             let avif_bytes = match task::spawn_blocking(move || {
                 image_encoding::covert_image_bytes_to_avif(&image_bytes)
@@ -155,10 +151,7 @@ pub async fn process_single_chapter(
                     return (index, Err(anyhow::anyhow!("Encoding failed: {}", e)));
                 }
                 Err(e) => {
-                    return (
-                        index,
-                        Err(anyhow::anyhow!("Encoding task panicked: {}", e)),
-                    );
+                    return (index, Err(anyhow::anyhow!("Encoding task panicked: {}", e)));
                 }
             };
 

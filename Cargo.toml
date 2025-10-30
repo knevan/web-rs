@@ -16,6 +16,6 @@ overflow-checks = false
 debug-assertions = false
 rpath = false
 lto = "thin"
-panic = "unwind"
+panic = "abort"
 codegen-units = 1
 incremental = false

@@ -38,17 +38,14 @@ pub async fn run_series_check(
         series.current_source_url
     );
 
-    let series_page_html =
-        fetcher::fetch_html(&http_client, &series.current_source_url).await?;
+    let series_page_html = fetcher::fetch_html(&http_client, &series.current_source_url).await?;
 
     random_sleep_time(2, 5).await;
 
     // [Quick Check] Get latest chapter
     println!("[SERIES CHECK] Performing quick check, get latest chapter.");
-    let latest_site_chapter = chapter_parser.quick_check_extract_latest_chapter_info(
-        &series_page_html,
-        &series.current_source_url,
-    )?;
+    let latest_site_chapter = chapter_parser
+        .quick_check_extract_latest_chapter_info(&series_page_html, &series.current_source_url)?;
 
     let last_db_chapter_number = series.last_chapter_found_in_storage.unwrap_or(0.0);
     let mut chapters_to_scrape: Vec<ChapterInfo> = Vec::new();
@@ -62,17 +59,13 @@ pub async fn run_series_check(
 
         // If latest chapter on site > latest in DB, we need a full scan.
         if latest_chapter.number > last_db_chapter_number {
-            println!(
-                "[SERIES CHECK] New chapter detected by Quick Check. Triggering full scan."
-            );
+            println!("[SERIES CHECK] New chapter detected by Quick Check. Triggering full scan.");
             needs_full_scan = true;
         } else {
             // [Count Check] If no new chapter, check for backfills or deletions
             println!("[SERIES CHECK] Quick Check passed. Performing Count Check");
-            let site_chapter_count =
-                chapter_parser.count_chapter_links(&series_page_html)?;
-            let db_chapter_count =
-                db_service.get_series_chapters_count(series.id).await?;
+            let site_chapter_count = chapter_parser.count_chapter_links(&series_page_html)?;
+            let db_chapter_count = db_service.get_series_chapters_count(series.id).await?;
 
             println!(
                 "[SERIES CHECK] Chapter on site: {}, chapters in DB: {}",
@@ -80,9 +73,7 @@ pub async fn run_series_check(
             );
 
             if site_chapter_count != db_chapter_count as usize {
-                println!(
-                    "[SERIES CHECK] Count missmatch. Trigger full scan for synchronization."
-                );
+                println!("[SERIES CHECK] Count missmatch. Trigger full scan for synchronization.");
                 needs_full_scan = true;
             }
         }
@@ -94,10 +85,8 @@ pub async fn run_series_check(
     // [Full Scan] Only run if triggered by one of the checks above.
     if needs_full_scan {
         println!("[SERIES CHECK] Run full scan");
-        let all_available_chapters = chapter_parser.full_scan_extract_all_chapter_info(
-            &series_page_html,
-            &series.current_source_url,
-        )?;
+        let all_available_chapters = chapter_parser
+            .full_scan_extract_all_chapter_info(&series_page_html, &series.current_source_url)?;
 
         if all_available_chapters.is_empty() {
             println!(
@@ -146,10 +135,7 @@ pub async fn run_series_check(
     // Update series metadata in the database
     if let Some(last_chapter_num) = last_info_downloaded_chapter {
         db_service
-            .update_series_last_chapter_found_in_storage(
-                series.id,
-                Some(last_chapter_num),
-            )
+            .update_series_last_chapter_found_in_storage(series.id, Some(last_chapter_num))
             .await?;
         println!(
             "[BULK SCRAPE] Updated last local chapter for '{}' to {}.",

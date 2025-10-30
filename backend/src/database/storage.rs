@@ -23,10 +23,10 @@ impl StorageClient {
     /// - `R2_SECRET_ACCESS_KEY`: Your R2 secret access key.
     /// - `R2_DOMAIN_CDN_URL`: The public URL of your bucket (https://pub-xxxxxxxx.r2.dev or your custom domain).
     pub async fn new_from_env() -> Result<Self> {
-        let bucket_name = env::var("R2_BUCKET_NAME")
-            .context("Environment variable R2_BUCKET_NAME is not set")?;
-        let account_id = env::var("R2_ACCOUNT_ID")
-            .context("Environment variable R2_ACCOUNT_ID is not set")?;
+        let bucket_name =
+            env::var("R2_BUCKET_NAME").context("Environment variable R2_BUCKET_NAME is not set")?;
+        let account_id =
+            env::var("R2_ACCOUNT_ID").context("Environment variable R2_ACCOUNT_ID is not set")?;
         let access_key_id = env::var("R2_ACCESS_KEY_ID")
             .context("Environment variable R2_ACCESS_KEY_ID is not set")?;
         let secret_access_key = env::var("R2_SECRET_ACCESS_KEY")
@@ -98,9 +98,7 @@ impl StorageClient {
             .content_type(content_type)
             .send()
             .await
-            .with_context(|| {
-                format!("Failed to upload object with key '{}' to R2 bucket", key)
-            })?;
+            .with_context(|| format!("Failed to upload object with key '{}' to R2 bucket", key))?;
 
         // Construct the public URL
         let public_url = format!("{}/{}", self.domain_cdn_url, key);

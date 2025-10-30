@@ -7,7 +7,7 @@ use reqwest::Client;
 /// Retry Strategy:
 /// - Retry: Server errors (5xx), timeouts, connection issues, rate limits (429)
 /// - Don't retry: Client errors (4xx except 429), parsing errors, other failures
-/// 
+///
 /// We use this approach because:
 /// - Server errors are often temporary (server restart, maintenance, etc.)
 /// - Timeouts might succeed on retry with better network conditions
@@ -36,7 +36,7 @@ fn is_transient_error(e: &anyhow::Error) -> bool {
 /// 2. Status code validation
 /// 3. Exponential backoff between retries
 /// 4. Flexible response processing (HTML, bytes, JSON, etc.)
-/// 
+///
 /// Generic Parameters Explained:
 /// - `T`: The final return type (String, Bytes, etc.)
 /// - `F`: The processor function type
@@ -70,9 +70,9 @@ where
         // Check if HTTP status indicates success (2xx) `Ok`
         // `error_for_status()` will convert a 4xx or 5xx status code into an `Errors`.
         // Why: HTTP request "succeeded" but server said "no" (404, 500, etc.)
-        let response = response.error_for_status().with_context(|| {
-            format!("Request to {} returned a non-success status", url)
-        })?;
+        let response = response
+            .error_for_status()
+            .with_context(|| format!("Request to {} returned a non-success status", url))?;
 
         println!("[FETCHER] HTML from {} fetched successfully", url);
 

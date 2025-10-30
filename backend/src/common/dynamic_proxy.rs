@@ -126,13 +126,12 @@ fn build_configured_http_client(
 pub fn init_client() -> Result<Client> {
     println!("[HTTP Client] Initializing HTTP client...");
     let proxy_list = load_dynamic_proxy();
-    
+
     let proxy_config = if !proxy_list.is_empty() {
         Some(ProxyConfig::new(proxy_list))
     } else {
         None
     };
 
-    build_configured_http_client(proxy_config.as_ref())
-        .context("Failed to initialize HTTP client")
+    build_configured_http_client(proxy_config.as_ref()).context("Failed to initialize HTTP client")
 }

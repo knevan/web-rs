@@ -18,8 +18,7 @@ impl DatabaseService {
         }
 
         // A map to hold all child comments, grouped by their parent's ID for efficient lookup.
-        let mut children_map: HashMap<i64, Vec<Comment>> =
-            HashMap::with_capacity(rows.len());
+        let mut children_map: HashMap<i64, Vec<Comment>> = HashMap::with_capacity(rows.len());
 
         // A vector to store the root-level comments.
         let mut root_comments: Vec<Comment> = Vec::new();
@@ -127,8 +126,8 @@ impl DatabaseService {
 
     fn process_comment_markdown(&self, markdown: &str) -> AnyhowResult<String> {
         // Process spoiler markdown ||spoiler|| to <span>
-        let processed_spoiler_markdown = SPOILER_REGEX
-            .replace_all(markdown, r#"<span class="spoiler-hook">$1</span>"#);
+        let processed_spoiler_markdown =
+            SPOILER_REGEX.replace_all(markdown, r#"<span class="spoiler-hook">$1</span>"#);
 
         let mut options = Options::empty();
         options.insert(Options::ENABLE_STRIKETHROUGH);
@@ -271,13 +270,13 @@ impl DatabaseService {
         if !attachment_keys.is_empty() {
             for key in attachment_keys {
                 sqlx::query!(
-                "INSERT INTO comment_attachments (comment_id, file_url) VALUES ($1, $2)",
-                new_comment_id,
-                key
-            )
-                    .execute(&mut *tx)
-                    .await
-                    .context("Failed to insert comment attachment")?;
+                    "INSERT INTO comment_attachments (comment_id, file_url) VALUES ($1, $2)",
+                    new_comment_id,
+                    key
+                )
+                .execute(&mut *tx)
+                .await
+                .context("Failed to insert comment attachment")?;
             }
         }
 
@@ -334,9 +333,9 @@ impl DatabaseService {
             comment_id,
             user_id
         )
-            .fetch_optional(&mut *tx)
-            .await
-            .context("Failed to fetch comment vote")?;
+        .fetch_optional(&mut *tx)
+        .await
+        .context("Failed to fetch comment vote")?;
 
         let mut final_user_vote: Option<i16> = Some(vote_type);
 
@@ -364,9 +363,9 @@ impl DatabaseService {
                 user_id,
                 vote_type
             )
-                .execute(&mut *tx)
-                .await
-                .context("Failed to insert comment")?;
+            .execute(&mut *tx)
+            .await
+            .context("Failed to insert comment")?;
         }
 
         // Recalculate new total votes for comment

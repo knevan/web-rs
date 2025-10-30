@@ -1,6 +1,6 @@
-use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
+use axum::Json;
 use axum_core::__private::tracing::error;
 use axum_core::response::{IntoResponse, Response};
 use axum_extra::extract::Multipart;
@@ -64,8 +64,7 @@ pub async fn create_new_series_handler(
         }
     };
 
-    let fetch_new_series: Series = match db_service.get_series_by_id(new_series_id).await
-    {
+    let fetch_new_series: Series = match db_service.get_series_by_id(new_series_id).await {
         Ok(Some(series)) => series,
         _ => {
             eprintln!("Error fetching new series from DB: {}", new_series_id);
@@ -190,8 +189,7 @@ pub async fn upload_series_cover_image_handler(
             .and_then(std::ffi::OsStr::to_str)
             .unwrap_or("jpg");
 
-        let unique_image_key =
-            format!("cover-manga/{}.{}", Uuid::new_v4(), file_extension);
+        let unique_image_key = format!("cover-manga/{}.{}", Uuid::new_v4(), file_extension);
 
         match state
             .storage_client
@@ -200,9 +198,7 @@ pub async fn upload_series_cover_image_handler(
         {
             Ok(key) => {
                 // Construct the public URL
-                let public_url =
-                    format!("{}/{}", state.storage_client.domain_cdn_url(), &key);
-
+                let public_url = format!("{}/{}", state.storage_client.domain_cdn_url(), &key);
                 (
                     StatusCode::OK,
                     Json(UploadResponse {
@@ -222,9 +218,10 @@ pub async fn upload_series_cover_image_handler(
         }
     } else {
         (
-        StatusCode::BAD_REQUEST,
-        Json(serde_json::json!({"status": "error", "message": "No cover image file found"}))
-    ).into_response()
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"status": "error", "message": "No cover image file found"})),
+        )
+            .into_response()
     }
 }
 

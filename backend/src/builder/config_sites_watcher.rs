@@ -9,10 +9,7 @@ use notify_debouncer_full::{DebouncedEvent, new_debouncer};
 
 use crate::scraping::model::SitesConfig;
 
-pub async fn config_sites_watcher(
-    config_path: String,
-    config_swap: Arc<ArcSwap<SitesConfig>>,
-) {
+pub async fn config_sites_watcher(config_path: String, config_swap: Arc<ArcSwap<SitesConfig>>) {
     println!("[CONFIG-WATCHER] Watch file {}", config_path);
 
     let path = Path::new(&config_path);
@@ -34,9 +31,7 @@ pub async fn config_sites_watcher(
                     match SitesConfig::load(&clone_config_path) {
                         Ok(new_config) => {
                             config_swap.store(Arc::new(new_config));
-                            println!(
-                                "[CONFIG-WATCHER] Config store and reloaded successfully"
-                            );
+                            println!("[CONFIG-WATCHER] Config store and reloaded successfully");
                         }
                         Err(e) => {
                             eprintln!(
