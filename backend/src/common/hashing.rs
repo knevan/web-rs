@@ -48,8 +48,7 @@ pub fn verify_password(password: &str, stored_hash: &str) -> Result<bool, PwHash
 
     let parsed_hash = PasswordHash::new(stored_hash)?;
 
-    let verification_result =
-        Argon2::default().verify_password(password_bytes, &parsed_hash);
+    let verification_result = Argon2::default().verify_password(password_bytes, &parsed_hash);
 
     match verification_result {
         Ok(()) => Ok(true),

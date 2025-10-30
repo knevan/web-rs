@@ -87,11 +87,10 @@ impl DatabaseService {
             .await
             .context("Failed to delete chapter images")?;
 
-            let result =
-                sqlx::query!("DELETE FROM series_chapters WHERE id = $1", chapter_id)
-                    .execute(&mut *tx)
-                    .await
-                    .context("Failed to delete chapter")?;
+            let result = sqlx::query!("DELETE FROM series_chapters WHERE id = $1", chapter_id)
+                .execute(&mut *tx)
+                .await
+                .context("Failed to delete chapter")?;
 
             // If transaction was successful, commit it
             tx.commit().await.context("Failed to commit transaction")?;

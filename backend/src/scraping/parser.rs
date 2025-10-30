@@ -25,8 +25,8 @@ pub struct ChapterParser {
 impl ChapterParser {
     // Creates a new parser instance with compiled configurations
     pub fn new(config: SiteScrapingConfig) -> Result<Self> {
-        let chapter_link_selector = Selector::parse(&config.chapter_link_selector)
-            .map_err(|e| {
+        let chapter_link_selector =
+            Selector::parse(&config.chapter_link_selector).map_err(|e| {
                 anyhow::anyhow!(
                     "Invalid CSS selector for image {}: {:?}",
                     &config.image_selector_on_chapter_page,
@@ -146,12 +146,11 @@ impl ChapterParser {
         let document = Html::parse_document(series_page_html);
 
         // Select first or last element depending on configured site chapter_order
-        let latest_chapter_element =
-            if self.config.chapter_order.eq_ignore_ascii_case("asc") {
-                document.select(&self.chapter_link_selector).next_back()
-            } else {
-                document.select(&self.chapter_link_selector).next()
-            };
+        let latest_chapter_element = if self.config.chapter_order.eq_ignore_ascii_case("asc") {
+            document.select(&self.chapter_link_selector).next_back()
+        } else {
+            document.select(&self.chapter_link_selector).next()
+        };
 
         if let Some(element) = latest_chapter_element {
             return self.process_link_element(element, series_page_url);
@@ -180,9 +179,7 @@ impl ChapterParser {
         let mut chapter_map: HashMap<i32, ChapterInfo> = HashMap::new();
 
         for link_element in document.select(&self.chapter_link_selector) {
-            if let Some(info) =
-                self.process_link_element(link_element, series_page_url)?
-            {
+            if let Some(info) = self.process_link_element(link_element, series_page_url)? {
                 let key = (info.number * 100.0) as i32;
                 chapter_map.entry(key).or_insert(info);
             }
@@ -215,8 +212,8 @@ pub fn extract_image_urls_from_html_content(
     );
     let document = Html::parse_document(html_content);
 
-    let image_element_selector = Selector::parse(&config.image_selector_on_chapter_page)
-        .map_err(|e| {
+    let image_element_selector =
+        Selector::parse(&config.image_selector_on_chapter_page).map_err(|e| {
             anyhow::anyhow!(
                 "Invalid CSS selector for image {}: {:?}",
                 &config.image_selector_on_chapter_page,
@@ -240,15 +237,14 @@ pub fn extract_image_urls_from_html_content(
 
     for img_element in document.select(&image_element_selector) {
         // Try primary attribute first
-        let maybe_url =
-            try_resolve_url(img_element.value().attr(&config.image_url_attribute))
-                // If primary fail, iterate through other fallback and use the one that works
-                .or_else(|| {
-                    config
-                        .image_url_fallback_attributes
-                        .iter()
-                        .find_map(|attr| try_resolve_url(img_element.value().attr(attr)))
-                });
+        let maybe_url = try_resolve_url(img_element.value().attr(&config.image_url_attribute))
+            // If primary fail, iterate through other fallback and use the one that works
+            .or_else(|| {
+                config
+                    .image_url_fallback_attributes
+                    .iter()
+                    .find_map(|attr| try_resolve_url(img_element.value().attr(attr)))
+            });
 
         if let Some(url_to_add) = maybe_url {
             // Ensure no duplicate URLs are added. For images, order is important

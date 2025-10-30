@@ -5,9 +5,7 @@ use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum_extra::extract::CookieJar;
 use chrono::{Duration, Utc};
-use jsonwebtoken::{
-    Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode,
-};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 
 use crate::common::error::AuthError;
@@ -56,10 +54,7 @@ where
     S: Send + Sync,
 {
     type Rejection = AuthError;
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &S,
-    ) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         // Extract cookie jar from request
         let jar = CookieJar::from_request_parts(parts, state).await.unwrap();
 
@@ -84,23 +79,18 @@ where
     S: Send + Sync,
 {
     type Rejection = AuthError;
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &S,
-    ) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let jar = CookieJar::from_request_parts(parts, state).await.unwrap();
 
-        let refresh_token_cookie =
-            jar.get("refresh-token").ok_or(AuthError::InvalidToken)?;
+        let refresh_token_cookie = jar.get("refresh-token").ok_or(AuthError::InvalidToken)?;
         let refresh_token = refresh_token_cookie.value();
 
         // Decode token with HS512 Algorithm
         let mut validation = Validation::default();
         validation.algorithms = vec![Algorithm::HS512];
 
-        let token_data =
-            decode::<RefreshClaims>(refresh_token, &KEYS.decoding, &validation)
-                .map_err(|_| AuthError::InvalidToken)?;
+        let token_data = decode::<RefreshClaims>(refresh_token, &KEYS.decoding, &validation)
+            .map_err(|_| AuthError::InvalidToken)?;
 
         Ok(token_data.claims)
     }
