@@ -1,5 +1,6 @@
 use anyhow::Context;
 use sqlx::postgres::types::PgInterval;
+use sqlx::QueryBuilder;
 
 use super::*;
 
@@ -99,11 +100,7 @@ impl DatabaseService {
         Ok(series_list)
     }
 
-    pub async fn add_bookmarked_series(
-        &self,
-        user_id: i32,
-        series_id: i32,
-    ) -> AnyhowResult<()> {
+    pub async fn add_bookmarked_series(&self, user_id: i32, series_id: i32) -> AnyhowResult<()> {
         let mut tx = self
             .pool
             .begin()
@@ -134,11 +131,7 @@ impl DatabaseService {
         Ok(())
     }
 
-    pub async fn delete_bookmarked_series(
-        &self,
-        user_id: i32,
-        series_id: i32,
-    ) -> AnyhowResult<()> {
+    pub async fn delete_bookmarked_series(&self, user_id: i32, series_id: i32) -> AnyhowResult<()> {
         let mut tx = self
             .pool
             .begin()
@@ -171,20 +164,16 @@ impl DatabaseService {
         Ok(())
     }
 
-    pub async fn is_series_bookmarked(
-        &self,
-        user_id: i32,
-        series_id: i32,
-    ) -> AnyhowResult<bool> {
+    pub async fn is_series_bookmarked(&self, user_id: i32, series_id: i32) -> AnyhowResult<bool> {
         // Query to check for existence of a bookmark entry
         let exist = sqlx::query_scalar!(
             "SELECT EXISTS(SELECT 1 FROM user_bookmarks WHERE user_id = $1 AND series_id = $2)",
             user_id,
             series_id
         )
-            .fetch_one(&self.pool)
-            .await
-            .context("Failed to check bookmarked series view with sqlx")?;
+        .fetch_one(&self.pool)
+        .await
+        .context("Failed to check bookmarked series view with sqlx")?;
 
         Ok(exist.unwrap_or(false))
     }
@@ -252,9 +241,9 @@ impl DatabaseService {
             user_id,
             rating,
         )
-            .execute(&mut *tx)
-            .await
-            .context("Failed to update series rating")?;
+        .execute(&mut *tx)
+        .await
+        .context("Failed to update series rating")?;
 
         match old_rating {
             Some(old_score) => {
@@ -265,9 +254,9 @@ impl DatabaseService {
                     rating_diff,
                     series_id,
                 )
-                    .execute(&mut *tx)
-                    .await
-                    .context("Failed to update user series rating")?;
+                .execute(&mut *tx)
+                .await
+                .context("Failed to update user series rating")?;
             }
             None => {
                 // New rating
@@ -389,9 +378,9 @@ impl DatabaseService {
             LEFT JOIN
                 series_chapters sc ON s.id = sc.series_id
                 AND s.last_chapter_found_in_storage = sc.chapter_number
-            LEFT JOIN 
+            LEFT JOIN
                     series_authors sa ON s.id = sa.series_id
-            LEFT JOIN 
+            LEFT JOIN
                     authors a ON sa.author_id = a.id
             WHERE
                 s.updated_at >= NOW() - interval '7 days'
@@ -405,9 +394,9 @@ impl DatabaseService {
             limit,
             offset
         )
-            .fetch_all(&self.pool)
-            .await
-            .context("Failed to query latest release series")?;
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to query latest release series")?;
 
         let total_items = records
             .first()
@@ -442,6 +431,7 @@ impl DatabaseService {
         order_by: SeriesOrderBy,
         include_category_ids: &[i32],
         exclude_category_ids: &[i32],
+        search_query: Option<&str>,
     ) -> AnyhowResult<PaginatedResult<BrowseSeriesSearchResult>> {
         let page_size = page_size.min(100);
         let limit = page_size as i64;
@@ -456,6 +446,72 @@ impl DatabaseService {
 
         let has_include_filters = !include_category_ids.is_empty();
         let has_exclude_filters = !exclude_category_ids.is_empty();
+
+        const SIMILARITY_THRESHOLD: f32 = 0.20;
+        let trimmed_search_query = search_query
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| s.trim());
+
+        // Define common parts of the query
+        const SELECT_FIELD: &str = r#"
+            SELECT
+                s.id, s.title, s.original_title, s.description, s.cover_image_url,
+                s.updated_at, s.last_chapter_found_in_storage,
+                COALESCE(json_agg(DISTINCT a.name ORDER BY a.name) FILTER (WHERE a.id IS NOT NULL), '[]'::json) as authors,
+                COALESCE(json_agg(DISTINCT c.name ORDER BY c.name) FILTER (WHERE c.id IS NOT NULL), '[]'::json) as categories,
+                COUNT(*) OVER () AS total_items
+        "#;
+
+        // Join table
+        const JOIN_LOGIC: &str = r#"
+            LEFT JOIN series_authors sa ON s.id = sa.series_id
+            LEFT JOIN authors a ON sa.author_id = a.id
+            LEFT JOIN series_categories sc ON s.id = sc.series_id
+            LEFT JOIN categories c ON sc.category_id = c.id
+        "#;
+
+        // This GROUP BY must include all non-aggregated columns from SELECT_FIELDS
+        const GROUP_BY_LOGIC: &str = r#"
+            GROUP BY s.id, s.title, s.original_title, s.description, s.cover_image_url,
+                 s.updated_at, s.last_chapter_found_in_storage, s.views_count,
+                 s.total_rating_score, s.created_at
+        "#;
+
+        // Define the search snippet
+        fn build_search_query<'a>(
+            query_builder: &mut QueryBuilder<'a, sqlx::Postgres>,
+            query_str: &'a str,
+            threshold: f32,
+        ) {
+            query_builder.push(" ("); // Start of search query
+
+            // Title search: (s.title ILIKE ... OR (s.title % ... AND similarity(...) >= ...))
+            query_builder.push(" (s.title ILIKE '%' || ");
+            query_builder.push_bind(query_str); // Binds value for ILIKE
+            query_builder.push(" || '%' OR (s.title % ");
+            query_builder.push_bind(query_str); // Binds value for trigram
+            query_builder.push(" AND similarity(s.title,");
+            query_builder.push_bind(query_str); // Binds value for similarity
+            query_builder.push(") >= ");
+            query_builder.push_bind(threshold); // Binds threshold
+            query_builder.push("))");
+
+            // Original title search: OR (s.original_title IS NOT NULL AND (...))
+            query_builder.push(" OR (s.original_title IS NOT NULL AND (");
+            query_builder.push(" s.original_title ILIKE '%' || ");
+            query_builder.push_bind(query_str); // Binds value for ILIKE
+            query_builder.push(" || '%'");
+            query_builder.push(" OR (s.original_title % ");
+            query_builder.push_bind(query_str); // Binds value for trigram
+            query_builder.push(" AND similarity(s.original_title, ");
+            query_builder.push_bind(query_str); // Binds value for similarity
+            query_builder.push(") >= ");
+            query_builder.push_bind(threshold); // Binds threshold
+            query_builder.push(")");
+            query_builder.push(" ))");
+
+            query_builder.push(" )"); // End of search query
+        }
 
         #[derive(Debug, FromRow)]
         struct QueryDefaultResult {
@@ -473,200 +529,92 @@ impl DatabaseService {
             total_items: Option<i64>,
         }
 
-        let record_list: Vec<QueryDefaultResult> = match (
-            has_include_filters,
-            has_exclude_filters,
-        ) {
-            (true, true) => {
-                // If both included and excluded filters
-                let query_string = format!(
-                    r#"
-                    WITH filtered_series AS (
-                        SELECT s.id
-                        FROM series s
-                        WHERE s.id IN (
-                            SELECT series_id
-                            FROM series_categories
-                            WHERE category_id = ANY($1)
-                            GROUP BY series_id
-                            HAVING COUNT(DISTINCT category_id) = $2
-                        )
-                        AND s.id NOT IN (
-                            SELECT series_id
-                            FROM series_categories
-                            WHERE category_id = ANY($3)
-                        )
-                    )
-                    SELECT
-                        s.id,
-                        s.title,
-                        s.original_title,
-                        s.description,
-                        s.cover_image_url,
-                        s.updated_at,
-                        s.last_chapter_found_in_storage,
-                        COALESCE(json_agg(DISTINCT a.name ORDER BY a.name) FILTER (WHERE a.id IS NOT NULL),
-                            '[]'::json) as authors,
-                        COALESCE(json_agg(DISTINCT c.name ORDER BY c.name) FILTER (WHERE c.id IS NOT NULL),
-                            '[]'::json) as categories,
-                        COUNT(*) OVER () AS total_items
-                    FROM
-                        filtered_series fs
-                        JOIN series s ON fs.id = s.id
-                        LEFT JOIN series_authors sa ON s.id = sa.series_id
-                        LEFT JOIN authors a ON sa.author_id = a.id
-                        LEFT JOIN series_categories sc ON s.id = sc.series_id
-                        LEFT JOIN categories c ON sc.category_id = c.id
-                    GROUP BY s.id, s.title, s.original_title, s.description, s.cover_image_url,
-                             s.updated_at, s.last_chapter_found_in_storage, s.views_count, s.total_rating_score, s.created_at
-                    ORDER BY {}
-                    LIMIT $4
-                    OFFSET $5
-                    "#,
-                    order_by_clause
-                );
-                sqlx::query_as::<_, QueryDefaultResult>(&query_string)
-                    .bind(include_category_ids)
-                    .bind(include_category_ids.len() as i64)
-                    .bind(exclude_category_ids)
-                    .bind(limit)
-                    .bind(offset)
-                    .fetch_all(&self.pool)
-                    .await
-                    .context("Failed to query series with both include and exclude filters")?
+        let mut query_builder = QueryBuilder::new("");
+        let mut where_condition_added = false;
+
+        // If any filter included, use the CTE
+        if has_include_filters {
+            query_builder
+                .push("WITH filtered_series AS ( SELECT s.id FROM series s WHERE s.id IN (");
+
+            // Subquery for include
+            query_builder.push("SELECT series_id FROM series_categories WHERE category_id = ANY(");
+            query_builder.push_bind(include_category_ids); // $1
+            query_builder.push(") GROUP BY series_id HAVING COUNT(DISTINCT category_id) = ");
+            query_builder.push_bind(include_category_ids.len() as i64); // $2
+            query_builder.push(")"); // Close IN (...)
+
+            // Exclude logic inside the CTE
+            if has_exclude_filters {
+                query_builder.push(" AND s.id NOT IN (SELECT series_id FROM series_categories WHERE category_id = ANY(");
+                query_builder.push_bind(exclude_category_ids); // $3
+                query_builder.push("))");
             }
-            (true, false) => {
-                // Only include filters
-                let query_string = format!(
-                    r#"
-                    WITH filtered_series AS (
-                        SELECT series_id as id
-                        FROM series_categories
-                        WHERE category_id = ANY($1)
-                        GROUP BY series_id
-                        HAVING COUNT(DISTINCT category_id) = $2
-                    )
-                    SELECT
-                        s.id,
-                        s.title,
-                        s.original_title,
-                        s.description,
-                        s.cover_image_url,
-                        s.updated_at,
-                        s.last_chapter_found_in_storage,
-                        COALESCE(json_agg(DISTINCT a.name ORDER BY a.name) FILTER (WHERE a.id IS NOT NULL),
-                            '[]'::json) as authors,
-                        COALESCE(json_agg(DISTINCT c.name ORDER BY c.name) FILTER (WHERE c.id IS NOT NULL),
-                            '[]'::json) as categories,
-                        COUNT(*) OVER () AS total_items
-                    FROM
-                        filtered_series fs
-                        JOIN series s ON fs.id = s.id
-                        LEFT JOIN series_authors sa ON s.id = sa.series_id
-                        LEFT JOIN authors a ON sa.author_id = a.id
-                        LEFT JOIN series_categories sc ON s.id = sc.series_id
-                        LEFT JOIN categories c ON sc.category_id = c.id
-                    GROUP BY s.id, s.title, s.original_title, s.description, s.cover_image_url,
-                             s.updated_at, s.last_chapter_found_in_storage, s.views_count, s.total_rating_score, s.created_at
-                    ORDER BY {}
-                    LIMIT $3
-                    OFFSET $4
-                    "#,
-                    order_by_clause
-                );
-                sqlx::query_as::<_, QueryDefaultResult>(&query_string)
-                    .bind(include_category_ids)
-                    .bind(include_category_ids.len() as i64)
-                    .bind(limit)
-                    .bind(offset)
-                    .fetch_all(&self.pool)
-                    .await
-                    .context("Failed to query series with include filters")?
+
+            // Search logic inside the CTE for performance
+            if let Some(query_str) = trimmed_search_query {
+                query_builder.push(" AND ");
+
+                build_search_query(&mut query_builder, query_str, SIMILARITY_THRESHOLD);
             }
-            (false, true) => {
-                // Only exclude filters
-                let query_string = format!(
-                    r#"
-                    SELECT
-                        s.id,
-                        s.title,
-                        s.original_title,
-                        s.description,
-                        s.cover_image_url,
-                        s.updated_at,
-                        s.last_chapter_found_in_storage,
-                        COALESCE(json_agg(DISTINCT a.name ORDER BY a.name) FILTER (WHERE a.id IS NOT NULL),
-                            '[]'::json) as authors,
-                        COALESCE(json_agg(DISTINCT c.name ORDER BY c.name) FILTER (WHERE c.id IS NOT NULL),
-                            '[]'::json) as categories,
-                        COUNT(*) OVER () as total_items
-                    FROM
-                        series s
-                        LEFT JOIN series_authors sa ON s.id = sa.series_id
-                        LEFT JOIN authors a ON sa.author_id = a.id
-                        LEFT JOIN series_categories sc ON s.id = sc.series_id
-                        LEFT JOIN categories c ON sc.category_id = c.id
-                    WHERE NOT EXISTS (
-                        SELECT 1
-                        FROM series_categories sc_exclude
-                        WHERE sc_exclude.series_id = s.id
-                          AND sc_exclude.category_id = ANY($1)
-                    )
-                    GROUP BY s.id, s.title, s.original_title, s.description, s.cover_image_url,
-                             s.updated_at, s.last_chapter_found_in_storage, s.views_count, s.total_rating_score, s.created_at
-                    ORDER BY {}
-                    LIMIT $2
-                    OFFSET $3
-                    "#,
-                    order_by_clause
-                );
-                sqlx::query_as::<_, QueryDefaultResult>(&query_string)
-                    .bind(exclude_category_ids)
-                    .bind(limit)
-                    .bind(offset)
-                    .fetch_all(&self.pool)
-                    .await
-                    .context("Failed to query series with exclude filters")?
+
+            // Close CTE and build the main query
+            query_builder.push(" ) ");
+            query_builder.push(SELECT_FIELD);
+            query_builder.push(" FROM filtered_series fs JOIN series s ON fs.id = s.id");
+            query_builder.push(JOIN_LOGIC);
+        } else {
+            query_builder.push(SELECT_FIELD);
+            query_builder.push(" FROM series s ");
+            query_builder.push(JOIN_LOGIC);
+
+            // Exclude logic in the WHERE clause
+            if has_exclude_filters {
+                query_builder.push(" WHERE NOT EXISTS (SELECT 1 FROM series_categories sc_exclude WHERE sc_exclude.series_id = s.id AND sc_exclude.category_id = ANY(");
+                query_builder.push_bind(exclude_category_ids); // $1
+                query_builder.push(")) ");
+
+                where_condition_added = true;
             }
-            (false, false) => {
-                // No filters
-                let query_string = format!(
-                    r#"
-                    SELECT
-                        s.id,
-                        s.title,
-                        s.original_title,
-                        s.description,
-                        s.cover_image_url,
-                        s.updated_at,
-                        s.last_chapter_found_in_storage,
-                        COALESCE(json_agg(DISTINCT a.name ORDER BY a.name) FILTER (WHERE a.id IS NOT NULL),
-                            '[]'::json) as authors,
-                        COALESCE(json_agg(DISTINCT c.name ORDER BY c.name) FILTER (WHERE c.id IS NOT NULL),
-                            '[]'::json) as categories,
-                        COUNT(*) OVER () as total_items
-                    FROM
-                        series s
-                        LEFT JOIN series_authors sa ON s.id = sa.series_id
-                        LEFT JOIN authors a ON sa.author_id = a.id
-                        LEFT JOIN series_categories sc ON s.id = sc.series_id
-                        LEFT JOIN categories c ON sc.category_id = c.id
-                    GROUP BY s.id, s.title, s.original_title, s.description, s.cover_image_url,
-                             s.updated_at, s.last_chapter_found_in_storage, s.views_count, s.total_rating_score, s.created_at
-                    ORDER BY {}
-                    LIMIT $1
-                    OFFSET $2
-                    "#,
-                    order_by_clause
-                );
-                sqlx::query_as::<_, QueryDefaultResult>(&query_string)
-                    .bind(limit)
-                    .bind(offset)
-                    .fetch_all(&self.pool)
-                    .await
-                    .context("Failed to query default without filters")?
+
+            // Search logic in the WHERE clause
+            if let Some(query_str) = trimmed_search_query {
+                if where_condition_added {
+                    query_builder.push(" AND ");
+                } else {
+                    query_builder.push(" WHERE ");
+                }
+
+                build_search_query(&mut query_builder, query_str, SIMILARITY_THRESHOLD);
+
+                // where_condition_added = true;
             }
-        };
+        }
+
+        // Final Assembly (Common to all logic paths)
+        query_builder.push(GROUP_BY_LOGIC);
+
+        // Add ORDER BY
+        query_builder.push(" ORDER BY ");
+        query_builder.push(order_by_clause);
+
+        // Add LIMIT and OFFSET
+        query_builder.push(" LIMIT ");
+        query_builder.push_bind(limit); // $... (last)
+        query_builder.push(" OFFSET ");
+        query_builder.push_bind(offset); // $... (very last)
+
+        println!(
+            "Executing SQL for Browse Series Paginated: {}",
+            query_builder.sql()
+        );
+
+        // Execute build queru
+        let record_list = query_builder
+            .build_query_as::<QueryDefaultResult>()
+            .fetch_all(&self.pool)
+            .await
+            .context("Failed to dymanically build and execute series browse query")?;
 
         let total_items = record_list
             .first()
@@ -694,7 +642,7 @@ impl DatabaseService {
     }
 
     // Paginated fetching of user search series
-    pub async fn user_search_paginated_series (
+    pub async fn user_search_paginated_series(
         &self,
         search_query: &str,
     ) -> AnyhowResult<Vec<UserSearchPaginatedSeries>> {
@@ -745,9 +693,9 @@ impl DatabaseService {
             SIMILARITY_THRESHOLD,
             LIMIT,
         )
-            .fetch_all(&self.pool)
-            .await
-            .context("User failed to search series")?;
+        .fetch_all(&self.pool)
+        .await
+        .context("User failed to search series")?;
 
         Ok(search_list)
     }
