@@ -3,6 +3,9 @@
     import {Check, ChevronDown, RotateCcw, X} from "@lucide/svelte";
     import {Button} from '$lib/components/ui/button';
     import slugify from "slugify";
+    import Pagination from "./Pagination.svelte";
+    import {page} from "$app/state";
+    import {goto} from "$app/navigation";
 
     type BrowseSeriesItem = {
         id: number;
@@ -34,11 +37,15 @@
     let seriesResult = $state<PaginatedResult | null>(null);
     let isLoading = $state(false);
     let error = $state<string | null>(null);
-    let page = $state(1);
     let fetchController: AbortController | null = null;
     let orderBy = $state<SortOrder>('updated');
+    let totalItems = $state(0);
+    let currentPage = $state(1);
+    let searchQuery = $state('');
 
     const PAGE_SIZE = 50;
+    const totalPages = $derived(Math.ceil(totalItems / PAGE_SIZE));
+    const VALID_SORT_ORDERS: SortOrder[] = ['updated', 'new', 'views', 'ratings'];
 
     const includedTags = $derived(
         Object.entries(tagFilterState)
@@ -59,8 +66,20 @@
         ratings: 'Highest Rated',
     }
 
+    function isSortOrder(value: string | null | undefined): value is SortOrder {
+        if (!value) return false;
+        return (VALID_SORT_ORDERS as string[]).includes(value);
+    }
+
     $effect(() => {
         async function fetchTags() {
+            searchQuery = page.url.searchParams.get("search") || '';
+
+            const urlInclude = page.url.searchParams.get("include");
+            const urlExclude = page.url.searchParams.get("exclude");
+            const urlOrderBy = page.url.searchParams.get("order_by");
+            const urlPage = page.url.searchParams.get("page");
+
             try {
                 const response = await fetch('/api/series/tags');
                 if (!response.ok) throw new Error('Failed to fetch tags');
@@ -72,8 +91,42 @@
                 for (const tag of allTags) {
                     initialState[tag.id] = 'neutral';
                 }
+
+                if (urlInclude) {
+                    const includeIds = urlInclude.split(',').map(id => parseInt(id.trim()));
+                    for (const id of includeIds) {
+
+                        if (id in initialState) {
+                            initialState[id] = 'include';
+                        }
+                    }
+                }
+
+                if (urlExclude) {
+                    const excludeIds = urlExclude.split(',').map(id => parseInt(id.trim()));
+                    for (const tag of allTags) {
+                        if (excludeIds.includes(tag.id)) {
+                            initialState[tag.id] = 'exclude';
+                        }
+                    }
+                }
+
                 tagFilterState = initialState;
-                await handleSearch();
+
+                if (isSortOrder(urlOrderBy)) {
+                    orderBy = urlOrderBy;
+                } else {
+                    orderBy = 'updated';
+                }
+
+                // Restore page number from URL
+                if (urlPage) {
+                    const parsedPage = parseInt(urlPage);
+                    if (!isNaN(parsedPage) && parsedPage > 0) {
+                        currentPage = parsedPage;
+                    }
+                }
+                await handleSearch({updateHistory: false});
             } catch (e) {
                 error = e instanceof Error ? e.message : 'An unknown error occurred';
             }
@@ -82,13 +135,42 @@
         fetchTags();
     });
 
+    function updateURL() {
+        const params = new URLSearchParams();
+
+        if (searchQuery.trim()) {
+            params.set('search', searchQuery.trim());
+        }
+
+        if (includedTags.length > 0) {
+            params.set('include', includedTags.join(','));
+        }
+
+        if (excludedTags.length > 0) {
+            params.set('exclude', excludedTags.join(','));
+        }
+
+        if (orderBy !== 'updated') {
+            params.set('order_by', orderBy);
+        }
+
+        if (currentPage > 1) {
+            params.set('page', currentPage.toString());
+        }
+
+        const queryString = params.toString();
+        const newUrl = queryString ? `/browse?${queryString}` : '/browse';
+
+        goto(newUrl, {replaceState: true, noScroll: true, keepFocus: true});
+    }
+
     async function fetchFilteredSeries(signal: AbortSignal) {
         isLoading = true;
         error = null;
 
         try {
             const query = new URLSearchParams({
-                page: page.toString(),
+                page: currentPage.toString(),
                 page_size: PAGE_SIZE.toString(),
                 order_by: orderBy,
             });
@@ -99,6 +181,9 @@
             if (excludedTags.length > 0) {
                 query.set('exclude', excludedTags.join(','));
             }
+            if (searchQuery.trim()) {
+                query.set('search', searchQuery.trim());
+            }
 
             const response = await fetch(`/api/series/browse?${query.toString()}`, {signal});
 
@@ -106,7 +191,9 @@
                 throw new Error(`Server responded with ${response.status}`);
             }
 
-            seriesResult = await response.json();
+            const data: PaginatedResult = await response.json();
+            seriesResult = data;
+            totalItems = data.total_items;
         } catch (e) {
             if (e instanceof Error && e.name !== 'AbortError') {
                 error = e.message;
@@ -118,11 +205,17 @@
         }
     }
 
-    async function handleSearch() {
+    async function handleSearch(options: { updateHistory?: boolean } = {}) {
+        const {updateHistory = true} = options;
+
         if (fetchController) {
             fetchController.abort();
         }
         fetchController = new AbortController();
+
+        if (updateHistory) {
+            updateURL();
+        }
         await fetchFilteredSeries(fetchController.signal);
     }
 
@@ -139,7 +232,7 @@
         }
 
         tagFilterState[tagId] = nextState;
-        page = 1;
+        currentPage = 1;
     }
 
     function resetFilters() {
@@ -148,14 +241,17 @@
             resetState[tag.id] = 'neutral';
         }
         tagFilterState = resetState;
-        page = 1;
+        searchQuery = '';
+        currentPage = 1;
+        orderBy = 'updated';
+
         handleSearch();
     }
 
     function handleSortChange(newOrder: SortOrder) {
         if (orderBy === newOrder) return;
         orderBy = newOrder;
-        page = 1;
+        currentPage = 1;
         handleSearch();
     }
 
@@ -215,21 +311,22 @@
     <title>Browse Series - Manga Reader</title>
 </svelte:head>
 
-<div class="max-w-7xl mx-auto px-1 py-8 text-gray-900 dark:text-white">
+<div class="max-w-5xl mx-auto px-1 py-8 text-gray-900 dark:text-white">
     <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm mb-8">
         <div class="p-4 sm:p-6">
             <h2 class="text-xl sm:text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-                Filter
+                Filter Genres
             </h2>
 
             <hr class="my-4 border-gray-300 dark:border-gray-600"/>
 
             {#if allTags.length > 0}
                 <div class="max-h-[300px] sm:max-h-80 overflow-y-auto">
-                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-x-4 gap-y-2">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-x-4 gap-y-2 max-h-[720px]">
                         {#each allTags as tag (tag.id)}
-                            <button
+                            <Button
                                     type="button"
+                                    variant="ghost"
                                     onclick={() => handleTagClick(tag.id)}
                                     class="flex items-center gap-2 p-1 text-sm font-medium cursor-pointer select-none rounded-md hover:bg-gray-500/10 transition-colors w-full text-left"
                                     aria-pressed={tagFilterState[tag.id] !== 'neutral'}
@@ -250,7 +347,7 @@
                                 <span class="truncate flex-1 {getStateClasses(tagFilterState[tag.id])}">
 									{tag.name}
 								</span>
-                            </button>
+                            </Button>
                         {/each}
                     </div>
                 </div>
@@ -333,7 +430,7 @@
     <div
             class="bg-white dark:bg-gray-800 rounded-lg shadow-sm"
     >
-        <div class="p-4 sm:p-6">
+        <div class="p-4 mt-4 sm:p-6">
             {#if isLoading}
                 <div class="text-center py-12">
                     <div
@@ -397,14 +494,13 @@
                         </a>
                     {/each}
                 </div>
-
-                <div class="mt-8 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <p class="text-sm text-gray-600 dark:text-gray-400 text-center">
-                        Showing {seriesResult.items.length} of {seriesResult.total_items} series
-                    </p>
-                </div>
+                {#if totalPages > 1}
+                    <div class="flex justify-center mt-6">
+                        <Pagination bind:currentPage totalPages={totalPages}/>
+                    </div>
+                {/if}
             {:else}
-                <div class="text-center py-12 px-4">
+                <div class="text-center py-2 px-2">
                     <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-8 max-w-md mx-auto">
                         <h3 class="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
                             No Results Found
@@ -413,7 +509,7 @@
                                 onclick={resetFilters}
                                 class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors"
                         >
-                            <RotateCcw size={16}/>
+                            <RotateCcw class="size-5"/>
                             Reset
                         </Button>
                     </div>
