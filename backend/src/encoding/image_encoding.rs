@@ -4,7 +4,6 @@ use ravif::{Encoder, Img};
 use rgb::FromSlice;
 
 /// This function is CPU-intensive and is designed to be run in a blocking thread or parallel iwth rayon
-/// [NOTE]: Using `tokio::task::spawn_blocking` to avoid blocking the async runtime?
 pub fn covert_image_bytes_to_avif(image_bytes: &[u8]) -> Result<Vec<u8>> {
     // Decode the image from memory
     let img = load_from_memory(image_bytes).with_context(
@@ -36,8 +35,7 @@ pub fn covert_image_bytes_to_avif(image_bytes: &[u8]) -> Result<Vec<u8>> {
         encoder.encode_rgb(Img::new(pixels, width, height))
     };
 
-    let avif_data =
-        avif_result.with_context(|| "Failed to encode image to AVIF")?;
+    let avif_data = avif_result.with_context(|| "Failed to encode image to AVIF")?;
 
     println!(
         "[IMAGE ENCODING] Successfully converted image ({}x{}) to AVIF format. Size: {} bytes",

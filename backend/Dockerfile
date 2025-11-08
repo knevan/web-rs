@@ -24,15 +24,19 @@ COPY .sqlx ./.sqlx
 COPY backend/src ./backend/src
 COPY Cargo.toml Cargo.lock ./
 COPY backend/Cargo.toml ./backend/
+#COPY migrations ./migrations
 
-RUN cargo build --release --profile deploy --bin backend
+RUN cargo build --profile deploy --bin backend
 
-FROM debian:trixie-slim AS runtime
+FROM ubuntu:25.04 AS runtime
 WORKDIR /app
 
 # Fix shared libraries: libssl.so.3.
 RUN apt-get update && apt-get install -y libssl3 && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/target/release/backend /usr/local/bin/
+RUN chmod +x backend
+
+EXPOSE 8000
 CMD ["backend"]
 

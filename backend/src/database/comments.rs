@@ -1,13 +1,14 @@
-use super::*;
+use std::collections::{HashMap, HashSet};
+
 use ammonia::Builder;
 use anyhow::anyhow;
 use once_cell::sync::Lazy;
 use pulldown_cmark::{Options, Parser, html};
 use regex::Regex;
-use std::collections::{HashMap, HashSet};
 
-static SPOILER_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\|\|(.*?)\|\|").unwrap());
+use super::*;
+
+static SPOILER_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\|\|(.*?)\|\|").unwrap());
 
 impl DatabaseService {
     // Helper function to transform a flat list of comments into a nested tree structure.
@@ -17,8 +18,7 @@ impl DatabaseService {
         }
 
         // A map to hold all child comments, grouped by their parent's ID for efficient lookup.
-        let mut children_map: HashMap<i64, Vec<Comment>> =
-            HashMap::with_capacity(rows.len());
+        let mut children_map: HashMap<i64, Vec<Comment>> = HashMap::with_capacity(rows.len());
 
         // A vector to store the root-level comments.
         let mut root_comments: Vec<Comment> = Vec::new();
@@ -126,8 +126,8 @@ impl DatabaseService {
 
     fn process_comment_markdown(&self, markdown: &str) -> AnyhowResult<String> {
         // Process spoiler markdown ||spoiler|| to <span>
-        let processed_spoiler_markdown = SPOILER_REGEX
-            .replace_all(markdown, r#"<span class="spoiler-hook">$1</span>"#);
+        let processed_spoiler_markdown =
+            SPOILER_REGEX.replace_all(markdown, r#"<span class="spoiler-hook">$1</span>"#);
 
         let mut options = Options::empty();
         options.insert(Options::ENABLE_STRIKETHROUGH);
@@ -181,7 +181,7 @@ impl DatabaseService {
         comment_id: i64,
         current_user_id: Option<i32>,
     ) -> AnyhowResult<Option<Comment>> {
-        let comment_row:Option<CommentFlatRow> = sqlx::query_as!(
+        let comment_row: Option<CommentFlatRow> = sqlx::query_as!(
             CommentFlatRow,
             r#"
             WITH vote_summary AS (
@@ -226,9 +226,9 @@ impl DatabaseService {
             comment_id,
             current_user_id
         )
-            .fetch_optional(&self.pool)
-            .await
-            .context("Failed to fetch comment by its id")?;
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to fetch comment by its id")?;
 
         Ok(comment_row.map(Comment::from))
     }
@@ -270,13 +270,13 @@ impl DatabaseService {
         if !attachment_keys.is_empty() {
             for key in attachment_keys {
                 sqlx::query!(
-                "INSERT INTO comment_attachments (comment_id, file_url) VALUES ($1, $2)",
-                new_comment_id,
-                key
-            )
-                    .execute(&mut *tx)
-                    .await
-                    .context("Failed to insert comment attachment")?;
+                    "INSERT INTO comment_attachments (comment_id, file_url) VALUES ($1, $2)",
+                    new_comment_id,
+                    key
+                )
+                .execute(&mut *tx)
+                .await
+                .context("Failed to insert comment attachment")?;
             }
         }
 
@@ -291,8 +291,7 @@ impl DatabaseService {
         user_id: i32,
         new_content_markdown: &str,
     ) -> AnyhowResult<Option<String>> {
-        let new_content_html =
-            self.process_comment_markdown(new_content_markdown)?;
+        let new_content_html = self.process_comment_markdown(new_content_markdown)?;
 
         let updated_html = sqlx::query_scalar!(
             r#"
@@ -334,9 +333,9 @@ impl DatabaseService {
             comment_id,
             user_id
         )
-            .fetch_optional(&mut *tx)
-            .await
-            .context("Failed to fetch comment vote")?;
+        .fetch_optional(&mut *tx)
+        .await
+        .context("Failed to fetch comment vote")?;
 
         let mut final_user_vote: Option<i16> = Some(vote_type);
 
@@ -348,9 +347,9 @@ impl DatabaseService {
                 comment_id,
                 user_id
             )
-                .execute(&mut *tx)
-                .await
-                .context("Failed to delete comment")?;
+            .execute(&mut *tx)
+            .await
+            .context("Failed to delete comment")?;
             final_user_vote = None;
         } else {
             // New vote or changing vote
@@ -364,9 +363,9 @@ impl DatabaseService {
                 user_id,
                 vote_type
             )
-                .execute(&mut *tx)
-                .await
-                .context("Failed to insert comment")?;
+            .execute(&mut *tx)
+            .await
+            .context("Failed to insert comment")?;
         }
 
         // Recalculate new total votes for comment

@@ -9,14 +9,13 @@ opt-level = 3
 
 [profile.deploy]
 inherits = "release"
-
 debug = false
 opt-level = 3
 strip = "none"
 overflow-checks = false
 debug-assertions = false
 rpath = false
-lto = "fat"
-panic = "unwind"
+lto = "thin"
+panic = "abort"
 codegen-units = 1
 incremental = false
