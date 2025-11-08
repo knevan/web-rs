@@ -4,8 +4,7 @@
     import {Button} from '$lib/components/ui/button';
     import slugify from "slugify";
     import Pagination from "./Pagination.svelte";
-    import {page} from "$app/state";
-    import {goto} from "$app/navigation";
+    import {parseAsArrayOf, parseAsInteger, parseAsString, parseAsStringEnum, useQueryState} from "nuqs-svelte";
 
     type BrowseSeriesItem = {
         id: number;
@@ -38,26 +37,23 @@
     let isLoading = $state(false);
     let error = $state<string | null>(null);
     let fetchController: AbortController | null = null;
-    let orderBy = $state<SortOrder>('updated');
     let totalItems = $state(0);
-    let currentPage = $state(1);
-    let searchQuery = $state('');
+    let autoFetch = $state(true);
 
     const PAGE_SIZE = 50;
     const totalPages = $derived(Math.ceil(totalItems / PAGE_SIZE));
-    const VALID_SORT_ORDERS: SortOrder[] = ['updated', 'new', 'views', 'ratings'];
 
-    const includedTags = $derived(
-        Object.entries(tagFilterState)
-            .filter(([, state]) => state === 'include')
-            .map(([id]) => +id)
-    );
-
-    const excludedTags = $derived(
-        Object.entries(tagFilterState)
-            .filter(([, state]) => state === 'exclude')
-            .map(([id]) => +id)
-    );
+    const searchQuery = useQueryState('search', parseAsString.withDefault(''));
+    const orderBy = useQueryState('sort', parseAsStringEnum<SortOrder>(['updated', 'new', 'views', 'ratings']).withDefault('updated').withOptions({
+        history: "push",
+        shallow: false
+    }));
+    const includedTags = useQueryState('include', parseAsArrayOf(parseAsInteger).withDefault([]));
+    const excludedTags = useQueryState('exclude', parseAsArrayOf(parseAsInteger).withDefault([]));
+    const currentPage = useQueryState('page', parseAsInteger.withDefault(1).withOptions({
+        history: "push",
+        shallow: false
+    }));
 
     const sortLabels: Record<SortOrder, string> = {
         updated: 'Last Updated',
@@ -66,20 +62,8 @@
         ratings: 'Highest Rated',
     }
 
-    function isSortOrder(value: string | null | undefined): value is SortOrder {
-        if (!value) return false;
-        return (VALID_SORT_ORDERS as string[]).includes(value);
-    }
-
     $effect(() => {
         async function fetchTags() {
-            searchQuery = page.url.searchParams.get("search") || '';
-
-            const urlInclude = page.url.searchParams.get("include");
-            const urlExclude = page.url.searchParams.get("exclude");
-            const urlOrderBy = page.url.searchParams.get("order_by");
-            const urlPage = page.url.searchParams.get("page");
-
             try {
                 const response = await fetch('/api/series/tags');
                 if (!response.ok) throw new Error('Failed to fetch tags');
@@ -92,41 +76,21 @@
                     initialState[tag.id] = 'neutral';
                 }
 
-                if (urlInclude) {
-                    const includeIds = urlInclude.split(',').map(id => parseInt(id.trim()));
-                    for (const id of includeIds) {
-
-                        if (id in initialState) {
-                            initialState[id] = 'include';
-                        }
+                // Restore filter state from URL
+                includedTags.current.forEach(id => {
+                    if (initialState[id] !== undefined) {
+                        initialState[id] = 'include';
                     }
-                }
+                })
 
-                if (urlExclude) {
-                    const excludeIds = urlExclude.split(',').map(id => parseInt(id.trim()));
-                    for (const tag of allTags) {
-                        if (excludeIds.includes(tag.id)) {
-                            initialState[tag.id] = 'exclude';
-                        }
+                excludedTags.current.forEach(id => {
+                    if (initialState[id] !== undefined) {
+                        initialState[id] = 'exclude';
                     }
-                }
+                })
 
                 tagFilterState = initialState;
-
-                if (isSortOrder(urlOrderBy)) {
-                    orderBy = urlOrderBy;
-                } else {
-                    orderBy = 'updated';
-                }
-
-                // Restore page number from URL
-                if (urlPage) {
-                    const parsedPage = parseInt(urlPage);
-                    if (!isNaN(parsedPage) && parsedPage > 0) {
-                        currentPage = parsedPage;
-                    }
-                }
-                await handleSearch({updateHistory: false});
+                await handleSearch();
             } catch (e) {
                 error = e instanceof Error ? e.message : 'An unknown error occurred';
             }
@@ -135,34 +99,18 @@
         fetchTags();
     });
 
-    function updateURL() {
-        const params = new URLSearchParams();
+    // Auto-fetch when URL params change
+    $effect(() => {
+        const deps = [
+            orderBy.current,
+            searchQuery.current,
+            currentPage.current,
+        ]
 
-        if (searchQuery.trim()) {
-            params.set('search', searchQuery.trim());
+        if (allTags.length > 0 && autoFetch) {
+            handleSearch();
         }
-
-        if (includedTags.length > 0) {
-            params.set('include', includedTags.join(','));
-        }
-
-        if (excludedTags.length > 0) {
-            params.set('exclude', excludedTags.join(','));
-        }
-
-        if (orderBy !== 'updated') {
-            params.set('order_by', orderBy);
-        }
-
-        if (currentPage > 1) {
-            params.set('page', currentPage.toString());
-        }
-
-        const queryString = params.toString();
-        const newUrl = queryString ? `/browse?${queryString}` : '/browse';
-
-        goto(newUrl, {replaceState: true, noScroll: true, keepFocus: true});
-    }
+    })
 
     async function fetchFilteredSeries(signal: AbortSignal) {
         isLoading = true;
@@ -170,19 +118,19 @@
 
         try {
             const query = new URLSearchParams({
-                page: currentPage.toString(),
+                page: currentPage.current.toString(),
                 page_size: PAGE_SIZE.toString(),
-                order_by: orderBy,
+                order_by: orderBy.current,
             });
 
-            if (includedTags.length > 0) {
-                query.set('include', includedTags.join(','));
+            if (includedTags.current.length > 0) {
+                query.set('include', includedTags.current.join(','));
             }
-            if (excludedTags.length > 0) {
-                query.set('exclude', excludedTags.join(','));
+            if (excludedTags.current.length > 0) {
+                query.set('exclude', excludedTags.current.join(','));
             }
-            if (searchQuery.trim()) {
-                query.set('search', searchQuery.trim());
+            if (searchQuery.current.trim()) {
+                query.set('search', searchQuery.current.trim());
             }
 
             const response = await fetch(`/api/series/browse?${query.toString()}`, {signal});
@@ -205,21 +153,20 @@
         }
     }
 
-    async function handleSearch(options: { updateHistory?: boolean } = {}) {
-        const {updateHistory = true} = options;
+    async function handleSearch() {
+        autoFetch = true;
 
         if (fetchController) {
             fetchController.abort();
         }
         fetchController = new AbortController();
 
-        if (updateHistory) {
-            updateURL();
-        }
         await fetchFilteredSeries(fetchController.signal);
     }
 
     function handleTagClick(tagId: number) {
+        autoFetch = false;
+
         const currentState = tagFilterState[tagId];
         let nextState: FilterState = 'neutral';
 
@@ -232,7 +179,17 @@
         }
 
         tagFilterState[tagId] = nextState;
-        currentPage = 1;
+
+        const newInclude = Object.entries(tagFilterState)
+            .filter(([, state]) => state === 'include')
+            .map(([id]) => +id);
+
+        const newExclude = Object.entries(tagFilterState)
+            .filter(([, state]) => state === 'exclude')
+            .map(([id]) => +id);
+
+        includedTags.current = newInclude;
+        excludedTags.current = newExclude;
     }
 
     function resetFilters() {
@@ -241,18 +198,20 @@
             resetState[tag.id] = 'neutral';
         }
         tagFilterState = resetState;
-        searchQuery = '';
-        currentPage = 1;
-        orderBy = 'updated';
+
+        searchQuery.current = '';
+        includedTags.current = [];
+        excludedTags.current = [];
+        orderBy.current = 'updated';
+        currentPage.current = 1;
 
         handleSearch();
     }
 
     function handleSortChange(newOrder: SortOrder) {
-        if (orderBy === newOrder) return;
-        orderBy = newOrder;
-        currentPage = 1;
-        handleSearch();
+        if (orderBy.current === newOrder) return;
+        orderBy.current = newOrder;
+        currentPage.current = 1;
     }
 
     function getStateClasses(state: FilterState): string {
@@ -311,9 +270,9 @@
     <title>Browse Series - Manga Reader</title>
 </svelte:head>
 
-<div class="max-w-5xl mx-auto px-1 py-8 text-gray-900 dark:text-white">
+<div class="w-full max-w-5xl mx-auto px-1 py-8 text-gray-900 dark:text-white">
     <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm mb-8">
-        <div class="p-4 sm:p-6">
+        <div class="p-4">
             <h2 class="text-xl sm:text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
                 Filter Genres
             </h2>
@@ -368,22 +327,22 @@
                     </Button>
                 </div>
 
-                {#if includedTags.length > 0 || excludedTags.length > 0}
+                {#if includedTags.current.length > 0 || excludedTags.current.length > 0}
                     <div
                             class="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg"
                     >
                         <div class="text-sm text-blue-800 dark:text-blue-200">
                             <span class="font-medium">Active Filters:</span>
-                            {#if includedTags.length > 0}
+                            {#if includedTags.current.length > 0}
 								<span class="ml-2">
 									<span class="text-green-600 dark:text-green-400 font-medium">Include:</span>
-                                    {includedTags.length} tags
+                                    {includedTags.current.length} tags
 								</span>
                             {/if}
-                            {#if excludedTags.length > 0}
+                            {#if excludedTags.current.length > 0}
 								<span class="ml-2">
 									<span class="text-red-600 dark:text-red-400 font-medium">Exclude:</span>
-                                    {excludedTags.length} tags
+                                    {excludedTags.current.length} tags
 								</span>
                             {/if}
                         </div>
@@ -406,7 +365,7 @@
         <DropdownMenu.Root>
             <DropdownMenu.Trigger>
                 <Button variant="outline" class="w-[140px] justify-between">
-                    {sortLabels[orderBy]}
+                    {sortLabels[orderBy.current]}
                     <ChevronDown class="ml-2 h-4 w-4 shrink-0 opacity-50"/>
                 </Button>
             </DropdownMenu.Trigger>
@@ -428,7 +387,7 @@
     </div>
 
     <div
-            class="bg-white dark:bg-gray-800 rounded-lg shadow-sm"
+            class="mt-5 mb-8 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
     >
         <div class="p-4 mt-4 sm:p-6">
             {#if isLoading}
@@ -496,12 +455,12 @@
                 </div>
                 {#if totalPages > 1}
                     <div class="flex justify-center mt-6">
-                        <Pagination bind:currentPage totalPages={totalPages}/>
+                        <Pagination bind:currentPage={currentPage.current} totalPages={totalPages}/>
                     </div>
                 {/if}
             {:else}
-                <div class="text-center py-2 px-2">
-                    <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-8 max-w-md mx-auto">
+                <div class="text-center max-w-5xl py-10">
+                    <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-8">
                         <h3 class="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
                             No Results Found
                         </h3>

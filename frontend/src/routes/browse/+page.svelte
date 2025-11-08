@@ -1,4 +1,7 @@
-<div>
-    <h1>Browse Page</h1>
-    <p>This is the main browse page content.</p>
+<script>
+    import BrowseSeries from "$lib/components/BrowseSeries.svelte";
+</script>
+
+<div class="flex h-screen w-full">
+    <BrowseSeries/>
 </div>
