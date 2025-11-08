@@ -1,11 +1,13 @@
-<script>
+<script lang="ts">
     import Header from '$lib/components/Header.svelte';
-    import Footer from '$lib/components/Footer.svelte';
     import '../app.css'
-    /*import '.style.css';*/
     import {auth} from "$lib/store/auth.js";
     import {Toaster} from "$lib/components/ui/sonner/index.js";
     import {ModeWatcher} from "mode-watcher";
+    import Footer from "$lib/components/Footer.svelte";
+    import {search} from '$lib/store/searchStore.svelte';
+    import SearchSeries from '$lib/components/SearchSeries.svelte';
+    import {NuqsAdapter} from "nuqs-svelte/adapters/svelte-kit";
 
     let {data, children} = $props();
 
@@ -26,7 +28,6 @@
             })
         }
     })
-
 </script>
 
 <ModeWatcher/>
@@ -44,5 +45,12 @@
 />
 
 <Header/>
-{@render children()}
-
+{#if search.isOpen}
+    <div class="w-full bg-[--background] px-2">
+        <SearchSeries/>
+    </div>
+{/if}
+<NuqsAdapter>
+    {@render children()}
+</NuqsAdapter>
+<Footer/>

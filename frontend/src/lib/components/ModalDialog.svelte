@@ -56,8 +56,8 @@
     </Dialog.Trigger>
     <Dialog.Content class={dialogClass}>
         <Dialog.Header>
-            <Dialog.Title>{title}</Dialog.Title>
-            <Dialog.Description>{description}</Dialog.Description>
+            <Dialog.Title class="text-left">{title}</Dialog.Title>
+            <Dialog.Description class="text-left">{description}</Dialog.Description>
         </Dialog.Header>
 
         {#if children}
@@ -70,18 +70,20 @@
                     {@render footer()}
                 {/if}
             {:else}
-                {#if showCancelButton}
-                    <Dialog.Close>
-                        <Button variant="outline" onclick={onCancel}>
-                            {cancelText}
+                <div class="flex w-full justify-end gap-2">
+                    {#if showCancelButton}
+                        <Dialog.Close>
+                            <Button variant="outline" onclick={onCancel}>
+                                {cancelText}
+                            </Button>
+                        </Dialog.Close>
+                    {/if}
+                    {#if showConfirmButton}
+                        <Button onclick={onConfirm} disabled={disableConfirm}>
+                            {confirmText}
                         </Button>
-                    </Dialog.Close>
-                {/if}
-                {#if showConfirmButton}
-                    <Button onclick={onConfirm} disabled={disableConfirm}>
-                        {confirmText}
-                    </Button>
-                {/if}
+                    {/if}
+                </div>
             {/if}
         </Dialog.Footer>
     </Dialog.Content>

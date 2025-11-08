@@ -1,4 +1,3 @@
-<!--<link rel="stylesheet" href="../../app.css">-->
 <script>
     let {children} = $props();
 </script>
