@@ -1,14 +1,15 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use reqwest::Client;
 use slug::slugify;
-use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tokio::task;
 
 use crate::common::utils::random_sleep_time;
 use crate::database::storage::StorageClient;
 use crate::database::{ChapterStatus, DatabaseService, Series};
-use crate::encoding::image_encoding;
+use crate::processing::image_encoding;
 use crate::scraping::model::SiteScrapingConfig;
 use crate::scraping::{fetcher, parser};
 
@@ -69,8 +70,7 @@ pub async fn process_single_chapter(
     config: &SiteScrapingConfig,
     db_service: &DatabaseService,
 ) -> Result<Option<f32>> {
-    let convert_chapter_number =
-        chapter_info.number.to_string().replace('.', "-");
+    let convert_chapter_number = chapter_info.number.to_string().replace('.', "-");
 
     let consistent_title = format!("{}-eng", convert_chapter_number);
 
@@ -92,17 +92,13 @@ pub async fn process_single_chapter(
         chapter_info.number, chapter_id
     );
 
-    let html_content =
-        fetcher::fetch_html(http_client, &chapter_info.url).await?;
+    let html_content = fetcher::fetch_html(http_client, &chapter_info.url).await?;
 
     // Pause before start processing images
     random_sleep_time(1, 3).await;
 
-    let image_urls = parser::extract_image_urls_from_html_content(
-        &html_content,
-        &chapter_info.url,
-        config,
-    )?;
+    let image_urls =
+        parser::extract_image_urls_from_html_content(&html_content, &chapter_info.url, config)?;
 
     let total_image_found = image_urls.len();
 
@@ -128,18 +124,22 @@ pub async fn process_single_chapter(
 
         let task = tokio::spawn(async move {
             // This will wait until a permit is available from the semaphore
-            let _permit = permit_semaphore.acquire_owned().await.unwrap();
+            let _permit = match permit_semaphore.acquire_owned().await {
+                Ok(permit) => permit,
+                Err(e) => {
+                    eprintln!(
+                        "[COORDINATOR-TASK][Ch:{}] Failed to acquire semaphore permit: {}. This indicates a critical logic error.",
+                        chapter_number_str, e
+                    );
+                    return (index, Err(anyhow::anyhow!("Failed to acquire semaphore")));
+                }
+            };
 
             // Pause random delay before task
             //random_sleep_time(1, 2).await;
 
             // The processing pipeline: fetch -> encode -> upload
-            let image_bytes = match fetcher::fetch_image_bytes(
-                &http_client,
-                &img_url,
-            )
-            .await
-            {
+            let image_bytes = match fetcher::fetch_image_bytes(&http_client, &img_url).await {
                 Ok(bytes) => bytes,
                 Err(e) => {
                     eprintln!(
@@ -157,16 +157,10 @@ pub async fn process_single_chapter(
             {
                 Ok(Ok(bytes)) => bytes,
                 Ok(Err(e)) => {
-                    return (
-                        index,
-                        Err(anyhow::anyhow!("Encoding failed: {}", e)),
-                    );
+                    return (index, Err(anyhow::anyhow!("Encoding failed: {}", e)));
                 }
                 Err(e) => {
-                    return (
-                        index,
-                        Err(anyhow::anyhow!("Encoding task panicked: {}", e)),
-                    );
+                    return (index, Err(anyhow::anyhow!("Encoding task panicked: {}", e)));
                 }
             };
 
@@ -179,11 +173,7 @@ pub async fn process_single_chapter(
 
             // Upload to R2
             if let Err(e) = storage_client
-                .upload_image_series_objects(
-                    &object_key,
-                    avif_bytes,
-                    "image/avif",
-                )
+                .upload_image_series_objects(&object_key, avif_bytes, "image/avif")
                 .await
             {
                 eprintln!("[TASK] Failed to upload to R2: {}", e);
@@ -211,10 +201,7 @@ pub async fn process_single_chapter(
             }
             // Task panicked
             Err(join_err) => {
-                eprintln!(
-                    "[COORDINATOR] Processing task panicked: {}",
-                    join_err
-                );
+                eprintln!("[COORDINATOR] Processing task panicked: {}", join_err);
             }
         }
     }
@@ -226,11 +213,7 @@ pub async fn process_single_chapter(
     for (original_index, key_to_save) in &successful_uploads {
         // Save CDN object key to the database if successful
         if db_service
-            .add_chapter_images(
-                chapter_id,
-                (*original_index + 1) as i32,
-                key_to_save,
-            )
+            .add_chapter_images(chapter_id, (*original_index + 1) as i32, key_to_save)
             .await
             .is_err()
         {
@@ -253,6 +236,7 @@ pub async fn process_single_chapter(
         total_image_found > 0,
         image_saved_count == total_image_found,
     ) {
+        // Complete chapter images
         (true, true) => {
             db_service
                 .update_chapter_status(chapter_id, ChapterStatus::Available)

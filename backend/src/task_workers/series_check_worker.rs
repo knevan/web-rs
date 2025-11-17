@@ -1,11 +1,13 @@
-use crate::app::orchestrator;
-use crate::database::storage::StorageClient;
-use crate::database::{DatabaseService, Series, SeriesStatus};
-use crate::scraping::model::SitesConfig;
-use arc_swap::ArcSwap;
-use reqwest::Client;
 use std::sync::Arc;
 use std::time::Duration;
+
+use arc_swap::ArcSwap;
+use reqwest::Client;
+
+use crate::database::storage::StorageClient;
+use crate::database::{DatabaseService, Series, SeriesStatus};
+use crate::processing::orchestrator;
+use crate::scraping::model::SitesConfig;
 
 #[derive(Debug)]
 pub struct SeriesCheckJob {
@@ -47,10 +49,7 @@ pub async fn run_series_check_scheduler(
                     break;
                 }
                 Err(e) => {
-                    eprintln!(
-                        "[SERIES-SCHEDULER] Error finding {}. Retrying later",
-                        e
-                    );
+                    eprintln!("[SERIES-SCHEDULER] Error finding {}. Retrying later", e);
                     break;
                 }
             }
@@ -101,11 +100,7 @@ pub async fn run_series_check_worker(
         };
 
         if let Err(e) = db_service
-            .update_series_check_schedule(
-                series.id,
-                Some(final_status),
-                next_check_time,
-            )
+            .update_series_check_schedule(series.id, Some(final_status), next_check_time)
             .await
         {
             eprintln!(

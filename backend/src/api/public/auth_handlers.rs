@@ -1,12 +1,3 @@
-use crate::api::extractor::AuthenticatedUser;
-use crate::builder::startup::AppState;
-use crate::common::email_service::send_password_reset_email;
-use crate::common::error::AuthError;
-use crate::common::hashing::{hash_password, verify_password};
-use crate::common::jwt::{
-    RefreshClaims, create_access_jwt, create_refresh_jwt,
-};
-use crate::database::DatabaseService;
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -17,16 +8,21 @@ use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::api::extractor::{AuthenticatedUser, Role};
+use crate::builder::startup::AppState;
+use crate::common::email_service::send_password_reset_email;
+use crate::common::error::AuthError;
+use crate::common::hashing::{hash_password, verify_password};
+use crate::common::jwt::{RefreshClaims, create_access_jwt, create_refresh_jwt};
+use crate::database::DatabaseService;
+
 #[derive(Serialize)]
 pub struct GenericMessageResponse {
     message: String,
 }
 
 // Helper function to get role name string from role id
-async fn get_role_name(
-    db_service: &DatabaseService,
-    role_id: i32,
-) -> Result<String, AuthError> {
+async fn get_role_name(db_service: &DatabaseService, role_id: i32) -> Result<String, AuthError> {
     db_service
         .get_role_name_by_id(role_id)
         .await
@@ -38,6 +34,91 @@ async fn get_role_name(
             error!("Role with id {} not found.", role_id);
             AuthError::InternalServerError
         })
+}
+
+#[derive(Deserialize)]
+pub struct RegisterPayload {
+    username: String,
+    email: String,
+    password: String,
+}
+
+impl RegisterPayload {
+    fn validate_input(&self) -> Result<(), AuthError> {
+        if self.username.trim().len() < 4 {
+            return Err(AuthError::InvalidCharacter(
+                "Username should be at least 4 characters long.".to_string(),
+            ));
+        }
+        if self.email.is_empty() || self.password.is_empty() {
+            return Err(AuthError::MissingCredentials);
+        }
+
+        Ok(())
+    }
+}
+
+/// Register new user
+/// Its checks for uniqueness and create a new user in the database
+pub async fn register_new_user_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<RegisterPayload>,
+) -> Result<(StatusCode, Json<GenericMessageResponse>), AuthError> {
+    let db_service = &state.db_service;
+
+    // Validate input
+    payload.validate_input()?;
+
+    // Check if user/username already exists in the database
+    if db_service
+        .get_user_by_identifier(&payload.username)
+        .await?
+        .is_some()
+    {
+        return Err(AuthError::UserAlreadyExists {
+            field: "username".to_string(),
+        });
+    }
+
+    if db_service
+        .get_user_by_identifier(&payload.email)
+        .await?
+        .is_some()
+    {
+        return Err(AuthError::UserAlreadyExists {
+            field: "email".to_string(),
+        });
+    }
+
+    let hashed_password =
+        hash_password(&payload.password).map_err(|_err| AuthError::InternalServerError)?;
+
+    // Get the ID for the default 'user' role.
+    let user_role_id = db_service
+        .get_role_id_by_name("user")
+        .await
+        .map_err(|_err| AuthError::InternalServerError)?
+        .ok_or_else(|| {
+            error!("Default 'user' role not found in the database.");
+            AuthError::InternalServerError
+        })?;
+
+    // Create a new user in the database
+    let _new_user = db_service
+        .create_user(
+            &payload.username,
+            &payload.email,
+            &hashed_password,
+            user_role_id,
+        )
+        .await
+        .map_err(|_err| AuthError::InternalServerError)?;
+
+    let response = GenericMessageResponse {
+        message: "User registered successfully".to_string(),
+    };
+
+    Ok((StatusCode::CREATED, Json(response)))
 }
 
 // Struct for Responses
@@ -71,8 +152,8 @@ impl LoginRequest {
     }
 }
 
-// Accepts a `CookieJar` and return modified `CookieJar`
-// with the token set as a cookie
+/// Login authenticated user with credential verification
+/// Return access and refresh tokens as HTTP-only cookies
 pub async fn login_handler(
     jar: CookieJar,
     State(state): State<AppState>,
@@ -91,14 +172,11 @@ pub async fn login_handler(
         })?
         .ok_or(AuthError::WrongCredentials)?;
 
-    let is_password_valid = verify_password(
-        &payload.password,
-        &user.password_hash,
-    )
-    .map_err(|_| {
-        error!("Password verification failed for user {}", user.username);
-        AuthError::WrongCredentials
-    })?;
+    let is_password_valid =
+        verify_password(&payload.password, &user.password_hash).map_err(|_err| {
+            error!("Password verification failed for user {}", user.username);
+            AuthError::WrongCredentials
+        })?;
 
     if !is_password_valid {
         return Err(AuthError::WrongCredentials);
@@ -106,8 +184,7 @@ pub async fn login_handler(
 
     let role_name = get_role_name(db_service, user.role_id).await?;
 
-    let access_token =
-        create_access_jwt(user.username.clone(), role_name.clone())?;
+    let access_token = create_access_jwt(user.username.clone(), role_name.clone())?;
     let refresh_token = create_refresh_jwt(user.username.clone())?;
 
     // Set cookie
@@ -143,6 +220,8 @@ pub async fn login_handler(
     Ok((new_jar, Json(response)))
 }
 
+/// Logout the user by clearing the token cookies
+/// Clear access dan refresh token from the browser
 pub async fn logout_handler(
     jar: CookieJar,
 ) -> Result<(CookieJar, Json<GenericMessageResponse>), AuthError> {
@@ -170,7 +249,9 @@ pub async fn logout_handler(
     Ok((new_jar, Json(response_body)))
 }
 
-pub async fn refresh_token_handler(
+/// Refresh the access token using a valid refresh token.
+/// Return a new access token in a cookie
+pub async fn refresh_access_token_handler(
     jar: CookieJar,
     State(state): State<AppState>,
     claims: RefreshClaims,
@@ -179,20 +260,19 @@ pub async fn refresh_token_handler(
         .db_service
         .get_user_by_identifier(&claims.sub)
         .await
-        .map_err(|_| AuthError::InvalidToken)?
+        .map_err(|_err| AuthError::InvalidToken)?
         .ok_or(AuthError::InvalidRefreshToken)?;
 
     let role_name = get_role_name(&state.db_service, user.role_id).await?;
 
-    let new_access_token =
-        create_access_jwt(claims.sub.clone(), role_name.clone())?;
+    let new_access_token = create_access_jwt(claims.sub.clone(), role_name.clone())?;
 
     let new_access_cookie = Cookie::build(("token", new_access_token))
         .path("/")
         .http_only(true)
         .secure(false) // Only send via HTTPS (disable for local development)
         .same_site(SameSite::Lax)
-        .max_age(time::Duration::minutes(15))
+        .max_age(time::Duration::minutes(30))
         .build();
 
     let new_jar = jar.add(new_access_cookie);
@@ -208,9 +288,8 @@ pub struct UserResponse {
     user: UserData,
 }
 
-/// Protected handler. `Claims` acts as a guard.
+/// Protected endpoint that returns authenticated user data
 pub async fn protected_handler(
-    State(state): State<AppState>,
     user: AuthenticatedUser,
 ) -> Result<(StatusCode, Json<UserResponse>), AuthError> {
     println!(
@@ -218,12 +297,12 @@ pub async fn protected_handler(
         user.username
     );
 
-    let role_name = get_role_name(&state.db_service, user.role_id).await?;
+    let role_name = user.role.to_name();
 
     let user_data = UserData {
         id: user.id,
         username: user.username,
-        role: role_name,
+        role: role_name.to_string(),
     };
 
     let response = UserResponse { user: user_data };
@@ -252,8 +331,7 @@ impl ResetPasswordRequest {
     }
 }
 
-// Handler for the password reset request
-// Finds a user by email, generates a token, and in a real app, sends an email.
+/// Handler for nitiate password reset by sending reset token to email
 pub async fn forgot_password_handler(
     State(state): State<AppState>,
     Json(payload): Json<ForgotPasswordRequest>,
@@ -265,18 +343,14 @@ pub async fn forgot_password_handler(
         .await
     {
         let unique_reset_token = Uuid::new_v4().to_string();
-        let expired_at = Utc::now() + Duration::hours(1);
+        let expired_at = Utc::now() + Duration::minutes(10);
 
         // Store reset token in the database
         state
             .db_service
-            .create_password_reset_token(
-                user.id,
-                &unique_reset_token,
-                expired_at,
-            )
+            .create_password_reset_token(user.id, &unique_reset_token, expired_at)
             .await
-            .map_err(|_| AuthError::InternalServerError)?;
+            .map_err(|_err| AuthError::InternalServerError)?;
 
         // Send the password reset email
         if let Err(e) = send_password_reset_email(
@@ -303,7 +377,7 @@ pub async fn forgot_password_handler(
     Ok(Json(response))
 }
 
-// Handler for finalizing password reset with token
+/// Handler for finalizing password reset using valid reset token
 pub async fn reset_password_handler(
     State(state): State<AppState>,
     Json(payload): Json<ResetPasswordRequest>,
@@ -315,25 +389,23 @@ pub async fn reset_password_handler(
     let (user_id, expires_at) = db_service
         .get_user_by_reset_token(&payload.token)
         .await?
-        .ok_or(AuthError::InvalidCredentials)?;
+        .ok_or(AuthError::InvalidToken)?;
 
+    // Clean up the expired token
     if Utc::now() > expires_at {
         db_service
             .delete_password_reset_token(&payload.token)
             .await?;
-        return Err(AuthError::MissingCredentials);
+        return Err(AuthError::InvalidToken);
     }
 
-    let hashed_password = hash_password(&payload.new_password)
-        .map_err(|_| AuthError::InvalidCredentials)?;
+    let hashed_password =
+        hash_password(&payload.new_password).map_err(|_err| AuthError::InternalServerError)?;
 
     db_service
-        .update_user_password_hash_after_reset_password(
-            user_id,
-            &hashed_password,
-        )
+        .update_user_password_hash_after_reset_password(user_id, &hashed_password)
         .await
-        .map_err(|_| AuthError::InternalServerError)?;
+        .map_err(|_err| AuthError::InternalServerError)?;
 
     db_service
         .delete_password_reset_token(&payload.token)
@@ -347,92 +419,6 @@ pub async fn reset_password_handler(
 }
 
 #[derive(Deserialize)]
-pub struct RegisterPayload {
-    username: String,
-    email: String,
-    password: String,
-}
-
-impl RegisterPayload {
-    fn validate_input(&self) -> Result<(), AuthError> {
-        if self.username.trim().len() < 4 {
-            return Err(AuthError::InvalidCharacter(
-                "Username should be at least 4 characters long.".to_string(),
-            ));
-        }
-        if self.email.is_empty() || self.password.is_empty() {
-            return Err(AuthError::MissingCredentials);
-        }
-
-        Ok(())
-    }
-}
-
-/// it checks for uniqueness and create new user in the database
-pub async fn register_new_user_handler(
-    State(state): State<AppState>,
-    Json(payload): Json<RegisterPayload>,
-) -> Result<(StatusCode, Json<GenericMessageResponse>), AuthError> {
-    let db_service = &state.db_service;
-
-    // Validate input
-    payload.validate_input()?;
-
-    // Check if user already exists in the database
-    // We use existing `get_user_by_identifier` method
-    if db_service
-        .get_user_by_identifier(&payload.username)
-        .await?
-        .is_some()
-    {
-        return Err(AuthError::UserAlreadyExists {
-            field: "username".to_string(),
-        });
-    }
-    if db_service
-        .get_user_by_identifier(&payload.email)
-        .await?
-        .is_some()
-    {
-        return Err(AuthError::UserAlreadyExists {
-            field: "email".to_string(),
-        });
-    }
-
-    // Hash the password before storing it in the database
-    let hashed_password = hash_password(&payload.password)
-        .map_err(|_| AuthError::InternalServerError)?;
-
-    // Get the ID for the default 'user' role.
-    let user_role_id = db_service
-        .get_role_id_by_name("user")
-        .await
-        .map_err(|_| AuthError::InternalServerError)?
-        .ok_or_else(|| {
-            error!("Default 'user' role not found in the database.");
-            AuthError::InternalServerError
-        })?;
-
-    // Create a new user in the database
-    let _new_user = db_service
-        .create_user(
-            &payload.username,
-            &payload.email,
-            &hashed_password,
-            user_role_id,
-        )
-        .await
-        .map_err(|_| AuthError::InternalServerError)?;
-
-    // Return success response
-    let response = GenericMessageResponse {
-        message: "User registered successfully".to_string(),
-    };
-
-    Ok((StatusCode::CREATED, Json(response)))
-}
-
-#[derive(Deserialize)]
 pub struct CheckUsernamePayload {
     username: String,
 }
@@ -443,6 +429,8 @@ pub struct CheckUsernameResponse {
     message: String,
 }
 
+/// Check if username already taken
+/// This aims to guarantee username uniqueness
 pub async fn realtime_check_username_handler(
     State(state): State<AppState>,
     Json(payload): Json<CheckUsernamePayload>,
@@ -453,8 +441,7 @@ pub async fn realtime_check_username_handler(
     if payload.username.trim().len() < 4 {
         let response = CheckUsernameResponse {
             available: false,
-            message: "Username should be at least 4 characters long"
-                .to_string(),
+            message: "Username should be at least 4 characters long".to_string(),
         };
         return (StatusCode::BAD_REQUEST, Json(response));
     }
@@ -483,9 +470,7 @@ pub async fn realtime_check_username_handler(
             );
             let response = CheckUsernameResponse {
                 available: false,
-                message:
-                    "Error checking username availability. Please try again"
-                        .to_string(),
+                message: "Error checking username availability. Please try again".to_string(),
             };
             (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
         }

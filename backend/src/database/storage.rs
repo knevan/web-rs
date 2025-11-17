@@ -1,9 +1,10 @@
+use std::env;
+
 use anyhow::{Context, Result, anyhow};
 use aws_sdk_s3::Client;
 use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::types::{Delete, Error as S3Error, ObjectIdentifier};
-use std::env;
 
 /// A client for interacting with an S3-compatible object storage like Cloudflare R2.
 #[derive(Clone)]
@@ -22,10 +23,10 @@ impl StorageClient {
     /// - `R2_SECRET_ACCESS_KEY`: Your R2 secret access key.
     /// - `R2_DOMAIN_CDN_URL`: The public URL of your bucket (https://pub-xxxxxxxx.r2.dev or your custom domain).
     pub async fn new_from_env() -> Result<Self> {
-        let bucket_name = env::var("R2_BUCKET_NAME")
-            .context("Environment variable R2_BUCKET_NAME is not set")?;
-        let account_id = env::var("R2_ACCOUNT_ID")
-            .context("Environment variable R2_ACCOUNT_ID is not set")?;
+        let bucket_name =
+            env::var("R2_BUCKET_NAME").context("Environment variable R2_BUCKET_NAME is not set")?;
+        let account_id =
+            env::var("R2_ACCOUNT_ID").context("Environment variable R2_ACCOUNT_ID is not set")?;
         let access_key_id = env::var("R2_ACCESS_KEY_ID")
             .context("Environment variable R2_ACCESS_KEY_ID is not set")?;
         let secret_access_key = env::var("R2_SECRET_ACCESS_KEY")
@@ -36,8 +37,7 @@ impl StorageClient {
         let domain_cdn_url = domain_cdn_url.trim_end_matches('/').to_string();
 
         // Construct the S3 endpoint URL for Cloudflare R2
-        let endpoint_url =
-            format!("https://{account_id}.r2.cloudflarestorage.com");
+        let endpoint_url = format!("https://{account_id}.r2.cloudflarestorage.com");
 
         // Create a static credentials provider
         let credentials = Credentials::new(
@@ -98,12 +98,7 @@ impl StorageClient {
             .content_type(content_type)
             .send()
             .await
-            .with_context(|| {
-                format!(
-                    "Failed to upload object with key '{}' to R2 bucket",
-                    key
-                )
-            })?;
+            .with_context(|| format!("Failed to upload object with key '{}' to R2 bucket", key))?;
 
         // Construct the public URL
         let public_url = format!("{}/{}", self.domain_cdn_url, key);
@@ -132,9 +127,7 @@ impl StorageClient {
         let delete_payload = Delete::builder()
             .set_objects(Some(objects_to_delete))
             .build()
-            .map_err(|e| {
-                anyhow::anyhow!("Failed to build Delete payload: {}", e)
-            })?;
+            .map_err(|e| anyhow::anyhow!("Failed to build Delete payload: {}", e))?;
 
         // Send the delete_objects request.
         let result = self
@@ -144,9 +137,7 @@ impl StorageClient {
             .delete(delete_payload)
             .send()
             .await
-            .with_context(
-                || "Failed to send delete_objects request to R2 bucket",
-            )?;
+            .with_context(|| "Failed to send delete_objects request to R2 bucket")?;
 
         // Check for "real" errors. Ignore "NoSuchKey" as it means the object is already gone.
         if let Some(errors) = result.errors {

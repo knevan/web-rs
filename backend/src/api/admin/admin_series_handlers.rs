@@ -1,32 +1,26 @@
-use crate::api::extractor::AdminUser;
-use crate::builder::startup::AppState;
-use crate::database::{NewSeriesData, Series, UpdateSeriesData};
-use crate::task_workers::repair_chapter_worker;
-use crate::task_workers::series_check_worker::SeriesCheckJob;
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum_core::__private::tracing::error;
+use axum_core::__private::tracing::{error, warn};
 use axum_core::response::{IntoResponse, Response};
 use axum_extra::extract::Multipart;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Deserialize)]
-pub struct CreateSeriesRequest {
-    title: String,
-    original_title: Option<String>,
-    authors: Option<Vec<String>>,
-    description: String,
-    cover_image_url: String,
-    source_url: String,
-    category_ids: Vec<i32>,
-}
+use crate::api::admin::{
+    CreateCategoryTagRequest, CreateSeriesRequest, PaginatedResponse, PaginationParams,
+    RepairChapterRequest, SeriesResponse, UpdateSeriesRequest, UploadCoverImageResponse,
+};
+use crate::api::extractor::AdminOrHigherUser;
+use crate::builder::startup::AppState;
+use crate::database::{NewSeriesData, Series, UpdateSeriesData};
+use crate::task_workers::repair_chapter_worker;
+use crate::task_workers::series_check_worker::SeriesCheckJob;
 
-// Admin endpoint to create new series
+// Create new series
 pub async fn create_new_series_handler(
-    admin: AdminUser,
+    admin: AdminOrHigherUser,
     State(state): State<AppState>,
     Json(payload): Json<CreateSeriesRequest>,
 ) -> Response {
@@ -52,22 +46,18 @@ pub async fn create_new_series_handler(
     };
 
     // Create new series in DB
-    let new_series_id = match db_service.add_new_series(&new_series_data).await
-    {
+    let new_series_id = match db_service.add_new_series(&new_series_data).await {
         Ok(id) => id,
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"status": "error", "message": e.to_string()}))
+                Json(serde_json::json!({"status": "error", "message": e.to_string()})),
             )
                 .into_response();
         }
     };
 
-    let fetch_new_series: Series = match db_service
-        .get_series_by_id(new_series_id)
-        .await
-    {
+    let fetch_new_series: Series = match db_service.get_series_by_id(new_series_id).await {
         Ok(Some(series)) => series,
         _ => {
             eprintln!("Error fetching new series from DB: {}", new_series_id);
@@ -94,7 +84,6 @@ pub async fn create_new_series_handler(
             new_series_id
         );
     }
-
     (
         StatusCode::CREATED,
         Json(serde_json::json!({"status": "success", "id": new_series_id, "message": "Series created and scheduled for immediate scraping"})),
@@ -102,21 +91,10 @@ pub async fn create_new_series_handler(
         .into_response()
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdateSeriesRequest {
-    title: Option<String>,
-    original_title: Option<String>,
-    authors: Option<Vec<String>>,
-    description: Option<String>,
-    cover_image_url: Option<String>,
-    source_url: Option<String>,
-    category_ids: Option<Vec<i32>>,
-}
-
+// Update existing series data
 pub async fn update_existing_series_handler(
     Path(series_id): Path<i32>,
-    admin: AdminUser,
+    admin: AdminOrHigherUser,
     State(state): State<AppState>,
     Json(payload): Json<UpdateSeriesRequest>,
 ) -> Response {
@@ -160,12 +138,7 @@ pub async fn update_existing_series_handler(
     }
 }
 
-#[derive(Serialize)]
-pub struct UploadResponse {
-    status: String,
-    url: String,
-}
-
+// Upload series cover image
 pub async fn upload_series_cover_image_handler(
     State(state): State<AppState>,
     mut multipart: Multipart,
@@ -192,8 +165,7 @@ pub async fn upload_series_cover_image_handler(
             .and_then(std::ffi::OsStr::to_str)
             .unwrap_or("jpg");
 
-        let unique_image_key =
-            format!("cover-manga/{}.{}", Uuid::new_v4(), file_extension);
+        let unique_image_key = format!("cover-manga/{}.{}", Uuid::new_v4(), file_extension);
 
         match state
             .storage_client
@@ -202,15 +174,10 @@ pub async fn upload_series_cover_image_handler(
         {
             Ok(key) => {
                 // Construct the public URL
-                let public_url = format!(
-                    "{}/{}",
-                    state.storage_client.domain_cdn_url(),
-                    &key
-                );
-
+                let public_url = format!("{}/{}", state.storage_client.domain_cdn_url(), &key);
                 (
                     StatusCode::OK,
-                    Json(UploadResponse {
+                    Json(UploadCoverImageResponse {
                         status: "success".to_string(),
                         url: public_url,
                     }),
@@ -227,51 +194,16 @@ pub async fn upload_series_cover_image_handler(
         }
     } else {
         (
-        StatusCode::BAD_REQUEST,
-        Json(serde_json::json!({"status": "error", "message": "No cover image file found"}))
-    ).into_response()
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"status": "error", "message": "No cover image file found"})),
+        )
+            .into_response()
     }
 }
 
-#[derive(Deserialize)]
-pub struct PaginationParams {
-    #[serde(default = "default_page")]
-    page: u32,
-    #[serde(default = "default_page_size")]
-    page_size: u32,
-    #[serde(default)]
-    search: Option<String>,
-}
-
-fn default_page() -> u32 {
-    1
-}
-fn default_page_size() -> u32 {
-    25
-}
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SeriesResponse {
-    id: i32,
-    title: String,
-    original_title: Option<String>,
-    description: String,
-    cover_image_url: String,
-    source_url: String,
-    authors: Vec<String>,
-    last_updated: String,
-    processing_status: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PaginatedResponse<T: Serialize> {
-    items: Vec<T>,
-    total_items: i64,
-}
-
-pub async fn get_all_series_handler(
-    admin: AdminUser,
+// Fetch all series with pagination
+pub async fn get_all_paginated_series_handler(
+    admin: AdminOrHigherUser,
     State(state): State<AppState>,
     Query(pagination): Query<PaginationParams>,
 ) -> Response {
@@ -282,7 +214,11 @@ pub async fn get_all_series_handler(
 
     match state
         .db_service
-        .get_admin_paginated_series(pagination.page, pagination.page_size, pagination.search.as_deref())
+        .get_admin_paginated_series(
+            pagination.page,
+            pagination.page_size,
+            pagination.search.as_deref(),
+        )
         .await
     {
         Ok(paginated_result) => {
@@ -296,7 +232,13 @@ pub async fn get_all_series_handler(
                     description: s.description,
                     cover_image_url: s.cover_image_url,
                     source_url: s.current_source_url,
-                    authors: serde_json::from_value(s.authors).unwrap_or_else(|_| vec![]),
+                    authors: Vec::<String>::deserialize(&s.authors).unwrap_or_else(|e| {
+                        warn!(
+                            "Failed to deserialize authors for series id {}: {}. Data: {:?}",
+                            s.id, e, s.authors
+                        );
+                        vec![]
+                    }),
                     last_updated: s.updated_at.format("%Y-%m-%d %H:%M:%S").to_string(),
                     processing_status: s.processing_status.to_string(),
                 })
@@ -309,62 +251,17 @@ pub async fn get_all_series_handler(
 
             (StatusCode::OK, Json(response_series_data)).into_response()
         }
-        Err(e) => {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"status": "error", "message": e.to_string()})),
-            )
-                .into_response()
-        }
-    }
-}
-
-pub async fn get_all_users_handler(
-    admin: AdminUser,
-    State(state): State<AppState>,
-    Query(pagination): Query<PaginationParams>,
-) -> Response {
-    println!(
-        "->> {:<12} - get_all_users_handler - user: {}",
-        "HANDLER", admin.0.username
-    );
-
-    match state
-        .db_service
-        .get_paginated_user(
-            pagination.page,
-            pagination.page_size,
-            pagination.search.as_deref(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"status": "error", "message": e.to_string()})),
         )
-        .await
-    {
-        Ok(paginated_result) => {
-            let response_user_data = PaginatedResponse {
-                items: paginated_result.items,
-                total_items: paginated_result.total_items,
-            };
-
-            (StatusCode::OK, Json(response_user_data)).into_response()
-        }
-        Err(e) => {
-            error!("Failed to get paginated users: {:#?}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"status": "error", "message": "Could not retrieve users"})),
-            )
-                .into_response()
-        }
+            .into_response(),
     }
 }
 
-#[derive(Deserialize)]
-pub struct RepairChapterRequest {
-    pub chapter_number: f32,
-    pub new_chapter_url: String,
-}
-
+// Repair chapter
 pub async fn repair_chapter_handler(
-    admin: AdminUser,
+    admin: AdminOrHigherUser,
     Path(series_id): Path<i32>,
     State(state): State<AppState>,
     Json(payload): Json<RepairChapterRequest>,
@@ -399,8 +296,9 @@ pub async fn repair_chapter_handler(
     }
 }
 
+// Delete series
 pub async fn delete_series_handler(
-    admin: AdminUser,
+    admin: AdminOrHigherUser,
     Path(series_id): Path<i32>,
     State(state): State<AppState>,
 ) -> Response {
@@ -436,13 +334,9 @@ pub async fn delete_series_handler(
     }
 }
 
-#[derive(Deserialize)]
-pub struct CreateCategoryTagRequest {
-    pub name: String,
-}
-
+// Create category tag
 pub async fn create_category_tag_handler(
-    admin: AdminUser,
+    admin: AdminOrHigherUser,
     State(state): State<AppState>,
     Json(payload): Json<CreateCategoryTagRequest>,
 ) -> Response {
@@ -452,22 +346,23 @@ pub async fn create_category_tag_handler(
     );
 
     match state.db_service.create_category_tag(&payload.name).await {
-        Ok(new_category) => {
-            (StatusCode::CREATED, Json(serde_json::json!({"status": "success", "category": new_category})),
-            )
-                .into_response()
-        }
+        Ok(new_category) => (
+            StatusCode::CREATED,
+            Json(serde_json::json!({"status": "success", "category": new_category})),
+        )
+            .into_response(),
         Err(e) => {
             // Check for unique violation error from PostgreSQL (code 23505)
             if let Some(sqlx::Error::Database(db_error)) =
                 e.root_cause().downcast_ref::<sqlx::Error>()
-                && db_error.code() == Some(std::borrow::Cow::from("23505")) {
-                    return (
+                && db_error.code() == Some(std::borrow::Cow::from("23505"))
+            {
+                return (
                             StatusCode::CONFLICT,
                             Json(serde_json::json!({"status": "error", "message": "Category tag already exists."})),
                         )
                             .into_response();
-                }
+            }
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"status": "error", "message": e.to_string()})),
@@ -477,8 +372,9 @@ pub async fn create_category_tag_handler(
     }
 }
 
+// Delete category tag
 pub async fn delete_category_tag_handler(
-    admin: AdminUser,
+    admin: AdminOrHigherUser,
     State(state): State<AppState>,
     Path(category_id): Path<i32>,
 ) -> Response {
@@ -507,7 +403,7 @@ pub async fn delete_category_tag_handler(
 }
 
 pub async fn get_list_category_tags_handler(
-    admin: AdminUser,
+    admin: AdminOrHigherUser,
     State(state): State<AppState>,
 ) -> Response {
     println!(
@@ -522,15 +418,16 @@ pub async fn get_list_category_tags_handler(
         )
             .into_response(),
         Err(e) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"status": "error", "message": e.to_string()})),
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"status": "error", "message": e.to_string()})),
         )
             .into_response(),
     }
 }
 
+// Get series category tags
 pub async fn get_series_category_tags_handler(
-    admin: AdminUser,
+    admin: AdminOrHigherUser,
     State(state): State<AppState>,
     Path(series_id): Path<i32>,
 ) -> Response {
@@ -539,14 +436,20 @@ pub async fn get_series_category_tags_handler(
         "HANDLER", admin.0.username, series_id
     );
 
-    match state.db_service.get_category_tag_by_series_id(series_id).await {
+    match state
+        .db_service
+        .get_category_tag_by_series_id(series_id)
+        .await
+    {
         Ok(tags) => (
             StatusCode::OK,
             Json(serde_json::json!({"status": "success", "tags": tags})),
-        ).into_response(),
+        )
+            .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"status": "error", "message": e.to_string()}))
-        ).into_response(),
+            Json(serde_json::json!({"status": "error", "message": e.to_string()})),
+        )
+            .into_response(),
     }
 }
