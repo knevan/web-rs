@@ -361,6 +361,14 @@ pub struct NewCommentPayload {
     pub attachments: Option<Vec<String>>,
 }
 
+#[derive(FromRow, Serialize, Debug)]
+pub struct UpdateCommentResponse {
+    pub id: i64,
+    pub content_user_markdown: String,
+    pub content_html: String,
+    pub updated_at: DateTime<Utc>,
+}
+
 // Payload for voting on a comment.
 #[derive(Debug, Deserialize)]
 pub struct VotePayload {
