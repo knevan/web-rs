@@ -1,4 +1,4 @@
-use axum::routing::{get, patch, post};
+use axum::routing::{delete, get, patch, post};
 use axum::Router;
 
 use crate::api::public::auth_handlers::{
@@ -7,8 +7,8 @@ use crate::api::public::auth_handlers::{
     reset_password_handler,
 };
 use crate::api::public::comments_handlers::{
-    create_chapter_comment_handler, create_series_comment_handler, get_chapter_comment_handler,
-    get_series_comment_handler, update_existing_comment_handler,
+    create_chapter_comment_handler, create_series_comment_handler, delete_comment_handler,
+    get_chapter_comment_handler, get_series_comment_handler, update_existing_comment_handler,
     upload_comment_attachments_handler, vote_on_comment_handler,
 };
 use crate::api::public::series_handlers::{
@@ -97,6 +97,7 @@ pub fn general_api_routes() -> Router<AppState> {
             "/comments/{id}/edit",
             patch(update_existing_comment_handler),
         )
+        .route("/comments/{id}/delete", delete(delete_comment_handler))
         .route("/comments/{id}/vote", post(vote_on_comment_handler))
         .route(
             "/comments/attachments/upload",

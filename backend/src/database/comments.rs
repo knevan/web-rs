@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use ammonia::Builder;
 use anyhow::anyhow;
 use once_cell::sync::Lazy;
-use pulldown_cmark::{Options, Parser, html};
+use pulldown_cmark::{html, Options, Parser};
 use regex::Regex;
 
 use super::*;
@@ -290,10 +290,11 @@ impl DatabaseService {
         comment_id: i64,
         user_id: i32,
         new_content_markdown: &str,
-    ) -> AnyhowResult<Option<String>> {
+    ) -> AnyhowResult<Option<UpdateCommentResponse>> {
         let new_content_html = self.process_comment_markdown(new_content_markdown)?;
 
-        let updated_html = sqlx::query_scalar!(
+        let updated_html = sqlx::query_as!(
+            UpdateCommentResponse,
             r#"
             UPDATE comments
             SET
@@ -301,7 +302,7 @@ impl DatabaseService {
                 content_html = $2,
                 updated_at = NOW()
             WHERE id = $3 AND user_id = $4
-            RETURNING content_html
+            RETURNING id, content_user_markdown, content_html, updated_at
             "#,
             new_content_markdown,
             new_content_html,
@@ -313,6 +314,104 @@ impl DatabaseService {
         .context("Failed to update existing comment")?;
 
         Ok(updated_html)
+    }
+
+    pub async fn delete_comment(
+        &self,
+        comment_id: i64,
+        user_id: i32,
+    ) -> AnyhowResult<(bool, Vec<String>)> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to start transaction")?;
+
+        // Fetch all attachment keys associated with this comment *before* deletion.
+        let attachment_object_key: Vec<String> = sqlx::query_scalar!(
+            "SELECT file_url FROM comment_attachments WHERE comment_id = $1",
+            comment_id
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .context("Failed to fetch attachment keys")?;
+
+        // Check if comment has replies
+        let has_replies: bool = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS(
+                SELECT 1 FROM comments WHERE parent_id = $1 AND deleted_at IS NULL
+            )
+            "#,
+            comment_id
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .context("Failed to check for replies")?
+        .context("EXISTS query returned NULL, which should not happen")?;
+
+        let rows_affected: u64;
+
+        if has_replies {
+            let soft_delete_result = sqlx::query!(
+                r#"
+                UPDATE comments
+                SET
+                    content_user_markdown = '',
+                    content_html = '<p>[Deleted]</p>', -- Or any placeholder
+                    deleted_at = NOW(),
+                    updated_at = NOW()
+                WHERE id = $1 AND user_id = $2
+                "#,
+                comment_id,
+                user_id
+            )
+            .execute(&mut *tx)
+            .await
+            .context("Failed to soft delete comment")?;
+
+            rows_affected = soft_delete_result.rows_affected();
+
+            if rows_affected > 0 {
+                // Since this is an UPDATE, ON DELETE CASCADE won't trigger
+                // Manually delete the attachments
+                if let Err(e) = sqlx::query!(
+                    "DELETE FROM comment_attachments WHERE comment_id = $1",
+                    comment_id
+                )
+                .execute(&mut *tx)
+                .await
+                {
+                    tx.rollback().await.context("Failed to delete comment")?;
+                    return Err(anyhow!(e).context("Failed to delete comment attachments"));
+                }
+            }
+        } else {
+            // No replies. We can safely delete the comment row.
+            // Attachment will automatically deleted by `ON DELETE CASCADE`
+            let hard_delete_result = sqlx::query!(
+                r#"
+                DELETE FROM comments
+                WHERE id = $1 AND user_id = $2
+                "#,
+                comment_id,
+                user_id
+            )
+            .execute(&mut *tx)
+            .await
+            .context("Failed to delete comment")?;
+
+            rows_affected = hard_delete_result.rows_affected();
+        }
+
+        if rows_affected == 0 {
+            tx.rollback().await.context("Failed to delete comment")?;
+            return Ok((false, Vec::new()));
+        }
+
+        tx.commit().await.context("Failed to commit transaction")?;
+
+        Ok((true, attachment_object_key))
     }
 
     pub async fn vote_on_comment(
