@@ -4,9 +4,9 @@ use arc_swap::ArcSwap;
 use reqwest::Client;
 use tokio::sync::mpsc;
 
-use crate::app::orchestrator::repair_specific_chapter_series;
 use crate::database::DatabaseService;
 use crate::database::storage::StorageClient;
+use crate::processing::orchestrator::repair_specific_chapter_series;
 use crate::scraping::model::SitesConfig;
 
 #[derive(Debug)]

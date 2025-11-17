@@ -5,10 +5,10 @@ use anyhow::{Result, anyhow};
 use reqwest::Client;
 use url::Url;
 
-use crate::app::coordinator;
 use crate::common::utils::random_sleep_time;
 use crate::database::storage::StorageClient;
 use crate::database::{DatabaseService, Series};
+use crate::processing::coordinator;
 use crate::scraping::fetcher;
 use crate::scraping::model::SitesConfig;
 use crate::scraping::parser::{ChapterInfo, ChapterParser};

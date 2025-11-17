@@ -8,7 +8,7 @@ use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::api::extractor::AuthenticatedUser;
+use crate::api::extractor::{AuthenticatedUser, Role};
 use crate::builder::startup::AppState;
 use crate::common::email_service::send_password_reset_email;
 use crate::common::error::AuthError;
@@ -91,13 +91,13 @@ pub async fn register_new_user_handler(
     }
 
     let hashed_password =
-        hash_password(&payload.password).map_err(|_| AuthError::InternalServerError)?;
+        hash_password(&payload.password).map_err(|_err| AuthError::InternalServerError)?;
 
     // Get the ID for the default 'user' role.
     let user_role_id = db_service
         .get_role_id_by_name("user")
         .await
-        .map_err(|_| AuthError::InternalServerError)?
+        .map_err(|_err| AuthError::InternalServerError)?
         .ok_or_else(|| {
             error!("Default 'user' role not found in the database.");
             AuthError::InternalServerError
@@ -112,7 +112,7 @@ pub async fn register_new_user_handler(
             user_role_id,
         )
         .await
-        .map_err(|_| AuthError::InternalServerError)?;
+        .map_err(|_err| AuthError::InternalServerError)?;
 
     let response = GenericMessageResponse {
         message: "User registered successfully".to_string(),
@@ -173,7 +173,7 @@ pub async fn login_handler(
         .ok_or(AuthError::WrongCredentials)?;
 
     let is_password_valid =
-        verify_password(&payload.password, &user.password_hash).map_err(|_| {
+        verify_password(&payload.password, &user.password_hash).map_err(|_err| {
             error!("Password verification failed for user {}", user.username);
             AuthError::WrongCredentials
         })?;
@@ -260,7 +260,7 @@ pub async fn refresh_access_token_handler(
         .db_service
         .get_user_by_identifier(&claims.sub)
         .await
-        .map_err(|_| AuthError::InvalidToken)?
+        .map_err(|_err| AuthError::InvalidToken)?
         .ok_or(AuthError::InvalidRefreshToken)?;
 
     let role_name = get_role_name(&state.db_service, user.role_id).await?;
@@ -290,7 +290,6 @@ pub struct UserResponse {
 
 /// Protected endpoint that returns authenticated user data
 pub async fn protected_handler(
-    State(state): State<AppState>,
     user: AuthenticatedUser,
 ) -> Result<(StatusCode, Json<UserResponse>), AuthError> {
     println!(
@@ -298,12 +297,12 @@ pub async fn protected_handler(
         user.username
     );
 
-    let role_name = get_role_name(&state.db_service, user.role_id).await?;
+    let role_name = user.role.to_name();
 
     let user_data = UserData {
         id: user.id,
         username: user.username,
-        role: role_name,
+        role: role_name.to_string(),
     };
 
     let response = UserResponse { user: user_data };
@@ -351,7 +350,7 @@ pub async fn forgot_password_handler(
             .db_service
             .create_password_reset_token(user.id, &unique_reset_token, expired_at)
             .await
-            .map_err(|_| AuthError::InternalServerError)?;
+            .map_err(|_err| AuthError::InternalServerError)?;
 
         // Send the password reset email
         if let Err(e) = send_password_reset_email(
@@ -401,12 +400,12 @@ pub async fn reset_password_handler(
     }
 
     let hashed_password =
-        hash_password(&payload.new_password).map_err(|_| AuthError::InternalServerError)?;
+        hash_password(&payload.new_password).map_err(|_err| AuthError::InternalServerError)?;
 
     db_service
         .update_user_password_hash_after_reset_password(user_id, &hashed_password)
         .await
-        .map_err(|_| AuthError::InternalServerError)?;
+        .map_err(|_err| AuthError::InternalServerError)?;
 
     db_service
         .delete_password_reset_token(&payload.token)

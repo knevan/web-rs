@@ -1,6 +1,6 @@
 use anyhow::Context;
-use sqlx::QueryBuilder;
 use sqlx::postgres::types::PgInterval;
+use sqlx::QueryBuilder;
 
 use super::*;
 
