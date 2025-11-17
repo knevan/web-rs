@@ -1,4 +1,4 @@
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 
 use super::*;
 
@@ -300,7 +300,7 @@ impl DatabaseService {
                 sqlx::query_as!(
                     QueryResult,
                     r#"
-                WITH base_search AS (
+                    WITH base_search AS (
                     SELECT
                         s.id, s.title, s.original_title, s.description, s.cover_image_url,
                         s.current_source_url, s.updated_at, s.processing_status,
@@ -311,44 +311,44 @@ impl DatabaseService {
                         s.title ILIKE '%' || $3 || '%'
                     OR
                         (s.title % $3 AND similarity(s.title, $3) >= $4)
-                ),
-                ranked_results AS (
+                    ),
+                    ranked_results AS (
+                        SELECT
+                            *,
+                            CASE
+                                WHEN title ILIKE $3 THEN 10
+                                WHEN title ILIKE $3 || '%' THEN 8
+                                WHEN title ILIKE '%' || $3 || '%' THEN 6
+                                ELSE 4
+                            END as search_rank
+                        FROM base_search
+                    ),
+                    total_count AS (
+                        SELECT COUNT(*) AS total FROM ranked_results
+                    )
                     SELECT
-                        *,
-                        CASE
-                            WHEN title ILIKE $3 THEN 10
-                            WHEN title ILIKE $3 || '%' THEN 8
-                            WHEN title ILIKE '%' || $3 || '%' THEN 6
-                            ELSE 4
-                        END as search_rank
-                    FROM base_search
-                ),
-                total_count AS (
-                    SELECT COUNT(*) AS total FROM ranked_results
-                )
-                SELECT
-                    rr.id, rr.title, rr.original_title, rr.description,
-                    rr.cover_image_url, rr.current_source_url, rr.updated_at,
-                    rr.processing_status as "processing_status: SeriesStatus",
-                    -- Aggregate author names into a JSON array for each series
-                    COALESCE(
-                        json_agg(a.name) FILTER (WHERE a.id IS NOT NULL),
-                        '[]'::json
-                    ) AS "authors!",
-                    tc.total as total_items
-                FROM ranked_results rr
-                CROSS JOIN total_count tc
-                LEFT JOIN series_authors sa ON rr.id = sa.series_id
-                LEFT JOIN authors a ON sa.author_id = a.id
-                GROUP BY
-                    rr.id, rr.title, rr.original_title, rr.description, rr.cover_image_url,
-                    rr.current_source_url, rr.updated_at, rr.processing_status,
-                    rr.search_rank, rr.sim_score, tc.total
-                -- Order by the best rank, then by similarity, then by ID for stable sorting
-                ORDER BY rr.search_rank DESC, rr.sim_score DESC, rr.id ASC
-                LIMIT $1
-                OFFSET $2
-                "#,
+                        rr.id, rr.title, rr.original_title, rr.description,
+                        rr.cover_image_url, rr.current_source_url, rr.updated_at,
+                        rr.processing_status as "processing_status: SeriesStatus",
+                        -- Aggregate author names into a JSON array for each series
+                        COALESCE(
+                            json_agg(a.name) FILTER (WHERE a.id IS NOT NULL),
+                            '[]'::json
+                        ) AS "authors!",
+                        tc.total as total_items
+                    FROM ranked_results rr
+                    CROSS JOIN total_count tc
+                    LEFT JOIN series_authors sa ON rr.id = sa.series_id
+                    LEFT JOIN authors a ON sa.author_id = a.id
+                    GROUP BY
+                        rr.id, rr.title, rr.original_title, rr.description, rr.cover_image_url,
+                        rr.current_source_url, rr.updated_at, rr.processing_status,
+                        rr.search_rank, rr.sim_score, tc.total
+                    -- Order by the best rank, then by similarity, then by ID for stable sorting
+                    ORDER BY rr.search_rank DESC, rr.sim_score DESC, rr.id ASC
+                    LIMIT $1
+                    OFFSET $2
+                    "#,
                     limit,
                     offset,
                     search_match,
