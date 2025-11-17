@@ -35,7 +35,7 @@ pub fn hash_password(password: &str) -> Result<String, PwHashError> {
         config.parallelism,
         None,
     )
-    .map_err(|_| PwHashError::ParamNameInvalid)?;
+    .map_err(|_err| PwHashError::ParamNameInvalid)?;
 
     let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
 

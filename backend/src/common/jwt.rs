@@ -56,7 +56,9 @@ where
     type Rejection = AuthError;
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         // Extract cookie jar from request
-        let jar = CookieJar::from_request_parts(parts, state).await.unwrap();
+        let jar = CookieJar::from_request_parts(parts, state)
+            .await
+            .map_err(|_err| AuthError::InvalidToken)?;
 
         // Get a Cookie named "token"
         let token_cookie = jar.get("token").ok_or(AuthError::InvalidToken)?;
@@ -67,7 +69,7 @@ where
         validation.algorithms = vec![Algorithm::HS512];
 
         let token_data = decode::<Claims>(token, &KEYS.decoding, &validation)
-            .map_err(|_| AuthError::InvalidToken)?;
+            .map_err(|_err| AuthError::InvalidToken)?;
 
         Ok(token_data.claims)
     }
@@ -80,7 +82,9 @@ where
 {
     type Rejection = AuthError;
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let jar = CookieJar::from_request_parts(parts, state).await.unwrap();
+        let jar = CookieJar::from_request_parts(parts, state)
+            .await
+            .map_err(|_err| AuthError::InvalidToken)?;
 
         let refresh_token_cookie = jar.get("refresh-token").ok_or(AuthError::InvalidToken)?;
         let refresh_token = refresh_token_cookie.value();
@@ -90,7 +94,7 @@ where
         validation.algorithms = vec![Algorithm::HS512];
 
         let token_data = decode::<RefreshClaims>(refresh_token, &KEYS.decoding, &validation)
-            .map_err(|_| AuthError::InvalidToken)?;
+            .map_err(|_err| AuthError::InvalidToken)?;
 
         Ok(token_data.claims)
     }
@@ -113,7 +117,7 @@ pub fn create_access_jwt(user_id: String, role: String) -> Result<String, AuthEr
 
     // Specify HS512 algorithm in the header
     encode(&Header::new(Algorithm::HS512), &claims, &KEYS.encoding)
-        .map_err(|_| AuthError::TokenCreation)
+        .map_err(|_err| AuthError::TokenCreation)
 }
 
 /// Create refresh jwt token for a given user ID (refresh token)
@@ -131,5 +135,5 @@ pub fn create_refresh_jwt(user_id: String) -> Result<String, AuthError> {
     };
 
     encode(&Header::new(Algorithm::HS512), &claims, &KEYS.encoding)
-        .map_err(|_| AuthError::TokenCreation)
+        .map_err(|_err| AuthError::TokenCreation)
 }

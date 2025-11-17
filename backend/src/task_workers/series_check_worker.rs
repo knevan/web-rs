@@ -4,9 +4,9 @@ use std::time::Duration;
 use arc_swap::ArcSwap;
 use reqwest::Client;
 
-use crate::app::orchestrator;
 use crate::database::storage::StorageClient;
 use crate::database::{DatabaseService, Series, SeriesStatus};
+use crate::processing::orchestrator;
 use crate::scraping::model::SitesConfig;
 
 #[derive(Debug)]

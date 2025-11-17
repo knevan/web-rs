@@ -73,7 +73,7 @@ pub async fn run(
 
     // CORS Configuration
     let frontend_origin =
-        env::var("FRONTEND_ORIGIN").unwrap_or_else(|_| "http://localhost:1998".to_string());
+        env::var("FRONTEND_ORIGIN").unwrap_or_else(|_err| "http://localhost:1998".to_string());
 
     let cors = CorsLayer::new()
         .allow_methods([
@@ -100,7 +100,7 @@ pub async fn run(
     // Setup App router
     // Initialize the router and attach the authentication routes
     let app = Router::new()
-        .merge(api::routes::routes())
+        .merge(api::routes::merged_routes())
         .layer(
             ServiceBuilder::new()
                 .layer(CompressionLayer::new())

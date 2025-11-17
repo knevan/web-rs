@@ -189,14 +189,9 @@ impl ChapterParser {
         let mut chapters: Vec<ChapterInfo> = chapter_map.into_values().collect();
 
         // Sort chapters by their number to ensure correct processing order
-        chapters.sort_by(|a, b| {
-            a.number
-                .partial_cmp(&b.number)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        chapters.sort_by(|a, b| a.number.total_cmp(&b.number));
 
         println!("[FULL SCAN] Found {} unique chapters", chapters.len());
-
         Ok(chapters)
     }
 }
@@ -231,7 +226,7 @@ pub fn extract_image_urls_from_html_content(
         }
         // Try to resolve as a relative URL first, then fall back to parsing as is
         utils::to_absolute_url(base_chapter_url_relative_path, trimmed_src)
-            .or_else(|_| Url::parse(trimmed_src).map(|u| u.to_string()))
+            .or_else(|_err| Url::parse(trimmed_src).map(|u| u.to_string()))
             .ok()
     };
 

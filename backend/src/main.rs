@@ -2,11 +2,10 @@
 extern crate core;
 
 mod api;
-mod app;
 mod builder;
 mod common;
 mod database;
-mod encoding;
+mod processing;
 mod scraping;
 mod task_workers;
 

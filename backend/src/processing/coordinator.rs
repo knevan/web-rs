@@ -9,7 +9,7 @@ use tokio::task;
 use crate::common::utils::random_sleep_time;
 use crate::database::storage::StorageClient;
 use crate::database::{ChapterStatus, DatabaseService, Series};
-use crate::encoding::image_encoding;
+use crate::processing::image_encoding;
 use crate::scraping::model::SiteScrapingConfig;
 use crate::scraping::{fetcher, parser};
 
@@ -124,7 +124,16 @@ pub async fn process_single_chapter(
 
         let task = tokio::spawn(async move {
             // This will wait until a permit is available from the semaphore
-            let _permit = permit_semaphore.acquire_owned().await.unwrap();
+            let _permit = match permit_semaphore.acquire_owned().await {
+                Ok(permit) => permit,
+                Err(e) => {
+                    eprintln!(
+                        "[COORDINATOR-TASK][Ch:{}] Failed to acquire semaphore permit: {}. This indicates a critical logic error.",
+                        chapter_number_str, e
+                    );
+                    return (index, Err(anyhow::anyhow!("Failed to acquire semaphore")));
+                }
+            };
 
             // Pause random delay before task
             //random_sleep_time(1, 2).await;
@@ -227,6 +236,7 @@ pub async fn process_single_chapter(
         total_image_found > 0,
         image_saved_count == total_image_found,
     ) {
+        // Complete chapter images
         (true, true) => {
             db_service
                 .update_chapter_status(chapter_id, ChapterStatus::Available)
