@@ -1,5 +1,5 @@
-use axum::Json;
 use axum::http::StatusCode;
+use axum::Json;
 use axum_core::response::{IntoResponse, Response};
 
 // Custom error type definition
@@ -7,7 +7,6 @@ pub enum AuthError {
     InvalidToken,
     WrongCredentials,
     MissingCredentials,
-    InvalidCredentials,
     TokenCreation,
     InvalidRefreshToken,
     InvalidCharacter(String),
@@ -21,7 +20,6 @@ impl IntoResponse for AuthError {
         let (status, error_message) = match self {
             AuthError::WrongCredentials => (StatusCode::UNAUTHORIZED, "Invalid credentials"),
             AuthError::MissingCredentials => (StatusCode::BAD_REQUEST, "Missing credentials"),
-            AuthError::InvalidCredentials => (StatusCode::BAD_REQUEST, "Missing credentials"),
             AuthError::TokenCreation => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create token")
             }

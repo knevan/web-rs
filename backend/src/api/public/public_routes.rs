@@ -97,7 +97,7 @@ pub fn general_api_routes() -> Router<AppState> {
             "/comments/{id}/edit",
             patch(update_existing_comment_handler),
         )
-        .route("/comments/{id}/delete", delete(delete_comment_handler))
+        .route("/comments/{id}/deleted", delete(delete_comment_handler))
         .route("/comments/{id}/vote", post(vote_on_comment_handler))
         .route(
             "/comments/attachments/upload",

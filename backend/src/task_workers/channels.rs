@@ -4,15 +4,15 @@ use arc_swap::ArcSwap;
 use reqwest::Client;
 use tokio::sync::mpsc;
 
-use crate::database::DatabaseService;
 use crate::database::storage::StorageClient;
+use crate::database::DatabaseService;
 use crate::scraping::model::SitesConfig;
 use crate::task_workers::delete_password_reset_token_worker::run_cleanup_password_reset_token_worker;
 use crate::task_workers::delete_series_worker::{run_deletion_scheduler, run_deletion_worker};
 use crate::task_workers::log_view_cleanup_worker::run_log_view_cleanup_worker;
-use crate::task_workers::repair_chapter_worker::{RepairChapterMsg, run_repair_chapter_worker};
+use crate::task_workers::repair_chapter_worker::{run_repair_chapter_worker, RepairChapterMsg};
 use crate::task_workers::series_check_worker::{
-    SeriesCheckJob, run_series_check_scheduler, run_series_check_worker,
+    run_series_check_scheduler, run_series_check_worker, SeriesCheckJob,
 };
 
 #[derive(Clone)]
@@ -64,16 +64,16 @@ pub fn setup_worker_channels(
     tokio::spawn(run_repair_chapter_worker(
         repair_rx,
         db_service.clone(),
-        storage_client.clone(),
-        http_client.clone(),
-        sites_config.clone(),
+        storage_client,
+        http_client,
+        sites_config,
     ));
 
     // Series Log View cleanup worker
     tokio::spawn(run_log_view_cleanup_worker(db_service.clone()));
 
     // Passowrd reset token cleanup worker
-    tokio::spawn(run_cleanup_password_reset_token_worker(db_service.clone()));
+    tokio::spawn(run_cleanup_password_reset_token_worker(db_service));
 
     OnDemandChannels {
         repair_tx,

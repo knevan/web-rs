@@ -234,8 +234,9 @@ impl DatabaseService {
         .await?;
 
         sqlx::query!(
-            r#"INSERT INTO series_ratings (series_id, user_id, rating) VALUES ($1, $2, $3)
-                ON CONFLICT (user_id, series_id) DO UPDATE SET rating = $3, updated_at = NOW()
+            r#"
+            INSERT INTO series_ratings (series_id, user_id, rating) VALUES ($1, $2, $3)
+            ON CONFLICT (user_id, series_id) DO UPDATE SET rating = $3, updated_at = NOW()
             "#,
             series_id,
             user_id,

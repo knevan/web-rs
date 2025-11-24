@@ -3,8 +3,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use arc_swap::ArcSwap;
-use axum::http::{HeaderValue, Method, header};
-use axum::{Router, serve};
+use axum::http::{header, HeaderValue, Method};
+use axum::{serve, Router};
 use lettre::AsyncSmtpTransport;
 use reqwest::Client;
 use tokio::net::TcpListener;
@@ -16,10 +16,10 @@ use tower_http::timeout::TimeoutLayer;
 
 use crate::api;
 use crate::builder::config_sites_watcher::config_sites_watcher;
-use crate::database::DatabaseService;
 use crate::database::storage::StorageClient;
+use crate::database::DatabaseService;
 use crate::scraping::model::SitesConfig;
-use crate::task_workers::channels::{OnDemandChannels, setup_worker_channels};
+use crate::task_workers::channels::{setup_worker_channels, OnDemandChannels};
 
 // Type definition for Mailer
 pub type Mailer = AsyncSmtpTransport<lettre::Tokio1Executor>;
