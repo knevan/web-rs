@@ -83,7 +83,7 @@
             return {label: 'Discontinued', className: 'text-red-400'};
         }
 
-        return {label: 'Ongoing', className: 'text-green-400'};
+        return {label: 'Ongoing', className: 'text-green-600'};
     });
 
     const averageRating = $derived(
@@ -148,11 +148,7 @@
         const lineHeight = parseFloat(style.lineHeight);
         const maxHeight = lineHeight * MAX_DESCRIPTION_LINES;
 
-        if (element.scrollHeight > maxHeight) {
-            isDescriptionOverflowing = true;
-        } else {
-            isDescriptionOverflowing = false;
-        }
+        isDescriptionOverflowing = element.scrollHeight > maxHeight;
     })
 
     // Fungsi-fungsi ini adalah JavaScript biasa dan tidak terpengaruh oleh Runes.
@@ -337,15 +333,18 @@
         {:else if mangaData}
             <!-- Main Content -->
             <div>
-                <div class="bg-gray-200/0 shadow-sm rounded-none md:rounded-sm p-4 md:p-8 flex flex-col gap-8">
+                <div class="bg-gray-300/10 shadow-sm rounded-sm md:p-6 flex flex-col gap-8">
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-7">
-                        <div class="md:col-span-1 flex justify-center">
-                            <img src={mangaData.series.cover_image_url} alt={mangaData.series.title}
-                                 class="w-full h-auto object-cover rounded-lg shadow-lg max-w-[200px] md:max-w-full aspect-[2/3]"
-                                 style="max-height: 400px;" loading="lazy"/>
+                        <div class="h-[120vh] max-h-90 overflow-hidden md:h-auto md:max-h-[400px]">
+                            <figure class="w-full h-full md:w-auto">
+                                <img src={mangaData.series.cover_image_url}
+                                     alt={`Cover for ${mangaData.series.title}`}
+                                     class="w-full h-full object-cover object-top md:rounded-lg md:shadow-lg md:aspect-[2/3]"
+                                     loading="lazy"/>
+                            </figure>
                         </div>
 
-                        <div class="md:col-span-2 flex flex-col space-y-4">
+                        <div class="md:col-span-2 flex flex-col space-y-4 p-4 -mt-5 md:p-0 md:mt-0">
                             <div class="space-y-2">
                                 <h1 class="text-xl md:text-xl font-medium text-gray-800 dark:text-gray-200 leading-tight">
                                     {mangaData.series.title}
@@ -379,26 +378,26 @@
                                 </div>
                             </div>
 
-                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-1 p-2 bg-dark-secondary rounded-lg">
-                                <div class="text-center flex flex-col items-center gap-x-1">
-                                    <p class="text-md text-gray-800 dark:text-gray-200">Chapters</p>
-                                    <div class="text-xl font-bold text-gray-800 dark:text-gray-200 flex items-center justify-center gap-2">
-                                        {chaptersCount}
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 md:gap-x-4 gap-y-4 md:gap-y-0 p-0.5 md:p-2 bg-dark-secondary rounded-lg">
+                                <div class="flex flex-col items-center justify-center p-3 rounded-lg bg-gray-200/5 border border-gray-700/50 md:bg-transparent md:border-0 md:p-0">
+                                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Chapters</p>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xl font-bold text-gray-800 dark:text-gray-200">{chaptersCount}</span>
                                     </div>
                                 </div>
-                                <div class="text-center flex flex-col items-center gap-x-1">
+                                <div class="text-centergap-x-1 flex flex-col items-center justify-center p-3 rounded-lg bg-gray-200/5 border border-gray-700/50 md:bg-transparent md:border-0 md:p-0">
                                     <p class="text-md text-gray-800 dark:text-gray-200">Views</p>
                                     <div class="text-xl font-bold text-gray-800 dark:text-gray-200 flex items-center justify-center gap-2">
                                         {formatCount(mangaData.series.views_count)}
                                     </div>
                                 </div>
-                                <div class="text-center flex flex-col items-center gap-x-1">
+                                <div class="text-center gap-x-1 flex flex-col items-center justify-center p-3 rounded-lg bg-gray-200/5 border border-gray-700/50 md:bg-transparent md:border-0 md:p-0">
                                     <p class="text-md text-gray-800 dark:text-gray-200">Bookmarked</p>
                                     <div class="text-xl font-bold text-gray-800 dark:text-gray-200 flex items-center justify-center gap-2">
                                         {formatCount(mangaData.series.bookmarks_count)}
                                     </div>
                                 </div>
-                                <div class="text-center flex flex-col items-center gap-x-1">
+                                <div class="text-center gap-x-1 flex flex-col items-center justify-center p-3 rounded-lg bg-gray-200/5 border border-gray-700/50 md:bg-transparent md:border-0 md:p-0">
                                     <p class="text-md text-gray-800 dark:text-gray-200">Status</p>
                                     <div class="text-sm font-bold text-gray-800 dark:text-gray-200 {displayStatus().className}">
                                         {displayStatus().label}
@@ -414,20 +413,26 @@
                             </div>
 
                             <div class="flex items-center gap-2 pt-2">
-                                {#if firstChapter}
-                                    <Button onclick={() => handleChapterClick(firstChapter.chapter_number)} size="lg"
-                                            class="w-1/2 flex text-center cursor-pointer border border-transparent bg-blue-600 hover:bg-blue-700 text-white font-semibold py-6 px-5 rounded-lg transition-colors duration-300 shadow-md"
-                                    >
+                                <Button onclick={() => {if (firstChapter) handleChapterClick(firstChapter.chapter_number); }}
+                                        disabled={!firstChapter}
+                                        size="sm"
+                                        class="flex-1 min-w-0 flex truncate text-center cursor-pointer border border-transparent bg-blue-600 hover:bg-blue-700 text-white font-semibold py-6 px-5 rounded-lg transition-colors duration-300 shadow-md disabled:bg-gray-600 disabled:cursor-not-allowed"
+                                >
                                         <span class="text-base md:text-lg ">
-											Read Chapter {firstChapter.chapter_number}
-										</span>
-                                    </Button>
-                                {/if}
+                                            {#if firstChapter}
+                                                Read Chapter {firstChapter.chapter_number}
+                                            {:else}
+                                                No Chapter
+                                            {/if}
+                                        </span>
+                                </Button>
 
                                 {#if authState.isAuthenticated}
-                                    <Button onclick={handleBookmarkSaveClick} size="lg"
+                                    <Button onclick={handleBookmarkSaveClick}
+                                            size="sm"
+                                            variant="outline"
                                             class={[
-                                                'w-1/2 text-center cursor-pointer border border-gray-400 bg-white/10 backdrop-blur-sm text-gray-800 dark:text-gray-200 hover:bg-white/20 font-semibold py-6 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2',
+                                                'flex-1 min-w-0 text-center truncate cursor-pointer border border-gray-400 bg-white/10 backdrop-blur-sm text-gray-800 dark:text-gray-200 hover:bg-white/20 font-semibold py-6 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2',
                                                 isBookmarked && '!bg-yellow-500 hover:!bg-yellow-600 !border-yellow-500'
                                             ]}
                                     >
@@ -436,10 +441,13 @@
 										</span>
                                     </Button>
                                 {:else}
-                                    <Button onclick={handleLoginClick} size="lg"
+                                    <Button onclick={handleLoginClick}
+                                            size="sm"
                                             variant="outline"
-                                            class="w-1/2 text-center cursor-pointer border border-gray-400 bg-gray-700/20 dark:bg-white/10 backdrop-blur-sm text-gray-800 dark:text-gray-200 hover:bg-white/20 font-semibold py-6 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2">
-                                        <span class="text-base md:text-lg">LOGIN</span>
+                                            class="flex-1 min-w-0 text-center truncate cursor-pointer border border-gray-400 bg-gray-700/20 dark:bg-white/10 backdrop-blur-sm text-gray-800 dark:text-gray-200 hover:bg-white/20 font-semibold py-6 px-5 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2">
+                                        <span class="text-base md:text-lg">
+                                            LOGIN
+                                        </span>
                                     </Button>
                                 {/if}
                             </div>
@@ -462,7 +470,7 @@
                         </div>
                     </div>
                     {#if mangaData.series.description}
-                        <div class="space-y-2 pt-4 border-t border-gray-700/40">
+                        <div class="space-y-2 pt-4 border-t p-4 border-gray-800/80">
                             <h3 class="text-md font-bold text-gray-800 dark:text-gray-200">Description</h3>
                             <p bind:this={descriptionElement}
                                class={[
@@ -474,10 +482,10 @@
                             </p>
                             {#if isDescriptionOverflowing}
                                 <div class="flex justify-end">
-                                    <Button onclick={() => isDescriptionExpanded = !isDescriptionExpanded}
-                                            class="text-blue-400 hover:text-blue-300 font-semibold text-sm">
+                                    <div onclick={() => isDescriptionExpanded = !isDescriptionExpanded}
+                                         class="text-blue-500 hover:text-blue-300 font-semibold text-sm">
                                         {isDescriptionExpanded ? 'Show Less' : 'Read More'}
-                                    </Button>
+                                    </div>
                                 </div>
                             {/if}
                         </div>
@@ -555,8 +563,9 @@
                     </div>
                 {/if}
 
+
                 {#if mangaId}
-                    <div class="bg-gray-200/0 shadow-2xl rounded-none md:rounded-sm md:mt-1 p-4 md:p-8">
+                    <div class="bg-gray-200/0 shadow-2xl rounded-none md:rounded-sm md:mt-1 p-4">
                         <h2 class="text-2xl font-bold mb-1 ml-1 text-gray-800 dark:text-gray-200">
                             Comments
                         </h2>
@@ -566,6 +575,7 @@
                                 currentUser={$auth.user}
                         />
                     </div>
+
                 {/if}
             </div>
         {/if}

@@ -101,7 +101,13 @@
             const data = await response.json();
             availableTags = data.categories || [];
         } catch (error: any) {
-            toast.error("Could not load category tags. Please try again.", {description: error.message});
+            toast.error("Could not load category tags. Please try again.", {
+                position: "top-center",
+                richColors: true,
+                closeButton: false,
+                duration: 2000,
+                description: error.message
+            });
             console.error(error);
         }
     }
@@ -132,7 +138,7 @@
         }
     })
 
-    // Api Interaction
+    // Api upload series cover image
     async function uploadCoverImage(file: File): Promise<string> {
         const formData = new FormData();
         formData.append('file', file);
@@ -299,8 +305,8 @@
                                 {/each}
                             </div>
                         {:else}
-                            <p class="text-sm text-muted-foreground pt-2">No category tags available. Add them in
-                                'Manage Tags'.</p>
+                            <p class="text-sm text-muted-foreground pt-2">
+                                No category tags available. Add them in 'Tags'.</p>
                         {/if}
                     </div>
                 </div>
@@ -372,19 +378,6 @@
 </form>
 
 <style>
-    /*
-    .add-manga {
-        background-color: #3b82f6;
-        color: #ffffff;
-        font-weight: 700;
-        padding: 0.5rem 1rem;
-        border-radius: 0.375rem;
-    }
-
-    .add-manga:hover {
-        background-color: #2563eb;
-    }*/
-
     .custom-scrollbar::-webkit-scrollbar {
         width: 5px;
     }

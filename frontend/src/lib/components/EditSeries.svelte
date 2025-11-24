@@ -52,7 +52,13 @@
             const currentTagIds = (seriesTagsData.tags || []).map((tag: CategoryTags) => tag.id);
             selectedTagsIds = new Set(currentTagIds);
         } catch (error: any) {
-            toast.error('Could not load tag information.', {description: error.message});
+            toast.error('Could not load tag information.', {
+                position: "top-center",
+                richColors: true,
+                closeButton: false,
+                duration: 2000,
+                description: error.message
+            });
             console.error(error);
         }
     }

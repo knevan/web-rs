@@ -6,6 +6,7 @@
 <script lang="ts">
     import SeriesCarousel from '$lib/components/SeriesCarousel.svelte';
     import LatestUpdateSeries from "$lib/components/LatestUpdateSeries.svelte";
+    import Button from '$lib/components/ui/button/button.svelte';
 
     type Manga = {
         id: number;
@@ -65,8 +66,6 @@
         }
         fetchNewSeries();
     });
-
-
 </script>
 
 <div class="w-full space-y-12">
@@ -83,39 +82,47 @@
                 <span>Most Viewed</span>
                 <span>{dynamicText}</span>
             </h2>
-            <div class="flex items-center gap-1 rounded-lg bg-gray-200 dark:bg-gray-700 p-0.5 sm:p-1">
-                <button
+            <div class="flex items-center gap-0.5 rounded-lg bg-gray-200 dark:bg-gray-700 p-0.5 sm:p-1">
+                <Button
                         onclick={() => (selectedPeriod = 'hour')}
-                        class="px-1 py-1 text-xs font-semibold rounded-md transition-colors sm:px-3 sm:text-sm {selectedPeriod === 'hour'
+                        variant="ghost"
+                        size="xs"
+                        class="text-xs font-semibold rounded-md transition-colors sm:px-3 sm:text-sm {selectedPeriod === 'hour'
 						? 'bg-blue-600 text-white shadow'
 						: 'text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}"
                 >
                     Hour
-                </button>
-                <button
+                </Button>
+                <Button
                         onclick={() => (selectedPeriod = 'day')}
-                        class="px-1 py-1 text-xs font-semibold rounded-md transition-colors sm:px-3 sm:text-sm {selectedPeriod === 'day'
+                        variant="ghost"
+                        size="xs"
+                        class="text-xs font-semibold rounded-md transition-colors sm:text-sm {selectedPeriod === 'day'
 						? 'bg-blue-600 text-white shadow'
 						: 'text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}"
                 >
                     Today
-                </button>
-                <button
+                </Button>
+                <Button
                         onclick={() => (selectedPeriod = 'week')}
-                        class="px-1 py-1 text-xs font-semibold rounded-md transition-colors sm:px-3 sm:text-sm {selectedPeriod === 'week'
+                        variant="ghost"
+                        size="xs"
+                        class="text-xs font-semibold rounded-md transition-colors sm:text-sm {selectedPeriod === 'week'
 						? 'bg-blue-600 text-white shadow'
 						: 'text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}"
                 >
                     Week
-                </button>
-                <button
+                </Button>
+                <Button
                         onclick={() => (selectedPeriod = 'month')}
-                        class="px-1 py-1 text-xs font-semibold rounded-md transition-colors sm:px-3 sm:text-sm {selectedPeriod === 'month'
+                        variant="ghost"
+                        size="xs"
+                        class="text-xs font-semibold rounded-md transition-colors sm:text-sm {selectedPeriod === 'month'
 						? 'bg-blue-600 text-white shadow'
 						: 'text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}"
                 >
                     Month
-                </button>
+                </Button>
             </div>
         </div>
         {#if isLoadingMostViewed}
@@ -127,7 +134,7 @@
     <section class="flex flex-col gap-4">
         <div class="flex items-center justify-between">
             <h2 class="text-lg font-bold sm:text-xl">New Series</h2>
-            <a href="/manga/new"
+            <a href="/browse?sort=new"
                class="px-3 py-2 text-sm font-semibold text-white bg-blue-600 rounded-sm shadow transition-colors hover:bg-blue-700">
                 View More
             </a>
@@ -137,6 +144,5 @@
             <SeriesCarousel manga={newSeries}/>
         {/if}
     </section>
-
     <LatestUpdateSeries/>
 </div>

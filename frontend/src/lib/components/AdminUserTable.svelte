@@ -13,8 +13,7 @@
         role_name: string,
     };
 
-    // Props from the parent component. This is correct.
-    let {rowsPerPage = 20, searchQuery = ''} = $props();
+    let {rowsPerPage = 25, searchQuery = ''} = $props();
 
     // Internal state for the component.
     let users = $state<User[] | null>(null);
@@ -26,16 +25,15 @@
     let activeUserId = $state<number | null>(null);
     let deleteUser = $state<User | null>(null);
     let previousSearchQuery = $state(searchQuery);
-    
+
     let totalPages = $derived(Math.ceil(totalItems / rowsPerPage));
 
     async function loadUsers(page: number, query: string, limit: number) {
         isLoading = true;
         errorMessage = null;
         try {
-            const url = new URL('/api/admin/users/list', window.location.origin);
+            const url = new URL('/api/admin/users/paginated/list-search', window.location.origin);
             url.searchParams.set('page', String(page));
-            // Use the 'limit' parameter which comes from rowsPerPage
             url.searchParams.set('pageSize', String(limit));
             if (query) {
                 url.searchParams.set('search', query);
@@ -57,25 +55,18 @@
     }
 
     $effect(() => {
-        // This line establishes a dependency on `searchQuery`.
-        // The effect will re-run whenever `searchQuery` changes.
         searchQuery;
-
-        // By resetting the page here, we ensure that any new search starts from the beginning.
-        // We don't need to check the previous value; the effect itself is the change detector.
         currentPage = 1;
     });
 
-    // Effect 2: This effect is responsible for fetching the data.
     // It will run whenever its dependencies (currentPage, searchQuery, rowsPerPage) change.
     $effect(() => {
-        // Now the logic is clean. We just call loadUsers with the current state of our dependencies.
         loadUsers(currentPage, searchQuery, rowsPerPage);
     });
 </script>
 
 <div class="border bg-card text-card-foreground rounded-lg shadow-sm overflow-x-auto">
-    <table class="series-table text-sm w-full">
+    <table class="text-sm text-left w-full min-w-full">
         <thead class="bg-muted/50 text-muted-foreground uppercase">
         <tr>
             <th scope="col" class="px-4 py-3 text-center">ID</th>
@@ -142,10 +133,3 @@
         <Pagination bind:currentPage totalPages={totalPages}/>
     </div>
 {/if}
-
-<style>
-    .series-table {
-        min-width: 100%;
-        text-align: left;
-    }
-</style>

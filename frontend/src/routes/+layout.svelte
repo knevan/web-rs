@@ -1,37 +1,89 @@
 <script lang="ts">
     import Header from '$lib/components/Header.svelte';
     import '../app.css'
-    import {auth} from "$lib/store/auth.js";
+    import {verifyAuth} from "$lib/store/auth.js";
     import {Toaster} from "$lib/components/ui/sonner/index.js";
     import {ModeWatcher} from "mode-watcher";
     import Footer from "$lib/components/Footer.svelte";
+    import {beforeNavigate} from '$app/navigation';
     import {search} from '$lib/store/searchStore.svelte';
     import SearchSeries from '$lib/components/SearchSeries.svelte';
     import {NuqsAdapter} from "nuqs-svelte/adapters/svelte-kit";
+    import {onMount} from 'svelte';
+    import {browser} from '$app/environment';
+    import {page} from "$app/state";
+    import {toast} from 'svelte-sonner';
 
     let {data, children} = $props();
+    let scrollYToRestore: number | undefined;
 
-    // It will sync the `api` store whenever the `data` from `load` function change
+    beforeNavigate(({from, to}) => {
+        console.log(`DEBUG: SvelteKit is navigating from '${from?.url.pathname}' to '${to?.url.pathname}'.`);
+        console.log('DEBUG: Calling `search.close()` due to navigation.');
+        search.close();
+    });
+
+    // Call verifyAuth() when the layout is first loaded on the client
+    onMount(() => {
+        verifyAuth();
+    });
+
     $effect(() => {
-        if (data.user) {
-            auth.set({
-                isAuthenticated: true,
-                user: data.user,
-                error: null,
-            });
-        } else {
-            // If no user data, set the store to its initial unauthenticated state.
-            auth.set({
-                isAuthenticated: false,
-                user: null,
-                error: null,
-            })
+        if (browser && page.url.searchParams.has('error')) {
+            const errorType = page.url.searchParams.get('error');
+
+            if (errorType === 'unauthorized') {
+                toast.error('Access Denied', {
+                    description: 'Anda tidak memiliki izin untuk mengakses halaman tersebut.',
+                    position: "top-center",
+                    richColors: true,
+                    closeButton: false,
+                    duration: 1500,
+                });
+            }
+
+            // Delete query param from URL
+            const url = new URL(page.url);
+            url.searchParams.delete('error');
+
+            // Replace URL without refreshing the page
+            history.replaceState(history.state, '', url);
         }
     })
+
+    /* Save the scroll position before navigating
+    beforeNavigate((navigation) => {
+        if (navigation.from?.url.pathname === navigation.to?.url.pathname) {
+            return;
+        }
+        savePosition(navigation.from?.url.pathname ?? '/', window.scrollY)
+    })
+
+    afterNavigate(async (navigation) => {
+        if (navigation.type === 'popstate') {
+            scrollYToRestore = getPosition(navigation.to?.url.pathname ?? '/');
+        } else {
+            window.scrollTo({top: 0});
+            scrollYToRestore = undefined;
+        }
+
+        if (scrollYToRestore !== undefined) {
+            await tick();
+            requestAnimationFrame(() => {
+                window.scrollTo({top: scrollYToRestore});
+            });
+        }
+    })*/
+
+    $effect(() => {
+        console.log(
+            'DEBUG: `+layout.svelte` detected a change in `search.isOpen`. New value:',
+            search.isOpen
+        );
+    });
 </script>
 
 <ModeWatcher/>
-
 <Toaster
         richColors
         closeButton
@@ -44,13 +96,15 @@
         }}
 />
 
-<Header/>
-{#if search.isOpen}
-    <div class="w-full bg-[--background] px-2">
-        <SearchSeries/>
-    </div>
-{/if}
-<NuqsAdapter>
-    {@render children()}
-</NuqsAdapter>
-<Footer/>
+<div class="flex min-h-screen min-w-screen w-full flex-col">
+    <Header/>
+    {#if search.isOpen}
+        <div class="w-full bg-[--background] px-2">
+            <SearchSeries/>
+        </div>
+    {/if}
+    <NuqsAdapter>
+        {@render children()}
+    </NuqsAdapter>
+    <Footer/>
+</div>

@@ -1,4 +1,7 @@
 <script lang="ts">
+    import {Button} from "$lib/components/ui/button";
+    import {Input} from "$lib/components/ui/input";
+
     let {
         currentPage = $bindable(),
         totalPages,
@@ -49,7 +52,6 @@
             pages.push({type: 'ellipsis', id: 'right'});
             pages.push(totalPages);
         }
-
         return pages;
     });
 
@@ -95,72 +97,67 @@
             cancelEdit();
         }
     }
-
-    function autoFocusInput(node: HTMLInputElement) {
-        node.focus();
-        node.select();
-    }
 </script>
 
 <nav aria-label="page navigation">
-    <ul class="inline-flex items-center -space-x-px text-sm">
+    <ul class="flex flex-wrap justify-center md:justify-start gap-1 md:gap-0 md:flex-nowrap md:inline-flex items-center md:-space-x-px text-sm">
         <li>
-            <button onclick={() => (currentPage -= 1)}
+            <Button onclick={() => (currentPage -= 1)}
+                    variant="outline"
                     disabled={currentPage === 1}
-                    class="flex items-center justify-center px-3 h-8 ms-0 leading-tight
-                           text-gray-500 bg-white border border-e-0 border-gray-300 rounded-s-lg hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
+                    class="rounded-none md:rounded-s-md md:rounded-e-none flex items-center justify-center px-3 h-8 leading-tight text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 &laquo;
-            </button>
+            </Button>
         </li>
         {#each pageNumbers() as page, i(i)}
             <li>
                 {#if typeof page === 'number'}
-                    <button
+                    <Button
                             onclick={() => (currentPage = page)}
-                            class="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700"
-                            class:bg-teal-600={currentPage === page}
-                            class:text-white={currentPage === page}
-                            class:text-gray-500={currentPage !== page}
-                            class:bg-white={currentPage !== page}
-                            class:hover:bg-gray-100={currentPage !== page}
-                            class:hover:text-gray-700={currentPage !== page}
+                            class="rounded-none"
+                            variant={currentPage === page ? 'default' : 'outline'}
+                            size="sm"
                     >
                         {page}
-                    </button>
+                    </Button>
                 {:else if page.type === 'ellipsis'}
                     {#if editingEllipsis === page.id}
-                        <input
+                        <Input
                                 type="number"
                                 bind:value={jumpInputValue}
-                                use:autoFocusInput
+                                autofocus
                                 onkeydown={handleKeydown}
                                 oninput={handleInputDebounce}
                                 onblur={cancelEdit}
-                                class="w-12 h-8 text-center border-gray-300 border bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                class="w-12 h-8 text-center rounded-none border-gray-300 border bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
                                 min="1"
                                 max={totalPages}
                         />
                     {:else}
-                        <button
+                        <Button
                                 onclick={() => startEdit(page.id)}
-                                class="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700"
+                                variant="outline"
+                                size="sm"
+                                class="flex items-center justify-center rounded-none px-3 h-8 leading-tight text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                                 title="Jump to page..."
                         >
                             ...
-                        </button>
+                        </Button>
                     {/if}
                 {/if}
             </li>
         {/each}
         <li>
-            <button
+            <Button
                     onclick={() => (currentPage += 1)}
+                    variant="outline"
+                    size="sm"
                     disabled={currentPage === totalPages}
-                    class="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-e-lg hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 rounded-none md:rounded-s-none md:rounded-e-md hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 &raquo;
-            </button>
+            </Button>
         </li>
     </ul>
 </nav>

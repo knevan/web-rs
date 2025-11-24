@@ -3,7 +3,7 @@
     import {Button} from "$lib/components/ui/button";
     import {Badge} from "$lib/components/ui/badge/index.js";
     import {Input} from "$lib/components/ui/input/index.js";
-    import {X} from "@lucide/svelte"
+    import {X, Tags} from "@lucide/svelte"
     import {toast} from "svelte-sonner";
     import {apiFetch} from "$lib/store/auth";
 
@@ -35,7 +35,13 @@
             const data = await response.json();
             tags = data.categories;
         } catch (e: any) {
-            toast.error('Failed to load tags:', {description: e.message});
+            toast.error('Failed to load tags:', {
+                position: "top-center",
+                richColors: true,
+                closeButton: false,
+                duration: 2000,
+                description: e.message
+            });
             console.error('Error adding tags:', e);
         } finally {
             isLoading = false;
@@ -122,7 +128,14 @@
 
 <Dialog.Root bind:open>
     <Dialog.Trigger>
-        <Button class="cursor-pointer">Manage Tags</Button>
+        <Button class="cursor-pointer md:!w-16"
+                size="iconLabel"
+        >
+            <Tags class="size-3.5"/>
+            <span class="hidden md:inline text-sm">
+                Tags
+            </span>
+        </Button>
     </Dialog.Trigger>
     <Dialog.Content class="sm:max-w-[425px]">
         <Dialog.Header class="-mb-3">

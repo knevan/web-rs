@@ -3,7 +3,7 @@
     import {page} from "$app/state";
     import {goto} from "$app/navigation";
     import {apiFetch} from "$lib/store/auth";
-    import {Timer} from "@lucide/svelte";
+    import {History} from "@lucide/svelte";
 
     interface LatestChapterInfo {
         chapterNumber: number;
@@ -32,7 +32,7 @@
                 if (!response.ok) {
                     if (response.status === 401) {
                         const redirectTo = page.url.pathname;
-                        goto(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
+                        await goto(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
                         return;
                     }
                     throw new Error(`Failed to fetch bookmark library: ${response.statusText}`);
@@ -49,8 +49,8 @@
         fetchUserBookmarkLibrary();
     });
 
-    function formatRelativeTime(datestring: string): string {
-        if (!datestring) return 'Unknown';
+    function formatRelativeTime(datestring: string): string[] {
+        if (!datestring) return ['Unknown'];
 
         const date = new Date(datestring);
         const now = new Date();
@@ -58,7 +58,7 @@
         let seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
         // If the difference is less than a minute, return "Just now"
-        if (seconds < 60) return "Just Now";
+        if (seconds < 60) return ["Just Now"];
 
         const intervals = {
             year: 31536000,
@@ -80,13 +80,13 @@
             const count = Math.floor(seconds / unitSeconds);
             if (count > 0) {
                 // Add unit and its count to result array
-                result.push(`${count} ${unit}${count > 1 ? 's' : ''}`);
+                result.push(`&nbsp;${count}&nbsp;${unit}${count > 1 ? 's' : ''}`);
                 seconds %= unitSeconds;
             }
         }
-        if (result.length === 0) return "Just Now";
+        if (result.length === 0) return ["Just Now"];
 
-        return result.join(", ");
+        return result;
     }
 
     function createSlugTitle(title: string): string {
@@ -94,12 +94,12 @@
     }
 </script>
 
-<div class="max-w-4xl mx-auto">
-    <div class="mb-8 border-b p-6">
-        <h1 class="text-xl md:text-3xl font-bold text-center text-gray-800 dark:text-gray-200">
+<div class="max-w-5xl mx-auto">
+    <div class="mb-4 border-b p-2 pb-6 sm:p-6">
+        <h1 class="text-lg md:text-3xl font-bold text-center text-gray-800 dark:text-gray-200">
             Your Bookmarked Manga Library
         </h1>
-        <p class="text-lg md:text-3xl text-center text-gray-800 dark:text-gray-200">
+        <p class="text-base md:text-3xl text-center text-gray-800 dark:text-gray-200">
             The list of Series you bookmarked.
         </p>
     </div>
@@ -124,45 +124,46 @@
             <p class="text-gray-400 mt-2">
                 Start adding series to your library to see them here.
             </p>
-            <button onclick={() => goto('/')}
+            <button onclick={() => goto('/browse')}
                     class="mt-6 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
                 Browse Series
             </button>
         </div>
     {:else}
-        <ul class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-5">
+        <ul class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4">
             {#each bookmarks as bookmark (bookmark.id)}
                 <li>
                     <a
                             href="/manga/{bookmark.id}/{createSlugTitle(bookmark.title)}"
                             class="group block transition-transform duration-300 ease-in-out hover:-translate-y-1"
                     >
-                        <figure class="aspect-[2/3] bg-gray-800 rounded-md shadow-lg overflow-hidden">
+                        <figure class="aspect-[2/3] bg-gray-800 rounded-sm shadow-lg overflow-hidden">
                             <img
                                     src={bookmark.coverImageUrl}
                                     alt="Cover for {bookmark.title}"
-                                    class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                    class="w-full h-full object-cover transition-transform duration-300"
                                     loading="lazy"
                             />
                         </figure>
-                        <h4 class="font-semibold text-lg truncate text-gray-800 dark:text-gray-100"
-                            title="{bookmark.title}">
+                        <h4 class="font-semibold text-base truncate text-gray-800 dark:text-gray-100 line-clamp-2"
+                            title="{bookmark.title}"
+                        >
                             {bookmark.title}
                         </h4>
                     </a>
                     <div class="text-gray-600 dark:text-gray-400 space-y-1 mt-2">
-                        <span class="text-lg ml-1 block mb-1 text-wrap">
-                            <Timer class="inline-block mr-2 mt-4"/>
-                            {formatRelativeTime(bookmark.updatedAt)}
+                        <span class="text-sm ml-1.5 flex mb-1 items-center">
+                            <History class="mr-2 size-4"/>
+                            {@html formatRelativeTime(bookmark.updatedAt).join(', <br class="sm:hidden">')}
                         </span>
                         <div>
-                            <span class="block text-lg border-b pb-0.5 mb-1">Latest Chapter</span>
-                            <span class="truncate text-lg">
+                            <span class="block text-sm border-b pb-0.5 mb-1">Latest Chapter</span>
+                            <span class="truncate text-base">
                                 {#if bookmark.latestChapter}
                                     <a href="/manga/{bookmark.id}/{createSlugTitle(bookmark.title)}/read-chapter/{bookmark.latestChapter.chapterNumber}"
-                                       class="truncate text-lg block"
+                                       class="truncate text-base block"
                                     >
-                                        Chapter {bookmark.latestChapter.title ?? `Chapter ${bookmark.latestChapter.chapterNumber}`}
+                                        Chapter {bookmark.latestChapter.title ?? `${bookmark.latestChapter.chapterNumber}`}
                                     </a>
                                 {:else }
                                     <span class="truncate text-lg">No Chapter</span>
@@ -170,7 +171,6 @@
                             </span>
                         </div>
                     </div>
-
                 </li>
             {/each}
         </ul>

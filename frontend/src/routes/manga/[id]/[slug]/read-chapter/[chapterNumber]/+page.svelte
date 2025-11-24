@@ -2,8 +2,11 @@
     import ChapterViewPage from "$lib/components/ChapterViewPage.svelte";
     import {page} from "$app/state";
 
-    const mangaId = page.params.id;
-    const chapterNumber = page.params.chapterNumber;
+    let {id: mangaId, chapterNumber} = $derived(page.params);
 </script>
 
-<ChapterViewPage {mangaId} {chapterNumber}/>
+{#if mangaId && chapterNumber}
+    <ChapterViewPage {mangaId} {chapterNumber}/>
+{:else}
+    <p>Loading chapter or invalid URL...</p>
+{/if}

@@ -4,13 +4,18 @@
     import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
     import {Sun, Moon, Menu} from "@lucide/svelte";
     import {toggleMode, mode} from "mode-watcher";
-    import {UserPlus} from "@lucide/svelte";
-    import {UserCog} from "@lucide/svelte";
+    import {UserPlus, UserCog, Search} from "@lucide/svelte";
+    import {search} from '$lib/store/searchStore.svelte.js';
+
+    function handleSearchClick() {
+        console.log('DEBUG: Search icon in `Header.svelte` clicked. Calling `search.toggle()`.');
+        search.toggle();
+    }
 </script>
 
 <header class="flex h-20 w-full items-center justify-between border-b-[2px] border-[--border] bg-[--background] px-2">
     <div class="mx-auto flex w-full lg:max-w-5xl max-w-6xl items-center justify-between">
-        <div class="flex items-center gap-6">
+        <div class="flex items-center gap-6 justify-between">
             <a href="/" aria-label="Home">
                 <img src={image_image1} alt="Home" class="h-10 w-10 object-contain"/>
             </a>
@@ -33,11 +38,11 @@
                     </li>
                     {#if $auth.isAuthenticated && $auth.user?.role === 'admin'}
                         <li>
-                            <a
-                                    href="/admin-dashboard"
-                                    class="font-semibold text-[--color-text] no-underline transition-colors hover:text-[--color-theme-1]"
-                            >Admin Dashboard</a
+                            <a href="/admin-dashboard"
+                               class="font-semibold text-[--color-text] no-underline transition-colors hover:text-[--color-theme-1]"
                             >
+                                Admin Dashboard
+                            </a>
                         </li>
                     {/if}
                 </ul>
@@ -45,14 +50,20 @@
         </div>
 
         <div class="flex items-center gap-4">
+            <button onclick={handleSearchClick}
+                    aria-label="Search"
+                    class="transition-colors hover:text-[--color-theme-1] cursor-pointer"
+            >
+                <Search/>
+            </button>
             <button onclick={toggleMode}
                     aria-label="Toggle Theme"
                     class="transition-colors hover:text-[--color-theme-1] cursor-pointer"
             >
                 {#if mode.current === 'dark'}
-                    <Sun/>
+                    <Sun class="size-6"/>
                 {:else}
-                    <Moon/>
+                    <Moon class="size-6"/>
                 {/if}
             </button>
 
@@ -82,7 +93,7 @@
                             href="/login"
                             class="flex items-center gap-2 font-semibold text-[--color-text] no-underline transition-colors hover:text-[--color-theme-1] hover:underline"
                     >
-                        <UserPlus size={20}/>
+                        <UserPlus class="size-6"/>
                         <span>SIGN IN</span>
                     </a>
                 {/if}
@@ -147,10 +158,10 @@
 <style>
     header {
         display: flex;
-        justify-content: space-between; /* Ubah dari center ke space-between */
+        justify-content: space-between;
         align-items: center;
         padding: 0 2rem;
-        margin: 0 auto; /* Pusatkan header */
+        margin: 0 auto;
         position: relative;
         height: 5rem;
     }

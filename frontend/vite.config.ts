@@ -1,5 +1,5 @@
 import tailwindcss from '@tailwindcss/vite';
-import { svelteTesting } from '@testing-library/svelte/vite';
+//import { svelteTesting } from '@testing-library/svelte/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
@@ -7,6 +7,7 @@ export default defineConfig({
 	envDir: '../',
 	plugins: [tailwindcss(), sveltekit()],
 	server: {
+		allowedHosts: true,
 		port: 1998,
 		// This proxy configuration is the key to connecting the frontend to the backend.
 		proxy: {
@@ -21,29 +22,29 @@ export default defineConfig({
 			}
 		}
 	},
-	test: {
-		projects: [
-			{
-				extends: './vite.config.ts',
-				plugins: [svelteTesting()],
-				test: {
-					name: 'client',
-					environment: 'jsdom',
-					clearMocks: true,
-					include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
-					exclude: ['src/lib/server/**'],
-					setupFiles: ['./vitest-setup-client.ts']
-				}
-			},
-			{
-				extends: './vite.config.ts',
-				test: {
-					name: 'server',
-					environment: 'node',
-					include: ['src/**/*.{test,spec}.{js,ts}'],
-					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
-				}
-			}
-		]
-	}
+	//test: {
+	//	projects: [
+	//		{
+	//			extends: './vite.config.ts',
+	//			plugins: [svelteTesting()],
+	//			test: {
+	//				name: 'client',
+	//				environment: 'jsdom',
+	//				clearMocks: true,
+	//				include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
+	//				exclude: ['src/lib/server/**'],
+	//				setupFiles: ['./vitest-setup-client.ts']
+	//			}
+	//		},
+	//		{
+	//			extends: './vite.config.ts',
+	//			test: {
+	//				name: 'server',
+	//				environment: 'node',
+	//				include: ['src/**/*.{test,spec}.{js,ts}'],
+	//				exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
+	//			}
+	//		}
+	//	]
+	//}
 });

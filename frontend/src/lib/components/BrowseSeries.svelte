@@ -270,7 +270,7 @@
     <title>Browse Series - Manga Reader</title>
 </svelte:head>
 
-<div class="w-full max-w-5xl mx-auto px-1 py-8 text-gray-900 dark:text-white">
+<div class="w-full max-w-5xl mx-auto px-1 py-2 text-gray-900 dark:text-white">
     <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm mb-8">
         <div class="p-4">
             <h2 class="text-xl sm:text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
@@ -387,7 +387,7 @@
     </div>
 
     <div
-            class="mt-5 mb-8 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
+            class="mt-5 mb-1 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
     >
         <div class="p-4 mt-4 sm:p-6">
             {#if isLoading}

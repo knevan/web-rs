@@ -21,7 +21,7 @@
         processingStatus: string;
     };
 
-    let {rowsPerPage = 20, searchQuery = ''} = $props();
+    let {rowsPerPage = 25, searchQuery = ''} = $props();
 
     let series = $state<Series[] | null>(null);
     let editingSeries = $state<Series | null>(null);
@@ -42,7 +42,7 @@
         errorMessage = null;
 
         try {
-            const url = new URL('/api/admin/series/list', window.location.origin);
+            const url = new URL('/api/admin/series/paginated/list-search', window.location.origin);
             url.searchParams.set('page', String(page));
             url.searchParams.set('pageSize', rowsPerPage.toString());
             if (query) {
@@ -166,15 +166,10 @@
     />
 {/if}
 
-<div class="overflow-x-auto bg-white rounded-lg shadow">
-    <table class="min-w-full text-sm text-left text-gray-500">
-    </table>
-</div>
-
-<div class="border bg-card text-card-foreground rounded-lg shadow-sm overflow-x-auto">
-    <table class="series-table text-sm w-full">
+<div class="border bg-card text-card-foreground rounded-lg shadow-sm overflow-x-auto mt-4">
+    <table class="text-sm w-full min-w-full text-left text-gray-500">
         <thead class="bg-muted/50 text-muted-foreground uppercase">
-        <tr>
+        <tr class="border-b border-b-gray-700">
             <th scope="col" class="px-4 py-3 text-center">Series Name</th>
             <th scope="col" class="px-4 py-3 text-center">Series Id</th>
             <th scope="col" class="px-4 py-3 text-center">Author</th>
@@ -193,57 +188,60 @@
         {:else if errorMessage}
             <tr>
                 <td colspan="5"
-                    class="text-center py-8 text-destructive">{errorMessage}</td>
+                    class="text-center py-8 text-destructive">
+                    {errorMessage}
+                </td>
             </tr>
         {:else if series && series.length > 0}
             {#each series as manga (manga.id)}
                 <tr class="border-b border-border hover:bg-muted/50 transition-colors cursor-pointer"
                     onclick={() => handleRowClick(manga.id)}>
-                    <td class="px-4 py-3 font-medium text-foreground justify-center">{manga.title}</td>
+                    <td class="px-4 py-3.5 font-medium text-foreground justify-center">{manga.title}</td>
+                    <td class="px-4 py-3.5 text-foreground text-center">{manga.id}</td>
                     {#if activeSeriesId === manga.id}
-                        <td colspan="4" class="px-4 py-2">
-                            <div class="flex items-center justify-center space-x-2">
+                        <td colspan="3" class="px-4 py-1.5">
+                            <div class="flex gap-2 md:gap-2 items-center justify-center">
                                 <Button onclick={(e) => { e.stopPropagation(); editingSeries = manga; }}
                                         size="iconLabel"
-                                        class="hover:text-blue-800 hover:bg-blue-100 transition-colors cursor-pointer"
+                                        class="hover:text-blue-800 !w-15 hover:bg-blue-100 transition-colors cursor-pointer"
                                         title="Edit {manga.title}">
-                                    <FilePen/>
+                                    <FilePen class="size-3.5"/>
                                     Edit
                                 </Button>
                                 <Button onclick={(e) => { e.stopPropagation(); repairSeriesId = manga.id }}
                                         size="iconLabel"
+                                        class="!w-19"
                                         title="Repair {manga.title}">
-                                    <Wrench/>
+                                    <Wrench class="size-3.5"/>
                                     Repair
                                 </Button>
                                 <Button onclick={(e) => {e.stopPropagation(); deleteSeries = manga; }}
                                         size="iconLabel"
                                         variant="destructive"
-                                        class="hover:bg-destructive/90 transition-colors"
+                                        class="!w-19 hover:bg-destructive/90 transition-colors"
                                         title="Delete {manga.title}">
-                                    <Trash2/>
+                                    <Trash2 class="size-3.5"/>
                                     Delete
                                 </Button>
                             </div>
                         </td>
                     {:else}
-                        <td class="px-4 py-3 text-foreground text-center">{manga.id}</td>
-                        <td class="px-4 py-3 text-foreground">{manga.authors.join(', ')}</td>
-                        <td class="px-4 py-2 text-left">{manga.lastUpdated}</td>
-                        <td class="px-4 py-2 text-foreground text-center">{manga.processingStatus}</td>
-                        <td class="px-4 py-3 text-foreground">
-                            <a href={manga.sourceUrl} target="_blank"
-                               class="text-primary hover:underline">
-                                Source URLs
-                            </a>
-                        </td>
+                        <td class="px-4 py-3.5 text-foreground">{manga.authors.join(', ')}</td>
+                        <td class="px-4 text-center">{manga.lastUpdated}</td>
+                        <td class="px-4 text-foreground text-center">{manga.processingStatus}</td>
                     {/if}
+                    <td class="px-4 text-foreground">
+                        <a href={manga.sourceUrl} target="_blank"
+                           class="text-primary hover:underline">
+                            Source URLs
+                        </a>
+                    </td>
                 </tr>
             {/each}
         {:else}
             <tr>
-                <td colspan="5" class="text-center py-8 text-muted-foreground">No Manga
-                    Found
+                <td colspan="5" class="text-center py-8 text-muted-foreground">
+                    No Manga Found
                 </td>
             </tr>
         {/if}
@@ -259,11 +257,3 @@
         />
     </div>
 {/if}
-
-<style>
-    .series-table {
-        min-width: 100%;
-        text-align: left;
-
-    }
-</style>

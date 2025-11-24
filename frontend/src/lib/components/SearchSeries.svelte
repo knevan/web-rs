@@ -1,10 +1,10 @@
 <script lang="ts">
     import {Search, X} from "@lucide/svelte";
-    import { search } from '$lib/store/searchStore.svelte.js';
-	import Input from "./ui/input/input.svelte";
-	import Button from "./ui/button/button.svelte";
+    import {search} from '$lib/store/searchStore.svelte.js';
+    import Input from "./ui/input/input.svelte";
+    import Button from "./ui/button/button.svelte";
     import slugify from "slugify";
-	import { error } from "@sveltejs/kit";
+    import {goto} from "$app/navigation";
 
     interface UserSearchSeriesResult {
         id: number;
@@ -19,16 +19,16 @@
     let searchInput = $state<HTMLInputElement | null>(null);
     let searchValue = $state('');
     let searchResults = $state<UserSearchSeriesResult[]>([]);
-    let isFocused = $state(false);
+    let isFocused = $state(true);
     let totalResults = $state(0);
-    let debounceTimer: number | null = $state(null);
-    let abortController: AbortController | null = $state(null);
+    let debounceTimer: number | null = null;
+    let abortController: AbortController | null = null;
     let isLoading = $state(false);
 
     const mockSeries = [
-        { id: 1, title: 'Kimetsu no Yaiba', author: 'Gotouge Koyoharu' },
-        { id: 2, title: 'Mo Dao Zu Shi', author: 'Mo Xiang Tong Xiu' },
-        { id: 3, title: 'Mairimashita! Iruma-kun', author: 'Nishi Osamu' }
+        {id: 1, title: 'Kimetsu no Yaiba', author: 'Gotouge Koyoharu'},
+        {id: 2, title: 'Mo Dao Zu Shi', author: 'Mo Xiang Tong Xiu'},
+        {id: 3, title: 'Mairimashita! Iruma-kun', author: 'Nishi Osamu'}
     ];
 
     let filteredSeries = $derived(() => {
@@ -68,10 +68,10 @@
 
         debounceTimer = setTimeout(async () => {
             abortController = new AbortController();
-            const { signal } = abortController;
+            const {signal} = abortController;
 
             try {
-                const response = await fetch(`/api/series/search?q=${encodeURIComponent(query)}`, {
+                const response = await fetch(`/api/series/search?search=${encodeURIComponent(query)}`, {
                     signal
                 });
 
@@ -92,7 +92,7 @@
             } finally {
                 isLoading = false;
             }
-        }, 300);
+        }, 500);
 
         return () => {
             if (debounceTimer) {
@@ -152,11 +152,11 @@
 
         const result: string[] = [];
         for (const [unit, unitSeconds] of Object.entries(interval)) {
-            if (result.length >= 2) break;
             const count = Math.floor(seconds / unitSeconds);
             if (count > 0) {
                 result.push(`${count} ${unit}${count > 1 ? 's' : ''}`);
-                seconds %= unitSeconds;
+                // seconds %= unitSeconds;
+                break;
             }
         }
         return result.length > 0 ? `${result.join(', ')}` : 'Just Now';
@@ -165,6 +165,14 @@
     function handleCloseClick() {
         console.log('DEBUG: Close button clicked. Calling `search.close()`.');
         search.close();
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+        if (event.key === 'Enter' && searchValue.trim() !== '') {
+            event.preventDefault();
+            goto(`/browse?search=${encodeURIComponent(searchValue)}`);
+            search.close();
+        }
     }
 
     function handleInput(event: Event) {
@@ -187,16 +195,15 @@
     function highlightMatchText(text: string, query: string) {
         if (!query) return text;
         const regex = new RegExp(`(${query.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')})`, 'gi');
-        return text.replace(regex, '<mark class="bg-blue-300 dark:bg-blue-700 bg-opacity-50 px-0 py-0 rounded-sm">$1</mark>');
+        return text.replace(regex, '<mark class="bg-yellow-300 bg-opacity-50">$1</mark>');
     }
 </script>
 
-
-<div class="mx-auto flex w-full max-w-5xl items-center gap-0.5 px-2 py-2 mt-4 lg:px-0">
+<div class="mx-auto flex w-full max-w-5xl items-center px-2 py-2 mt-4 lg:px-0">
     <div class="relative w-full"
          onfocusin={() => (isFocused = true)}
          onfocusout={handleFocusOut}>
-        <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"/>
         <Input
                 value={searchValue}
                 bind:ref={searchInput}
@@ -207,30 +214,82 @@
         />
 
         {#if isFocused}
-        <div
-                class="absolute top-full left-0 bg-gray-300 right-0 z-50 border bg-base-200 p-1 shadow-lg"
-        >
-            {#if searchValue.length === 0}
-                <div class="flex h-5 items-center justify-center text-center text-gray-700 dark:text-white">
-                    <h1 class="text-base">series title or original title</h1>
-                </div>
-            {:else}
-                {#if filteredSeries().length > 0}
-                    <div class="space-y-3">
-                        {#each filteredSeries() as series (series.id)}
-                            <div class="flex items-center justify-between">
-                                <div class="bg-white w-full custom-scrollbar">
-                                    <div class="font-bold text-gray-800 dark:text-white">{series.title}</div>
-                                    <div class="text-sm text-gray-600 dark:text-gray-400">{series.author}</div>
-                                </div>
-                            </div>
-                        {/each}
-                    </div>
-                {:else}
-                        <div class="justify-center h-5">
-                            <div>No Result</div>
+            <div class="absolute top-full left-0 bg-gray-300 right-0 z-50 border bg-base-200 p-1 shadow-lg">
+                <div class="max-h-[500px] overflow-y-auto divide-y-1 divide-gray-400 dark:divide-gray-700">
+                    {#if searchValue.length === 0}
+                        <div class="flex h-5 items-center justify-center text-center text-gray-700 dark:text-white">
+                            <h1 class="text-base">
+                                series title or original title
+                            </h1>
                         </div>
+                    {:else}
+                        {#if searchResults.length > 0}
+                            {#each searchResults as item (item.id)}
+                                <div class="flex items-center justify-between divide-y-2 divide-gray-200 dark:divide-gray-700">
+                                    <div class="bg-white w-full flex">
+                                        <img src={item.cover_image_url}
+                                             alt="Cover for {item.title}"
+                                             class="h-20 w-[3.75rem] flex-shrink-0 rounded-sm object-cover bg-gray-200 dark:bg-gray-700"
+                                             loading="lazy"
+                                        />
+                                        <div class=" text-gray-800 dark:text-white flex-col flex flex-1 ml-2">
+                                            <h3 class="text-sm text-blue-500">
+                                                <a href={`/manga/${item.id}/${slugify(item.title, { lower: true, strict: false })}`}>
+                                                    {@html highlightMatchText(item.title, searchValue)}
+                                                </a>
+                                            </h3>
+                                            <div class="text-sm">
+                                            <span>
+                                                {@html highlightMatchText(item.original_title ?? '', searchValue)}
+                                            </span>
+                                            </div>
+                                            <div class="flex justify-between pr-4">
+                                            <span class="text-sm text-gray-500 dark:text-gray-400">
+                                                    Chapter {item.last_chapter_found_in_storage}
+                                            </span>
+                                                {#if item.last_chapter_found_in_storage}
+                                                <span>
+                                                    Chapter {item.last_chapter_found_in_storage}
+                                                </span>
+                                                {/if}
+                                                <span class="text-sm text-gray-500 dark:text-gray-400">
+                                                {formatRelativeTime(item.updated_at)}
+                                            </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {/each}
+                        {:else}
+                            <div class="flex h-5 items-center justify-center text-center text-gray-700 dark:text-white">
+                                <p class="text-base">No results found</p>
+                            </div>
+                        {/if}
                     {/if}
+                </div>
+                {#if totalResults > 0}
+                    <div
+                            class="flex items-center justify-between border-t border-gray-400 bg-gray-100 dark:bg-gray-800 p-2 text-sm"
+                    >
+                        <a
+                                href={`/browse?search=${encodeURIComponent(searchValue)}`}
+                                class="text-blue-600 dark:text-blue-400 hover:underline"
+                                onclick={(event) => {
+                                    event.preventDefault();
+                                    goto(`/browse?search=${encodeURIComponent(searchValue)}`);
+                                    search.close();
+                                }}
+                        >
+                            View all {totalResults} results
+                        </a>
+                        <button
+                                type="button"
+                                onmousedown={handleCloseClick}
+                                class="cursor-pointer font-semibold text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white"
+                        >
+                            Close
+                        </button>
+                    </div>
                 {/if}
             </div>
         {/if}
@@ -243,6 +302,6 @@
             aria-label="Close Search"
             class="cursor-pointer text-[--color-text] transition-colors hover:text-[--color-theme-1]"
     >
-        <X />
+        <X/>
     </Button>
 </div>

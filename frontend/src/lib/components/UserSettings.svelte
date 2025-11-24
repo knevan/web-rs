@@ -66,11 +66,13 @@
     });
 
     $effect(() => {
-        if (avatarPreviewUrl) {
-            URL.revokeObjectURL(avatarPreviewUrl);
-        }
         if (avatarFile) {
-            avatarPreviewUrl = URL.createObjectURL(avatarFile);
+            const newUrl = URL.createObjectURL(avatarFile);
+            avatarPreviewUrl = newUrl;
+
+            return () => {
+                URL.revokeObjectURL(newUrl);
+            };
         } else {
             avatarPreviewUrl = null;
         }
@@ -93,7 +95,6 @@
             });
             return;
         }
-
         isAvatarLoading = true;
 
         const avatarPromise = async () => {
@@ -162,11 +163,21 @@
 
     async function handlePasswordUpdate() {
         if (passwordData.newPassword.length < 8) {
-            toast.error('Password must be at least 8 characters long.');
+            toast.error('Password must be at least 8 characters long.', {
+                position: "top-center",
+                richColors: true,
+                closeButton: false,
+                duration: 2000,
+            });
             return;
         }
         if (passwordData.newPassword !== passwordData.newPasswordConfirm) {
-            toast.error('Passwords do not match.');
+            toast.error('Passwords do not match.', {
+                position: "top-center",
+                richColors: true,
+                closeButton: false,
+                duration: 2000,
+            });
             return;
         }
 
@@ -205,9 +216,9 @@
     }
 </script>
 
-<div class="max-w-3xl lg:max-7-xl mx-auto p-4 md:p-6 text-gray-200">
+<div class="max-w-4xl lg:max-7-xl mx-auto  p-4 md:p-6 text-gray-200">
     <div class="mb-8">
-        <h1 class="text-2xl md:text-3xl font-bold text-center text-gray-800 dark:text-gray-200">
+        <h1 class="text-xl md:text-3xl font-medium text-center text-gray-800 dark:text-gray-200">
             Change Profile Settings
         </h1>
         <p class="text-gray-800 dark:text-gray-200 mt-4 text-center text-xl">
@@ -281,7 +292,7 @@
                 <form onsubmit={handleProfileUpdate} class="space-y-6">
                     <div>
                         <Label for="displayName"
-                               class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Change Comment
+                               class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Comment
                             Name</Label>
                         <Input
                                 type="text"
@@ -322,8 +333,9 @@
                 <form onsubmit={handlePasswordUpdate} class="space-y-4">
                     <div>
                         <Label for="new-password"
-                               class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New
-                            Password</Label>
+                               class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            New Password
+                        </Label>
                         <Input
                                 type="password"
                                 id="new-password"
@@ -335,8 +347,9 @@
                     </div>
                     <div>
                         <Label for="confirm-password"
-                               class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Confirm
-                            Password</Label>
+                               class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Confirm Password
+                        </Label>
                         <Input
                                 type="password"
                                 id="confirm-password"
