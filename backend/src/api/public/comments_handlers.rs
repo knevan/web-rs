@@ -1,4 +1,4 @@
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
 use axum_core::__private::tracing::error;
@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::api::extractor::{AuthenticatedUser, OptionalAuthenticatedUser};
 use crate::api::public::user_handlers::extract_field_data;
 use crate::builder::startup::AppState;
-use crate::database::{Comment, CommentEntityType, VotePayload};
+use crate::database::{Comment, CommentEntityType, CommentSort, DeleteCommentResult, VotePayload};
 
 /// Helper function to recursively prepend the base CDN URL to all comment attachment URLs.
 /// This modifies the comments in place using an iterative stack-based approach.
@@ -31,16 +31,23 @@ fn hydrate_attachments_url(comments: &mut [Comment], base_url: &str) {
     }
 }
 
+#[derive(Deserialize)]
+pub struct CommentParams {
+    #[serde(default)]
+    sort: CommentSort,
+}
+
 // Fetch series comments
 pub async fn get_series_comment_handler(
     State(state): State<AppState>,
     Path(series_id): Path<i32>,
     user: OptionalAuthenticatedUser,
+    Query(params): Query<CommentParams>,
 ) -> Response {
     let user_id = user.0.map(|u| u.id);
     match state
         .db_service
-        .get_comments(CommentEntityType::Series, series_id, user_id)
+        .get_comments(CommentEntityType::Series, series_id, user_id, params.sort)
         .await
     {
         Ok(mut comments) => {
@@ -69,11 +76,17 @@ pub async fn get_chapter_comment_handler(
     State(state): State<AppState>,
     Path(chapter_id): Path<i32>,
     user: OptionalAuthenticatedUser,
+    Query(params): Query<CommentParams>,
 ) -> Response {
     let user_id = user.0.map(|u| u.id);
     match state
         .db_service
-        .get_comments(CommentEntityType::SeriesChapters, chapter_id, user_id)
+        .get_comments(
+            CommentEntityType::SeriesChapters,
+            chapter_id,
+            user_id,
+            params.sort,
+        )
         .await
     {
         Ok(mut comments) => {
@@ -210,20 +223,34 @@ pub async fn new_comment_submission_handler(
     {
         // If fetch is successful, return the full comment object
         Ok(Some(mut new_comment)) => {
-            if let Some(urls) = &mut new_comment.attachment_urls {
-                let base_url = state.storage_client.domain_cdn_url();
-                for url in urls.iter_mut() {
-                    *url = format!("{}{}", base_url, url);
-                }
-            }
+            let base_url = state.storage_client.domain_cdn_url();
+
+            hydrate_attachments_url(std::slice::from_mut(&mut new_comment), base_url);
+
             (StatusCode::OK, Json(new_comment)).into_response()
         }
         // Handle cases where the comment couldn't be fetched right after creation
-        Ok(None) | Err(_) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": "Comment created but failed to retrieve its data"})),
-        )
-            .into_response(),
+        Ok(None) => {
+            error!(
+                "Comment created id {} but not not found immediately early",
+                new_comment_id
+            );
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Comment create but not found early"})),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            error!("Failed to retrive comment data {:#?}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(
+                    serde_json::json!({"error": format!("Comment created but failed to retrieve its data {:#?}", e)}),
+                ),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -331,26 +358,42 @@ pub async fn delete_comment_handler(
     user: AuthenticatedUser,
     Path(comment_id): Path<i64>,
 ) -> Response {
-    match state
-        .db_service
-        .delete_comment(comment_id, user.id)
-        .await
-    {
-        Ok((true, attachment_object_key)) => {
+    match state.db_service.delete_comment(comment_id, user.id).await {
+        Ok(DeleteCommentResult::SoftDeleted(updated_comment, attachment_object_key)) => {
             // Database transaction was successful.
             // Run this after the DB commit.
-            if !attachment_object_key.is_empty() {
-                if let Err(e) = state.storage_client.delete_image_objects(&attachment_object_key).await {
-                    error!("Failed to delete storage objects for comment {}: {}. Keys: {:?}", comment_id, e, attachment_object_key);
-                }
+            if !attachment_object_key.is_empty()
+                && let Err(e) = state
+                    .storage_client
+                    .delete_image_objects(&attachment_object_key)
+                    .await
+            {
+                error!(
+                    "Failed to delete storage objects for comment {}: {}. Keys: {:?}",
+                    comment_id, e, attachment_object_key
+                );
+            }
+            (StatusCode::OK, Json(updated_comment)).into_response()
+        }
+        Ok(DeleteCommentResult::HardDeleted(attachment_object_key)) => {
+            if !attachment_object_key.is_empty()
+                && let Err(e) = state
+                    .storage_client
+                    .delete_image_objects(&attachment_object_key)
+                    .await
+            {
+                error!(
+                    "Failed to delete storage objects for comment {}: {}. Keys: {:?}",
+                    comment_id, e, attachment_object_key
+                );
             }
             (
-                StatusCode::OK,
-                Json(serde_json::json!({"message": "Comment deleted successfully"})),
+                StatusCode::NO_CONTENT,
+                Json(serde_json::json!({"message": "Comment not found or permission denied"})),
             )
                 .into_response()
         }
-        Ok((false, _)) => (
+        Ok(DeleteCommentResult::NotFound) => (
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({"message": "Comment not found or permission denied"})),
         )

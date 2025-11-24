@@ -299,7 +299,7 @@ pub struct Comment {
 
 // Helper struct to map the flat comment result
 #[derive(Debug, FromRow)]
-struct CommentFlatRow {
+pub struct CommentFlatRow {
     id: i64,
     parent_id: Option<i64>,
     content_html: String,
@@ -312,32 +312,7 @@ struct CommentFlatRow {
     upvotes: i64,
     downvotes: i64,
     current_user_vote: Option<i16>,
-    attachment_urls: Option<serde_json::Value>,
-}
-
-impl From<CommentFlatRow> for Comment {
-    fn from(row: CommentFlatRow) -> Self {
-        Comment {
-            id: row.id,
-            parent_id: row.parent_id,
-            content_html: row.content_html,
-            content_markdown: row.content_markdown,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            user: CommentUser {
-                id: row.user_id,
-                username: row.user_username,
-                avatar_url: row.user_avatar_url,
-            },
-            upvotes: row.upvotes,
-            downvotes: row.downvotes,
-            current_user_vote: row.current_user_vote,
-            replies: Vec::new(),
-            attachment_urls: row
-                .attachment_urls
-                .and_then(|v| serde_json::from_value(v).ok()),
-        }
-    }
+    attachment_urls: Option<Vec<String>>,
 }
 
 #[derive(Debug, FromRow, Serialize, Clone)]
@@ -354,6 +329,19 @@ pub enum CommentEntityType {
     SeriesChapters,
 }
 
+#[derive(Debug, Clone, Deserialize, Copy)]
+pub enum CommentSort {
+    Newest,
+    Oldest,
+    TopVote,
+}
+
+impl Default for CommentSort {
+    fn default() -> Self {
+        Self::Newest
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct NewCommentPayload {
     pub content_markdown: String,
@@ -367,6 +355,12 @@ pub struct UpdateCommentResponse {
     pub content_user_markdown: String,
     pub content_html: String,
     pub updated_at: DateTime<Utc>,
+}
+
+pub enum DeleteCommentResult {
+    HardDeleted(Vec<String>),
+    SoftDeleted(UpdateCommentResponse, Vec<String>),
+    NotFound,
 }
 
 // Payload for voting on a comment.

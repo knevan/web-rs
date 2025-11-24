@@ -1,15 +1,12 @@
-use axum::Json;
 use axum::extract::{Path, Query, State};
+use axum::Json;
 use axum_core::__private::tracing::error;
 use axum_core::response::{IntoResponse, Response};
-use axum_extra::extract::Multipart;
 use reqwest::StatusCode;
 use serde::de::{Deserializer, Error};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
-use crate::api::extractor::{AuthenticatedUser, OptionalAuthenticatedUser};
-use crate::api::public::user_handlers::extract_field_data;
+use crate::api::extractor::AuthenticatedUser;
 use crate::builder::startup::AppState;
 use crate::database::{CategoryTag, Series, SeriesChapter, SeriesOrderBy};
 
