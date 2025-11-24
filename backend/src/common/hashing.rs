@@ -71,10 +71,10 @@ mod tests {
         // Ensure the hashing process was successful
         assert!(hash_result.is_ok());
 
-        let hash = hash_result.unwrap();
+        let hash = hash_result.unwrap_or_default();
         println!("\nGenerated hash for '{}': {}\n", password, hash);
 
-        let is_valid = verify_password(password, &hash).unwrap();
+        let is_valid = verify_password(password, &hash).unwrap_or_default();
         assert!(is_valid);
     }
 }

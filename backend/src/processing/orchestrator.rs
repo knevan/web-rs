@@ -1,7 +1,7 @@
 use std::env;
 use std::sync::Arc;
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use reqwest::Client;
 use url::Url;
 
@@ -201,7 +201,7 @@ pub async fn repair_specific_chapter_series(
         .ok_or_else(|| anyhow!("No scraping config for host: {}", new_host))?;
 
     let chapter_info_to_scrape = ChapterInfo {
-        url: msg.new_chapter_url.to_string(),
+        url: msg.new_chapter_url,
         number: msg.chapter_number,
     };
 
