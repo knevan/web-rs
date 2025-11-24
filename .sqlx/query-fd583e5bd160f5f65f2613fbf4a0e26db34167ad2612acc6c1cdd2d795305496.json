@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM comment_attachments WHERE comment_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fd583e5bd160f5f65f2613fbf4a0e26db34167ad2612acc6c1cdd2d795305496"
+}

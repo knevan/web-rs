@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE comments\n            SET\n                content_user_markdown = $1,\n                content_html = $2,\n                updated_at = NOW()\n            WHERE id = $3 AND user_id = $4\n            RETURNING id, content_user_markdown, content_html, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "content_user_markdown",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "content_html",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f5be2ffdb952880260b3cb27063e6746f6830689e9eb072bd9bd4497e0513c39"
+}
