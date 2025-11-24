@@ -1,9 +1,10 @@
+use std::fmt;
+
 use anyhow::{Context, Result as AnyhowResult};
 use chrono::{DateTime, Utc};
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool, Type};
-use std::fmt;
 use url::Url;
 
 pub mod auth;
@@ -110,33 +111,6 @@ pub struct SeriesChapter {
     pub created_at: DateTime<Utc>,
 }
 
-/// Strcuct represents a user record fetched from the database
-#[derive(Debug, FromRow)]
-pub struct Users {
-    pub id: i32,
-    pub username: String,
-    pub email: String,
-    pub password_hash: String,
-    pub role_id: i32,
-}
-
-#[derive(Debug, FromRow, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserProfileDetails {
-    pub username: String,
-    pub email: String,
-    pub display_name: Option<String>,
-    pub avatar_url: Option<String>,
-}
-
-#[derive(Debug, FromRow, Serialize)]
-pub struct UserWithRole {
-    pub id: i32,
-    pub username: String,
-    pub email: String,
-    pub role_name: String,
-}
-
 #[derive(Debug)]
 pub struct NewSeriesData<'a> {
     pub title: &'a str,
@@ -201,6 +175,12 @@ pub enum SeriesOrderBy {
     Rating,
 }
 
+#[derive(Debug, FromRow, Serialize, Deserialize)]
+pub struct CategoryTag {
+    pub id: i32,
+    pub name: String,
+}
+
 // Pagination parameters for fetching series list.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PaginatedResult<T> {
@@ -208,19 +188,32 @@ pub struct PaginatedResult<T> {
     pub total_items: i64,
 }
 
-#[derive(Debug, FromRow, Serialize, Deserialize)]
-pub struct CategoryTag {
-    pub id: i32,
-    pub name: String,
-}
-
-// Most viewed series data for the public API.
-#[derive(Debug, FromRow, Serialize)]
-pub struct MostViewedSeries {
+// User Search Paginated Series Struct
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct UserSearchPaginatedSeries {
     pub id: i32,
     pub title: String,
+    pub original_title: Option<String>,
     pub cover_image_url: String,
-    pub view_count: Option<i64>,
+    pub last_chapter_found_in_storage: Option<f32>,
+    pub updated_at: DateTime<Utc>,
+    #[sqlx(json)]
+    pub authors: serde_json::Value,
+}
+
+// Latest Release Series Struct
+#[derive(Debug, Serialize, FromRow)]
+pub struct LatestReleaseSeries {
+    pub id: i32,
+    pub title: String,
+    pub original_title: Option<String>,
+    #[sqlx(json)]
+    pub authors: serde_json::Value,
+    pub cover_image_url: String,
+    pub description: String,
+    pub last_chapter_found_in_storage: Option<f32>,
+    pub updated_at: DateTime<Utc>,
+    pub chapter_title: Option<String>,
 }
 
 #[derive(Debug, FromRow, Serialize)]
@@ -238,6 +231,15 @@ pub struct BrowseSeriesSearchResult {
     pub categories: serde_json::Value,
 }
 
+// Most viewed series data for the public API.
+#[derive(Debug, FromRow, Serialize)]
+pub struct MostViewedSeries {
+    pub id: i32,
+    pub title: String,
+    pub cover_image_url: String,
+    pub view_count: Option<i64>,
+}
+
 #[derive(Debug, FromRow, Serialize)]
 pub struct BookmarkedSeries {
     pub id: i32,
@@ -248,16 +250,34 @@ pub struct BookmarkedSeries {
     pub chapter_title: Option<String>,
 }
 
-#[derive(Debug, Serialize, FromRow)]
-pub struct LatestReleaseSeries {
+/// Strcuct represents a user record fetched from the database
+#[derive(Debug, FromRow)]
+pub struct Users {
     pub id: i32,
-    pub title: String,
-    pub cover_image_url: String,
-    pub last_chapter_found_in_storage: Option<f32>,
-    pub updated_at: DateTime<Utc>,
-    pub chapter_title: Option<String>,
+    pub username: String,
+    pub email: String,
+    pub password_hash: String,
+    pub role_id: i32,
 }
 
+#[derive(Debug, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserProfileDetails {
+    pub username: String,
+    pub email: String,
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+}
+
+#[derive(Debug, FromRow, Serialize)]
+pub struct UserWithRole {
+    pub id: i32,
+    pub username: String,
+    pub email: String,
+    pub role_name: String,
+}
+
+// Comment struct
 #[derive(Debug, FromRow, Serialize, Clone)]
 pub struct Comment {
     pub id: i64,
@@ -279,7 +299,7 @@ pub struct Comment {
 
 // Helper struct to map the flat comment result
 #[derive(Debug, FromRow)]
-struct CommentFlatRow {
+pub struct CommentFlatRow {
     id: i64,
     parent_id: Option<i64>,
     content_html: String,
@@ -292,32 +312,7 @@ struct CommentFlatRow {
     upvotes: i64,
     downvotes: i64,
     current_user_vote: Option<i16>,
-    attachment_urls: Option<serde_json::Value>,
-}
-
-impl From<CommentFlatRow> for Comment {
-    fn from(row: CommentFlatRow) -> Self {
-        Comment {
-            id: row.id,
-            parent_id: row.parent_id,
-            content_html: row.content_html,
-            content_markdown: row.content_markdown,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            user: CommentUser {
-                id: row.user_id,
-                username: row.user_username,
-                avatar_url: row.user_avatar_url,
-            },
-            upvotes: row.upvotes,
-            downvotes: row.downvotes,
-            current_user_vote: row.current_user_vote,
-            replies: Vec::new(),
-            attachment_urls: row
-                .attachment_urls
-                .and_then(|v| serde_json::from_value(v).ok()),
-        }
-    }
+    attachment_urls: Option<Vec<String>>,
 }
 
 #[derive(Debug, FromRow, Serialize, Clone)]
@@ -334,11 +329,38 @@ pub enum CommentEntityType {
     SeriesChapters,
 }
 
+#[derive(Debug, Clone, Deserialize, Copy)]
+pub enum CommentSort {
+    Newest,
+    Oldest,
+    TopVote,
+}
+
+impl Default for CommentSort {
+    fn default() -> Self {
+        Self::Newest
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct NewCommentPayload {
     pub content_markdown: String,
     pub parent_id: Option<i64>,
     pub attachments: Option<Vec<String>>,
+}
+
+#[derive(FromRow, Serialize, Debug)]
+pub struct UpdateCommentResponse {
+    pub id: i64,
+    pub content_user_markdown: String,
+    pub content_html: String,
+    pub updated_at: DateTime<Utc>,
+}
+
+pub enum DeleteCommentResult {
+    HardDeleted(Vec<String>),
+    SoftDeleted(UpdateCommentResponse, Vec<String>),
+    NotFound,
 }
 
 // Payload for voting on a comment.

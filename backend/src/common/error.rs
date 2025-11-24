@@ -1,4 +1,5 @@
-use axum::{Json, http::StatusCode};
+use axum::http::StatusCode;
+use axum::Json;
 use axum_core::response::{IntoResponse, Response};
 
 // Custom error type definition
@@ -6,7 +7,6 @@ pub enum AuthError {
     InvalidToken,
     WrongCredentials,
     MissingCredentials,
-    InvalidCredentials,
     TokenCreation,
     InvalidRefreshToken,
     InvalidCharacter(String),
@@ -18,24 +18,13 @@ pub enum AuthError {
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let (status, error_message) = match self {
-            AuthError::WrongCredentials => {
-                (StatusCode::UNAUTHORIZED, "Invalid credentials")
-            }
-            AuthError::MissingCredentials => {
-                (StatusCode::BAD_REQUEST, "Missing credentials")
-            }
-            AuthError::InvalidCredentials => {
-                (StatusCode::BAD_REQUEST, "Missing credentials")
-            }
+            AuthError::WrongCredentials => (StatusCode::UNAUTHORIZED, "Invalid credentials"),
+            AuthError::MissingCredentials => (StatusCode::BAD_REQUEST, "Missing credentials"),
             AuthError::TokenCreation => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create token")
             }
-            AuthError::InvalidToken => {
-                (StatusCode::UNAUTHORIZED, "Invalid token")
-            }
-            AuthError::InvalidRefreshToken => {
-                (StatusCode::UNAUTHORIZED, "Invalid refresh token")
-            }
+            AuthError::InvalidToken => (StatusCode::UNAUTHORIZED, "Invalid token"),
+            AuthError::InvalidRefreshToken => (StatusCode::UNAUTHORIZED, "Invalid refresh token"),
             AuthError::InternalServerError => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
             }
@@ -43,7 +32,7 @@ impl IntoResponse for AuthError {
                 return (
                     StatusCode::CONFLICT,
                     Json(serde_json::json!({"message": format!("{} Already exists", field) })),
-                    )
+                )
                     .into_response();
             }
             AuthError::InvalidCharacter(message) => {

@@ -5,21 +5,21 @@ tasks:
     cmds:
       - cargo run {{.CLI_ARGS}}
 
-  release:
+  dev-fast:
     cmds:
-      - task: backend -- --release
-  
+      - cargo run --release
+
+  optimize:
+    cmds:
+      - cargo run --profile deploy
+
   frontend:
     cmds:
       - bun run dev
     dir: ./frontend
 
-  dev:
+  prod:
     cmds:
-      - task: run-backend
-      - task: run-frontend
-
-  dev-release:
-    cmds:
-      - task: run-backend -- --release
-      - task: run-frontend
+      - bun run build
+      - bun run preview
+    dir: ./frontend

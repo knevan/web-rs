@@ -1,10 +1,12 @@
-use crate::database::storage::StorageClient;
-use crate::database::{DatabaseService, Series, SeriesStatus};
-use anyhow::Context;
-use backon::{BackoffBuilder, Retryable};
 use std::sync::Arc;
 use std::time::Duration;
+
+use anyhow::Context;
+use backon::{BackoffBuilder, Retryable};
 use tokio::sync::mpsc;
+
+use crate::database::storage::StorageClient;
+use crate::database::{DatabaseService, Series, SeriesStatus};
 
 #[derive(Debug, Clone)]
 pub struct DeletionJob {
@@ -89,9 +91,7 @@ pub async fn run_deletion_worker(
             async move {
                 execute_full_deletion(series_id, &db_attempt, storage_attempt)
                     .await
-                    .with_context(|| {
-                        format!("Attempt for series  {} failed", series_id)
-                    })
+                    .with_context(|| format!("Attempt for series  {} failed", series_id))
             }
         };
 
@@ -112,10 +112,7 @@ pub async fn run_deletion_worker(
             );
 
             if let Err(e_update) = db_service
-                .update_series_processing_status(
-                    series_id,
-                    SeriesStatus::DeletionFailed,
-                )
+                .update_series_processing_status(series_id, SeriesStatus::DeletionFailed)
                 .await
             {
                 eprintln!(

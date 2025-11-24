@@ -1,5 +1,6 @@
+use anyhow::{anyhow, Context};
+
 use super::*;
-use anyhow::{Context, anyhow};
 
 /// Macros `sqlx::query!`
 /// For DML operations (INSERT, UPDATE, DELETE) or SELECTs,
@@ -13,10 +14,7 @@ use anyhow::{Context, anyhow};
 /// For queries returning a single value (one row, one column).
 /// Highly efficient for this purpose.
 impl DatabaseService {
-    pub async fn add_new_series(
-        &self,
-        data: &NewSeriesData<'_>,
-    ) -> AnyhowResult<i32> {
+    pub async fn add_new_series(&self, data: &NewSeriesData<'_>) -> AnyhowResult<i32> {
         let mut tx = self
             .pool
             .begin()
@@ -26,7 +24,8 @@ impl DatabaseService {
         let host = get_host_from_url(Some(data.source_url));
 
         let new_series_id = sqlx::query_scalar!(
-            r#"INSERT INTO series
+            r#"
+            INSERT INTO series
             (title, original_title, description, cover_image_url, current_source_url, source_website_host, check_interval_minutes)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id"#,
@@ -131,13 +130,10 @@ impl DatabaseService {
         .context("Failed to update series with sqlx")?;
 
         if let Some(author_names) = data.authors {
-            sqlx::query!(
-                "DELETE FROM series_authors WHERE series_id = $1",
-                series_id
-            )
-            .execute(&mut *tx)
-            .await
-            .context("Failed to delete existing authors for series")?;
+            sqlx::query!("DELETE FROM series_authors WHERE series_id = $1", series_id)
+                .execute(&mut *tx)
+                .await
+                .context("Failed to delete existing authors for series")?;
 
             for name in author_names {
                 let author_id = sqlx::query_scalar!(
@@ -156,10 +152,7 @@ impl DatabaseService {
                 )
                 .fetch_one(&mut *tx)
                 .await
-                .context(format!(
-                    "Failed to find or create author: {}",
-                    name
-                ))?;
+                .context(format!("Failed to find or create author: {}", name))?;
 
                 sqlx::query!(
                     "INSERT INTO series_authors (series_id, author_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
@@ -200,36 +193,34 @@ impl DatabaseService {
         Ok(result.rows_affected())
     }
 
-    pub async fn get_series_by_id(
-        &self,
-        id: i32,
-    ) -> AnyhowResult<Option<Series>> {
+    pub async fn get_series_by_id(&self, id: i32) -> AnyhowResult<Option<Series>> {
         let series = sqlx::query_as!(
             Series,
-            r#"SELECT id, title, original_title, description, cover_image_url, current_source_url,
-       source_website_host, views_count, bookmarks_count, total_rating_score, total_ratings_count, last_chapter_found_in_storage,
-       processing_status as "processing_status: SeriesStatus",
-       check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at
-       FROM series WHERE id = $1"#,
+            r#"
+            SELECT id, title, original_title, description, cover_image_url, current_source_url,
+            source_website_host, views_count, bookmarks_count, total_rating_score, total_ratings_count,
+            last_chapter_found_in_storage, processing_status as "processing_status: SeriesStatus",
+            check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at
+            FROM series WHERE id = $1
+            "#,
             id
         )
             .fetch_optional(&self.pool)
             .await
-            .context("Failed to query series by ID with sqlx")?; // Handles cases where no row is found
+            .context("Failed to query series by ID with sqlx")?;
         Ok(series)
     }
 
-    pub async fn get_series_by_title(
-        &self,
-        title: &str,
-    ) -> AnyhowResult<Option<Series>> {
+    pub async fn get_series_by_title(&self, title: &str) -> AnyhowResult<Option<Series>> {
         let series = sqlx::query_as!(
             Series,
-            r#"SELECT id, title, original_title, description, cover_image_url, current_source_url,
-            source_website_host, views_count, bookmarks_count, total_rating_score, total_ratings_count, last_chapter_found_in_storage,
-            processing_status as "processing_status: SeriesStatus",
+            r#"
+            SELECT id, title, original_title, description, cover_image_url, current_source_url,
+            source_website_host, views_count, bookmarks_count, total_rating_score, total_ratings_count,
+            last_chapter_found_in_storage, processing_status as "processing_status: SeriesStatus",
             check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at
-            FROM series WHERE title = $1"#,
+            FROM series WHERE title = $1
+            "#,
             title
         )
             .fetch_optional(&self.pool)
@@ -239,10 +230,7 @@ impl DatabaseService {
     }
 
     // Get authors for a sepecific series
-    pub async fn get_authors_by_series_id(
-        &self,
-        series_id: i32,
-    ) -> AnyhowResult<Vec<String>> {
+    pub async fn get_authors_by_series_id(&self, series_id: i32) -> AnyhowResult<Vec<String>> {
         let authors_name = sqlx::query_scalar!(
             r#"SELECT a.name FROM authors a
             JOIN series_authors sa ON a.id = sa.author_id
@@ -275,7 +263,7 @@ impl DatabaseService {
         Ok(categories)
     }
 
-    // Get paginated series list for admin
+    // Get series search list for admin panel
     pub async fn get_admin_paginated_series(
         &self,
         page: u32,
@@ -304,45 +292,102 @@ impl DatabaseService {
             total_items: Option<i64>,
         }
 
-        let record_list = sqlx::query_as!(
-            QueryResult,
-            r#"
-            SELECT
-                sr.id,
-                sr.title,
-                sr.original_title,
-                sr.description,
-                sr.cover_image_url,
-                sr.current_source_url,
-                sr.updated_at,
-                sr.processing_status as "processing_status: SeriesStatus",
-                COALESCE(
-                    json_agg(a.name) FILTER (WHERE a.id IS NOT NULL),
-                    '[]'::json
-                ) as "authors!",
-                COUNT(*) OVER () as total_items
-            FROM
-                series sr
-            LEFT JOIN
-                series_authors sa ON sr.id = sa.series_id
-            LEFT JOIN
-                authors a ON sa.author_id = a.id
-            WHERE
-                ($3::TEXT IS NULL OR sr.title_tsv @@ plainto_tsquery('english', $3))
-            GROUP BY
-                sr.id
-            ORDER BY
-                sr.updated_at DESC
-            LIMIT $1
-            OFFSET $2
-            "#,
-            limit,
-            offset,
-            search_query
-        )
-            .fetch_all(&self.pool)
-            .await
-            .context("Failed to query all series")?;
+        let record_list = match search_query.filter(|q| !q.trim().is_empty()) {
+            Some(search_match) => {
+                let search_match = search_match.trim();
+                let similarity_threshold = 0.20_f32;
+
+                sqlx::query_as!(
+                    QueryResult,
+                    r#"
+                    WITH base_search AS (
+                    SELECT
+                        s.id, s.title, s.original_title, s.description, s.cover_image_url,
+                        s.current_source_url, s.updated_at, s.processing_status,
+                        -- Calculate similarity score for ranking
+                        similarity(s.title, $3) as sim_score
+                    FROM series s
+                    WHERE
+                        s.title ILIKE '%' || $3 || '%'
+                    OR
+                        (s.title % $3 AND similarity(s.title, $3) >= $4)
+                    ),
+                    ranked_results AS (
+                        SELECT
+                            *,
+                            CASE
+                                WHEN title ILIKE $3 THEN 10
+                                WHEN title ILIKE $3 || '%' THEN 8
+                                WHEN title ILIKE '%' || $3 || '%' THEN 6
+                                ELSE 4
+                            END as search_rank
+                        FROM base_search
+                    ),
+                    total_count AS (
+                        SELECT COUNT(*) AS total FROM ranked_results
+                    )
+                    SELECT
+                        rr.id, rr.title, rr.original_title, rr.description,
+                        rr.cover_image_url, rr.current_source_url, rr.updated_at,
+                        rr.processing_status as "processing_status: SeriesStatus",
+                        -- Aggregate author names into a JSON array for each series
+                        COALESCE(
+                            json_agg(a.name) FILTER (WHERE a.id IS NOT NULL),
+                            '[]'::json
+                        ) AS "authors!",
+                        tc.total as total_items
+                    FROM ranked_results rr
+                    CROSS JOIN total_count tc
+                    LEFT JOIN series_authors sa ON rr.id = sa.series_id
+                    LEFT JOIN authors a ON sa.author_id = a.id
+                    GROUP BY
+                        rr.id, rr.title, rr.original_title, rr.description, rr.cover_image_url,
+                        rr.current_source_url, rr.updated_at, rr.processing_status,
+                        rr.search_rank, rr.sim_score, tc.total
+                    -- Order by the best rank, then by similarity, then by ID for stable sorting
+                    ORDER BY rr.search_rank DESC, rr.sim_score DESC, rr.id ASC
+                    LIMIT $1
+                    OFFSET $2
+                    "#,
+                    limit,
+                    offset,
+                    search_match,
+                    similarity_threshold,
+                )
+                .fetch_all(&self.pool)
+                .await
+                .context("Failed to query all series")
+            }
+            None => {
+                // No search - simple pagination
+                sqlx::query_as!(
+                    QueryResult,
+                    r#"
+                    SELECT
+                        s.id, s.title, s.original_title, s.description, s.cover_image_url,
+                        s.current_source_url, s.updated_at,
+                        s.processing_status as "processing_status: SeriesStatus",
+                        COALESCE(
+                            json_agg(a.name) FILTER (WHERE a.id IS NOT NULL),
+                            '[]'::json
+                        ) as "authors!",
+                        COUNT(*) OVER () as total_items
+                    FROM
+                        series s
+                    LEFT JOIN series_authors sa ON s.id = sa.series_id
+                    LEFT JOIN authors a ON sa.author_id = a.id
+                    GROUP BY s.id
+                    ORDER BY s.updated_at DESC
+                    LIMIT $1 OFFSET $2
+                    "#,
+                    limit,
+                    offset
+                )
+                .fetch_all(&self.pool)
+                .await
+                .context("Failed to get paginated series without search")
+            }
+        }?;
 
         let total_items = record_list
             .first()
@@ -381,18 +426,15 @@ impl DatabaseService {
             new_status as _,
             series_id,
         )
-            .execute(&self.pool)
-            .await
-            .context("Failed to update series processing status with sqlx")?;
+        .execute(&self.pool)
+        .await
+        .context("Failed to update series processing status with sqlx")?;
 
         Ok(result.rows_affected())
     }
 
     // Called only if there's new valid content (new chapter)
-    pub async fn update_series_new_content_timestamp(
-        &self,
-        series_id: i32,
-    ) -> AnyhowResult<u64> {
+    pub async fn update_series_new_content_timestamp(&self, series_id: i32) -> AnyhowResult<u64> {
         let result = sqlx::query!(
             "UPDATE series SET updated_at = NOW() WHERE id = $1",
             series_id,
@@ -412,13 +454,10 @@ impl DatabaseService {
         new_next_checked_at: Option<DateTime<Utc>>,
     ) -> AnyhowResult<u64> {
         // First, get the series data asynchronously.
-        let series =
-            self.get_series_by_id(series_id).await?.ok_or_else(|| {
-                anyhow!(
-                    "Series with id {} not found for schedule update",
-                    series_id
-                )
-            })?;
+        let series = self
+            .get_series_by_id(series_id)
+            .await?
+            .ok_or_else(|| anyhow!("Series with id {} not found for schedule update", series_id))?;
 
         // Calculate the next check time if not provided
         let final_next_checked_at = new_next_checked_at.unwrap_or_else(|| {
@@ -427,8 +466,7 @@ impl DatabaseService {
             // Add a random +- 5 minutes jitter to avoid all series checking at the exact same time
             let random_jitter = rng.random_range(-300..=300);
             let actual_interval_secs = (base_interval * 60) + random_jitter;
-            Utc::now()
-                + chrono::Duration::seconds(actual_interval_secs.max(300))
+            Utc::now() + chrono::Duration::seconds(actual_interval_secs.max(300))
         });
 
         let final_status = new_status.unwrap_or(series.processing_status);
@@ -459,10 +497,7 @@ impl DatabaseService {
         Ok(result.rows_affected())
     }
 
-    pub async fn get_series_chapters_count(
-        &self,
-        series_id: i32,
-    ) -> AnyhowResult<i64> {
+    pub async fn get_series_chapters_count(&self, series_id: i32) -> AnyhowResult<i64> {
         let count = sqlx::query_scalar!(
             "SELECT COUNT(*) FROM series_chapters WHERE series_id = $1",
             series_id
@@ -511,10 +546,7 @@ impl DatabaseService {
         }))
     }
 
-    pub async fn delete_series_by_id(
-        &self,
-        series_id: i32,
-    ) -> AnyhowResult<u64> {
+    pub async fn delete_series_by_id(&self, series_id: i32) -> AnyhowResult<u64> {
         let mut tx = self
             .pool
             .begin()
@@ -550,19 +582,15 @@ impl DatabaseService {
         .context("Failed to delete series chapters")?;
 
         // Delete all author link records
-        sqlx::query!(
-            "DELETE FROM series_authors WHERE series_id = $1",
-            series_id
-        )
-        .execute(&mut *tx)
-        .await
-        .context("Failed to delete series-authors links")?;
+        sqlx::query!("DELETE FROM series_authors WHERE series_id = $1", series_id)
+            .execute(&mut *tx)
+            .await
+            .context("Failed to delete series-authors links")?;
 
-        let result =
-            sqlx::query!("DELETE FROM series WHERE id = $1", series_id)
-                .execute(&mut *tx)
-                .await
-                .context("Failed to delete series")?;
+        let result = sqlx::query!("DELETE FROM series WHERE id = $1", series_id)
+            .execute(&mut *tx)
+            .await
+            .context("Failed to delete series")?;
 
         tx.commit()
             .await
@@ -571,10 +599,7 @@ impl DatabaseService {
         Ok(result.rows_affected())
     }
 
-    pub async fn mark_series_for_deletion(
-        &self,
-        series_id: i32,
-    ) -> AnyhowResult<u64> {
+    pub async fn mark_series_for_deletion(&self, series_id: i32) -> AnyhowResult<u64> {
         let result = sqlx::query!(
             "UPDATE series SET processing_status = $1,
                   updated_at = NOW() WHERE id = $2 AND processing_status NOT IN ($3, $4)",
@@ -583,16 +608,14 @@ impl DatabaseService {
             SeriesStatus::PendingDeletion as _,
             SeriesStatus::Deleting as _,
         )
-            .execute(&self.pool)
-            .await
-            .context("Failed to mark series for deletion with sqlx")?;
+        .execute(&self.pool)
+        .await
+        .context("Failed to mark series for deletion with sqlx")?;
 
         Ok(result.rows_affected())
     }
 
-    pub async fn find_and_lock_series_for_check(
-        &self,
-    ) -> AnyhowResult<Option<Series>> {
+    pub async fn find_and_lock_series_for_check(&self) -> AnyhowResult<Option<Series>> {
         let series = sqlx::query_as!(
             Series,
             r#"
@@ -624,9 +647,7 @@ impl DatabaseService {
         Ok(series)
     }
 
-    pub async fn find_and_lock_series_for_job_deletion(
-        &self,
-    ) -> AnyhowResult<Option<Series>> {
+    pub async fn find_and_lock_series_for_job_deletion(&self) -> AnyhowResult<Option<Series>> {
         // If the row is already locked by another transaction,
         // it will skip it and look for the next row.
         let series = sqlx::query_as!(
@@ -657,10 +678,7 @@ impl DatabaseService {
         Ok(series)
     }
 
-    pub async fn create_category_tag(
-        &self,
-        name: &str,
-    ) -> AnyhowResult<CategoryTag> {
+    pub async fn create_category_tag(&self, name: &str) -> AnyhowResult<CategoryTag> {
         let category = sqlx::query_as!(
             CategoryTag,
             "INSERT INTO categories (name) VALUES ($1) RETURNING id, name",
@@ -682,14 +700,11 @@ impl DatabaseService {
         Ok(result.rows_affected())
     }
 
-    pub async fn get_list_all_categories(
-        &self,
-    ) -> AnyhowResult<Vec<CategoryTag>> {
-        let categories =
-            sqlx::query_as!(CategoryTag, "SELECT id, name FROM categories")
-                .fetch_all(&self.pool)
-                .await
-                .context("Failed to list all categories with sqlx")?;
+    pub async fn get_list_all_categories(&self) -> AnyhowResult<Vec<CategoryTag>> {
+        let categories = sqlx::query_as!(CategoryTag, "SELECT id, name FROM categories")
+            .fetch_all(&self.pool)
+            .await
+            .context("Failed to list all categories with sqlx")?;
 
         Ok(categories)
     }
