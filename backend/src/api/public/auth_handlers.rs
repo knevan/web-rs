@@ -1,19 +1,19 @@
-use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
+use axum::Json;
 use axum_core::__private::tracing::error;
-use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
+use axum_extra::extract::CookieJar;
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::api::extractor::{AuthenticatedUser, Role};
+use crate::api::extractor::AuthenticatedUser;
 use crate::builder::startup::AppState;
 use crate::common::email_service::send_password_reset_email;
 use crate::common::error::AuthError;
 use crate::common::hashing::{hash_password, verify_password};
-use crate::common::jwt::{RefreshClaims, create_access_jwt, create_refresh_jwt};
+use crate::common::jwt::{create_access_jwt, create_refresh_jwt, RefreshClaims};
 use crate::database::DatabaseService;
 
 #[derive(Serialize)]
@@ -265,7 +265,7 @@ pub async fn refresh_access_token_handler(
 
     let role_name = get_role_name(&state.db_service, user.role_id).await?;
 
-    let new_access_token = create_access_jwt(claims.sub.clone(), role_name.clone())?;
+    let new_access_token = create_access_jwt(claims.sub.clone(), role_name)?;
 
     let new_access_cookie = Cookie::build(("token", new_access_token))
         .path("/")

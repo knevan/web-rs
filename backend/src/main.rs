@@ -1,4 +1,12 @@
-// #![allow(clippy::uninlined_format_args)]
+#![deny(
+    clippy::panic,
+    clippy::unwrap_used,
+    clippy::panicking_unwrap,
+    clippy::redundant_clone,
+    clippy::implicit_clone,
+    clippy::perf
+)]
+// clippy::expect_used
 extern crate core;
 
 mod api;

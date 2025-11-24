@@ -7,7 +7,6 @@ use axum_core::__private::tracing::error;
 use crate::builder::startup::AppState;
 use crate::common::error::AuthError;
 use crate::common::jwt::Claims;
-use crate::database::Users;
 
 #[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
 pub enum Role {

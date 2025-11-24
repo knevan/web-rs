@@ -1,18 +1,18 @@
-use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum_core::__private::tracing::{error, warn};
+use axum::Json;
+use axum_core::__private::tracing::warn;
 use axum_core::response::{IntoResponse, Response};
 use axum_extra::extract::Multipart;
 use rand::Rng;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::api::admin::{
     CreateCategoryTagRequest, CreateSeriesRequest, PaginatedResponse, PaginationParams,
     RepairChapterRequest, SeriesResponse, UpdateSeriesRequest, UploadCoverImageResponse,
 };
-use crate::api::extractor::AdminOrHigherUser;
+use crate::api::extractor::{AdminOrHigherUser, SuperAdminUser};
 use crate::builder::startup::AppState;
 use crate::database::{NewSeriesData, Series, UpdateSeriesData};
 use crate::task_workers::repair_chapter_worker;
@@ -298,7 +298,7 @@ pub async fn repair_chapter_handler(
 
 // Delete series
 pub async fn delete_series_handler(
-    admin: AdminOrHigherUser,
+    admin: SuperAdminUser,
     Path(series_id): Path<i32>,
     State(state): State<AppState>,
 ) -> Response {
