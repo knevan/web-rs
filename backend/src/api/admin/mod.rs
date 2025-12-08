@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::common::error::AuthError;
 
+pub mod admin_comment_handler;
 pub mod admin_routes;
 pub mod admin_series_handlers;
 pub mod admin_user_handler;

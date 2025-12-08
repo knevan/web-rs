@@ -27,7 +27,7 @@ impl Role {
         }
     }
 
-    pub fn to_name(&self) -> &str {
+    pub fn to_name(self) -> &'static str {
         match self {
             Role::SuperAdmin => "superadmin",
             Role::Admin => "admin",

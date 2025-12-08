@@ -35,6 +35,7 @@ fn hydrate_attachments_url(comments: &mut [Comment], base_url: &str) {
 pub struct CommentParams {
     #[serde(default)]
     sort: CommentSort,
+    thread_id: Option<i64>,
 }
 
 // Fetch series comments
@@ -47,7 +48,13 @@ pub async fn get_series_comment_handler(
     let user_id = user.0.map(|u| u.id);
     match state
         .db_service
-        .get_comments(CommentEntityType::Series, series_id, user_id, params.sort)
+        .get_comments(
+            CommentEntityType::Series,
+            series_id,
+            user_id,
+            params.sort,
+            params.thread_id,
+        )
         .await
     {
         Ok(mut comments) => {
@@ -86,6 +93,7 @@ pub async fn get_chapter_comment_handler(
             chapter_id,
             user_id,
             params.sort,
+            params.thread_id,
         )
         .await
     {
@@ -375,6 +383,14 @@ pub async fn delete_comment_handler(
             }
             (StatusCode::OK, Json(updated_comment)).into_response()
         }
+        Ok(DeleteCommentResult::InsufficientPermissions) => (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "status": "error",
+                "message": "You do not have permission to delete this user's comment"
+            })),
+        )
+            .into_response(),
         Ok(DeleteCommentResult::HardDeleted(attachment_object_key)) => {
             if !attachment_object_key.is_empty()
                 && let Err(e) = state

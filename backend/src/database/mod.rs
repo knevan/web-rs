@@ -91,7 +91,7 @@ pub struct Series {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, sqlx::Type, Serialize, Deserialize)]
-#[sqlx(type_name = "series_status", rename_all = "PascalCase")]
+#[sqlx(type_name = "chapter_status", rename_all = "PascalCase")]
 pub enum ChapterStatus {
     Processing,
     Available,
@@ -275,6 +275,8 @@ pub struct UserWithRole {
     pub username: String,
     pub email: String,
     pub role_name: String,
+    pub role_id: i32,
+    pub is_active: bool,
 }
 
 // Comment struct
@@ -289,6 +291,7 @@ pub struct Comment {
     pub user: CommentUser,
     pub upvotes: i64,
     pub downvotes: i64,
+    pub is_deleted: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_user_vote: Option<i16>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -311,6 +314,7 @@ pub struct CommentFlatRow {
     user_avatar_url: Option<String>,
     upvotes: i64,
     downvotes: i64,
+    is_deleted: bool,
     current_user_vote: Option<i16>,
     attachment_urls: Option<Vec<String>>,
 }
@@ -329,17 +333,12 @@ pub enum CommentEntityType {
     SeriesChapters,
 }
 
-#[derive(Debug, Clone, Deserialize, Copy)]
+#[derive(Debug, Clone, Deserialize, Copy, Default)]
 pub enum CommentSort {
+    #[default]
     Newest,
     Oldest,
     TopVote,
-}
-
-impl Default for CommentSort {
-    fn default() -> Self {
-        Self::Newest
-    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -355,12 +354,14 @@ pub struct UpdateCommentResponse {
     pub content_user_markdown: String,
     pub content_html: String,
     pub updated_at: DateTime<Utc>,
+    pub is_deleted: bool,
 }
 
 pub enum DeleteCommentResult {
     HardDeleted(Vec<String>),
     SoftDeleted(UpdateCommentResponse, Vec<String>),
     NotFound,
+    InsufficientPermissions,
 }
 
 // Payload for voting on a comment.
