@@ -253,7 +253,8 @@ impl DatabaseService {
             r#"
             SELECT c.id, c.name FROM categories c
             JOIN series_categories sc ON c.id = sc.category_id
-            WHERE sc.series_id = $1"#,
+            WHERE sc.series_id = $1
+            "#,
             series_id
         )
         .fetch_all(&self.pool)

@@ -453,3 +453,60 @@ pub async fn get_series_category_tags_handler(
             .into_response(),
     }
 }
+
+pub async fn get_series_chapter_handler(
+    admin: AdminOrHigherUser,
+    State(state): State<AppState>,
+    Path(series_id): Path<i32>,
+) -> Response {
+    println!(
+        "->> {:<12} - get_series_chapters_handler - user: {}, series_id: {}",
+        "HANDLER", admin.0.username, series_id
+    );
+
+    match state.db_service.get_chapters_by_series_id(series_id).await {
+        Ok(chapters) => (
+            StatusCode::OK,
+            Json(serde_json::json!({"status": "success", "chapters": chapters})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"status": "error", "message": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn delete_chapter_handler(
+    admin: AdminOrHigherUser,
+    State(state): State<AppState>,
+    Path((series_id, chapter_number)): Path<(i32, f32)>,
+) -> Response {
+    println!(
+        "->> {:<12} - delete_chapter_handler - user: {}, series: {}, chap: {}",
+        "HANDLER", admin.0.username, series_id, chapter_number
+    );
+
+    match state
+        .db_service
+        .delete_chapter_and_images_for_chapter(series_id, chapter_number)
+        .await
+    {
+        Ok(row_affected) if row_affected > 0 => (
+            StatusCode::OK,
+            Json(serde_json::json!({"status": "success", "message": "Chapter has been deleted."})),
+        )
+            .into_response(),
+        Ok(_) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"status": "error", "message": "Chapter not found."})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"status": "error", "message": e.to_string()})),
+        )
+            .into_response(),
+    }
+}

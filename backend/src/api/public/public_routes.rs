@@ -25,7 +25,7 @@ use crate::api::public::user_handlers::{
 };
 use crate::builder::startup::AppState;
 
-// Route for user auth api
+/// User auth api routes
 pub fn auth_api_routes() -> Router<AppState> {
     Router::new()
         .route("/login", post(login_handler))
@@ -38,11 +38,9 @@ pub fn auth_api_routes() -> Router<AppState> {
         .route("/reset-password", post(reset_password_handler))
 }
 
-// Route for general public api
-pub fn general_api_routes() -> Router<AppState> {
-    // Router user related api
-    let user_api = Router::new()
-        .route("/user/bookmark", get(get_user_bookmark_library_handler))
+/// User logged-in api routes
+fn user_logged_in_api_routes() -> Router<AppState> {
+    Router::new()
         .route(
             "/user/profile",
             get(get_user_profile_handler).patch(update_user_profile_handler),
@@ -51,10 +49,21 @@ pub fn general_api_routes() -> Router<AppState> {
             "/user/profile/password",
             patch(update_user_password_setting_handler),
         )
-        .route("/user/profile/avatar", post(update_user_avatar_handler));
+        .route("/user/profile/avatar", post(update_user_avatar_handler))
+        .route("/user/bookmark", get(get_user_bookmark_library_handler))
+        .route(
+            "/series/{id}/bookmark",
+            post(add_bookmark_series_handler).delete(delete_bookmark_series_handler),
+        )
+        .route(
+            "/series/{id}/bookmark/status",
+            get(get_bookmark_status_current_user_handler),
+        )
+}
 
-    // Route for public api
-    let public_series_api_routes = Router::new()
+/// General public api routes (no authentication required)
+fn public_general_api_routes() -> Router<AppState> {
+    Router::new()
         .route("/series/most-viewed", get(fetch_most_viewed_series_handler))
         .route("/series/new-series", get(fetch_new_series_handler))
         .route(
@@ -74,17 +83,11 @@ pub fn general_api_routes() -> Router<AppState> {
         )
         .route("/series/{id}/rate", post(rate_series_handler))
         .route("/series/{id}/views-count", post(record_series_view_handler))
-        .route(
-            "/series/{id}/bookmark",
-            post(add_bookmark_series_handler).delete(delete_bookmark_series_handler),
-        )
-        .route(
-            "/series/{id}/bookmark/status",
-            get(get_bookmark_status_current_user_handler),
-        );
+}
 
-    // Router comments related api
-    let comments_api = Router::new()
+/// Comment api routes
+fn public_comment_api_routes() -> Router<AppState> {
+    Router::new()
         .route(
             "/series/{id}/comments",
             get(get_series_comment_handler).post(create_series_comment_handler),
@@ -97,13 +100,18 @@ pub fn general_api_routes() -> Router<AppState> {
             "/comments/{id}/edit",
             patch(update_existing_comment_handler),
         )
-        .route("/comments/{id}/deleted", delete(delete_comment_handler))
+        .route("/comments/{id}/delete", delete(delete_comment_handler))
         .route("/comments/{id}/vote", post(vote_on_comment_handler))
         .route(
             "/comments/attachments/upload",
             post(upload_comment_attachments_handler),
-        );
+        )
+}
 
+// Route for general public api
+pub fn general_api_routes() -> Router<AppState> {
     // Merge same prefix "/api" routes into one
-    public_series_api_routes.merge(user_api).merge(comments_api)
+    public_general_api_routes()
+        .merge(public_comment_api_routes())
+        .merge(user_logged_in_api_routes())
 }

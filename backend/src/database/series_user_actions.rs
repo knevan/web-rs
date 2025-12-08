@@ -610,7 +610,7 @@ impl DatabaseService {
             query_builder.sql()
         );
 
-        // Execute build queru
+        // Execute build query
         let record_list = query_builder
             .build_query_as::<QueryDefaultResult>()
             .fetch_all(&self.pool)
