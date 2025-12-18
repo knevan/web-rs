@@ -212,9 +212,6 @@
     async function handleRatingClick(rating: number) {
         if (!authState.isAuthenticated) {
             toast.warning('Please log in to rate this series', {
-                position: "top-center",
-                closeButton: false,
-                duration: 3000,
                 action: {
                     label: 'Login',
                     onClick: () => handleLoginClick(),
@@ -242,18 +239,10 @@
                 mangaData.series.total_rating_score = result.new_total_score;
                 mangaData.series.total_ratings_count = result.new_total_count;
             }
-            toast.success(`You rated this series ${rating} stars!`, {
-                position: "top-center",
-                closeButton: false,
-                duration: 1500,
-            });
+            toast.success(`You rated this series ${rating} stars!`);
         } catch (err) {
             userRating = 0;
-            toast.error(err instanceof Error ? err.message : 'An unknown error occurred', {
-                position: "top-center",
-                closeButton: false,
-                duration: 3000,
-            });
+            toast.error(err instanceof Error ? err.message : 'An unknown error occurred');
         }
     }
 
@@ -284,10 +273,6 @@
         mangaData.series.bookmarks_count = originalCount;
 
         toast.promise(updateBookmarkStatus(), {
-            position: "top-center",
-            richColors: true,
-            closeButton: false,
-            duration: 1500,
             loading: `Add series to Bookmark Library...`,
             success: (isNowBookmarked) => {
                 isBookmarked = isNowBookmarked;

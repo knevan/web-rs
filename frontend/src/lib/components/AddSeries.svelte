@@ -102,10 +102,6 @@
             availableTags = data.categories || [];
         } catch (error: any) {
             toast.error("Could not load category tags. Please try again.", {
-                position: "top-center",
-                richColors: true,
-                closeButton: false,
-                duration: 2000,
                 description: error.message
             });
             console.error(error);
@@ -194,9 +190,6 @@
         isSubmitting = true;
 
         toast.promise(createSeriesRequest(), {
-            position: "top-center",
-            richColors: true,
-            duration: 3000,
             loading: 'Adding new series...',
             success: (data) => {
                 open = false;

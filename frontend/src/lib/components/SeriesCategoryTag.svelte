@@ -36,10 +36,6 @@
             tags = data.categories;
         } catch (e: any) {
             toast.error('Failed to load tags:', {
-                position: "top-center",
-                richColors: true,
-                closeButton: false,
-                duration: 2000,
                 description: e.message
             });
             console.error('Error adding tags:', e);
@@ -70,9 +66,6 @@
         };
 
         toast.promise(addRequest(), {
-            position: "top-center",
-            richColors: true,
-            duration: 3000,
             loading: 'Adding new tag...',
             success: (name) => {
                 newTagName = '';
@@ -104,9 +97,6 @@
         };
 
         toast.promise(deleteRequest(), {
-            position: "top-center",
-            richColors: true,
-            duration: 3000,
             loading: 'Deleting tag...',
             success: () => {
                 loadTags();

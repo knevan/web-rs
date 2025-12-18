@@ -30,40 +30,39 @@
     let isPasswordLoading = $state(false);
 
     $effect(() => {
+        if ($auth.isVerifying) {
+            return;
+        }
+
         if (!$auth.isAuthenticated) {
             const redirectTo = page.url.pathname;
             goto(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
             return;
         }
 
-        async function fetchUserProfile() {
-            isLoading = true;
-            error = null;
-            try {
-                const response = await apiFetch('/api/user/profile');
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch user profile: ${response.statusText}`);
-                }
-                const data = await response.json();
-                userProfile.email = data.email ?? '';
-                userProfile.displayName = data.displayName ?? '';
-                userProfile.avatarUrl = data.avatarUrl ?? '';
-            } catch (err) {
-                const errorMessage = err instanceof Error ? err.message : 'Unknown user profile error';
-                error = errorMessage;
-                toast.error(errorMessage, {
-                    position: "top-center",
-                    richColors: true,
-                    closeButton: false,
-                    duration: 2000,
-                });
-            } finally {
-                isLoading = false;
-            }
-        }
-
         fetchUserProfile();
     });
+
+    async function fetchUserProfile() {
+        isLoading = true;
+        error = null;
+        try {
+            const response = await apiFetch('/api/user/profile');
+            if (!response.ok) {
+                throw new Error(`Failed to fetch user profile: ${response.statusText}`);
+            }
+            const data = await response.json();
+            userProfile.email = data.email ?? '';
+            userProfile.displayName = data.displayName ?? '';
+            userProfile.avatarUrl = data.avatarUrl ?? '';
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Unknown user profile error';
+            error = errorMessage;
+            toast.error(errorMessage);
+        } finally {
+            isLoading = false;
+        }
+    }
 
     $effect(() => {
         if (avatarFile) {
@@ -87,12 +86,7 @@
 
     async function handleAvatarUpdate() {
         if (!avatarFile) {
-            toast.warning('Please select an image first.', {
-                position: "top-center",
-                richColors: true,
-                closeButton: false,
-                duration: 2000,
-            });
+            toast.warning('Please select an image first.');
             return;
         }
         isAvatarLoading = true;
@@ -115,10 +109,6 @@
             avatarFile = null;
         };
         toast.promise(avatarPromise(), {
-            position: "top-center",
-            richColors: true,
-            closeButton: false,
-            duration: 2000,
             loading: 'Uploading avatar...',
             success: 'Avatar updated successfully.',
             error: (err) => err instanceof Error ? err.message : 'Update avatar profile failed!',
@@ -148,10 +138,6 @@
         };
 
         toast.promise(profilePromise(), {
-            position: "top-center",
-            richColors: true,
-            closeButton: false,
-            duration: 2000,
             loading: 'Updating profile...',
             success: 'Profile updated successfully!',
             error: (err) => err instanceof Error ? err.message : 'Could not update profile.',
@@ -163,21 +149,11 @@
 
     async function handlePasswordUpdate() {
         if (passwordData.newPassword.length < 8) {
-            toast.error('Password must be at least 8 characters long.', {
-                position: "top-center",
-                richColors: true,
-                closeButton: false,
-                duration: 2000,
-            });
+            toast.error('Password must be at least 8 characters long.');
             return;
         }
         if (passwordData.newPassword !== passwordData.newPasswordConfirm) {
-            toast.error('Passwords do not match.', {
-                position: "top-center",
-                richColors: true,
-                closeButton: false,
-                duration: 2000,
-            });
+            toast.error('Passwords do not match.');
             return;
         }
 
@@ -199,10 +175,6 @@
             }
         };
         toast.promise(passwordPromise(), {
-            position: "top-center",
-            richColors: true,
-            closeButton: false,
-            duration: 2000,
             success: () => {
                 passwordData.newPassword = '';
                 passwordData.newPasswordConfirm = '';

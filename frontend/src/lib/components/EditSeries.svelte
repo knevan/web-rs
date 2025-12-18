@@ -53,10 +53,6 @@
             selectedTagsIds = new Set(currentTagIds);
         } catch (error: any) {
             toast.error('Could not load tag information.', {
-                position: "top-center",
-                richColors: true,
-                closeButton: false,
-                duration: 2000,
                 description: error.message
             });
             console.error(error);
@@ -93,10 +89,6 @@
         };
 
         toast.promise(uploadRequest(), {
-            position: "top-center",
-            richColors: true,
-            closeButton: false,
-            duration: 3000,
             loading: `Uploading ${file.name}`,
             success: (newUrl) => {
                 formData.coverImageUrl = newUrl;
@@ -145,10 +137,6 @@
         isSubmitting = true;
 
         toast.promise(updateSeriesRequest(), {
-            position: "top-center",
-            richColors: true,
-            closeButton: false,
-            duration: 3000,
             class: "[--width:500px]",
             loading: 'Updating the series...',
             success: (title) => {

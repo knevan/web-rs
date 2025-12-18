@@ -56,9 +56,6 @@
         };
 
         toast.promise(repairRequest(), {
-            position: "top-center",
-            richColors: true,
-            duration: 3000,
             loading: `Submitting repair chapter...`,
             success: (message) => {
                 setTimeout(() => {

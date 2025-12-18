@@ -34,11 +34,7 @@
 
             if (errorType === 'unauthorized') {
                 toast.error('Access Denied', {
-                    description: 'Anda tidak memiliki izin untuk mengakses halaman tersebut.',
-                    position: "top-center",
-                    richColors: true,
-                    closeButton: false,
-                    duration: 1500,
+                    description: 'Anda tidak memiliki izin untuk mengakses halaman tersebut.'
                 });
             }
 
@@ -86,12 +82,14 @@
 <ModeWatcher/>
 <Toaster
         richColors
-        closeButton
+        duration={2500}
+        position="top-center"
         class="![--width:clamp(280px,340px,100%)] xl:[--width:clamp(280px,660px,100%)]"
         toastOptions={{
             classes: {
                 toast: 'flex items-center w-full px-5 py-3 rounded-lg shadow-lg bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-500 text-zinc-800 dark:text-zinc-200',
-                title: 'font-medium text-sm'
+                title: 'font-medium text-sm',
+                description: 'text-sm',
             }
         }}
 />
