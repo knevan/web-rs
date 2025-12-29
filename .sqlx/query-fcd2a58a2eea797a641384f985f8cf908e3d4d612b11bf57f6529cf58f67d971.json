@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT \n                u.username, u.email, u.role_id, u.is_active, r.role_name \n            FROM users u\n            JOIN roles r ON u.role_id = r.id\n            WHERE u.id = $1 \n            FOR UPDATE",
+  "query": "SELECT u.username, u.email, u.role_id, u.is_active, r.role_name\n            FROM users u\n            JOIN roles r ON u.role_id = r.id\n            WHERE u.id = $1\n            FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -42,5 +42,5 @@
       false
     ]
   },
-  "hash": "263f18e6e501202789d94afa7a31baacaf4fb201941634a73e8b8ae1db819216"
+  "hash": "fcd2a58a2eea797a641384f985f8cf908e3d4d612b11bf57f6529cf58f67d971"
 }

@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
-use image::{GenericImageView, load_from_memory};
+use image::{load_from_memory, GenericImageView};
 use ravif::{Encoder, Img};
 use rgb::FromSlice;
 
-/// This function is CPU-intensive and is designed to be run in a blocking thread or parallel iwth rayon
+/// This function is CPU-intensive and is designed to be run in a blocking thread or parallel th rayon
 pub fn covert_image_bytes_to_avif(image_bytes: &[u8]) -> Result<Vec<u8>> {
     // Decode the image from memory
     let img = load_from_memory(image_bytes).with_context(
