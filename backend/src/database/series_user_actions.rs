@@ -704,8 +704,8 @@ impl DatabaseService {
     // Query helper for delete old view logs
     pub async fn cleanup_old_view_logs(&self) -> AnyhowResult<u64> {
         let retention_interval = PgInterval {
-            months: 1,
-            days: 0,
+            months: 0,
+            days: 35,
             microseconds: 0,
         };
 

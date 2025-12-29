@@ -4,7 +4,7 @@ use super::*;
 
 /// Macros `sqlx::query!`
 /// For DML operations (INSERT, UPDATE, DELETE) or SELECTs,
-/// where you're manually processing generic `sqlx::Row`s (anonymous struct).
+/// where you're manually processing generic `sqlx::Row` (anonymous struct).
 ///
 /// Macros `sqlx::query_as!`
 /// For mapping SELECT results directly to a defined rust struct (`#[derive(FromRow)]`),
@@ -616,7 +616,7 @@ impl DatabaseService {
         Ok(result.rows_affected())
     }
 
-    pub async fn find_and_lock_series_for_check(&self) -> AnyhowResult<Option<Series>> {
+    pub async fn find_and_lock_series_for_check(&self, limit: i64) -> AnyhowResult<Vec<Series>> {
         let series = sqlx::query_as!(
             Series,
             r#"
@@ -626,22 +626,23 @@ impl DatabaseService {
                     processing_status = $1
                     AND next_checked_at <= NOW()
                 ORDER BY next_checked_at ASC
-                LIMIT 1
+                LIMIT $2
                 FOR UPDATE SKIP LOCKED
             )
             UPDATE series
-            SET processing_status = $2
-            WHERE id = (SELECT id FROM candidate)
+            SET processing_status = $3
+            WHERE id IN (SELECT id FROM candidate)
             RETURNING
-                id, title, original_title, description, cover_image_url, current_source_url,
-                source_website_host, views_count, bookmarks_count, total_rating_score, total_ratings_count, last_chapter_found_in_storage,
+                id, title, original_title, description, cover_image_url, current_source_url, source_website_host,
+                views_count, bookmarks_count, total_rating_score, total_ratings_count, last_chapter_found_in_storage,
                 processing_status as "processing_status: SeriesStatus", check_interval_minutes, last_checked_at,
                 next_checked_at, created_at, updated_at
             "#,
             SeriesStatus::Ongoing as _,
+            limit,
             SeriesStatus::Processing as _,
         )
-            .fetch_optional(&self.pool)
+            .fetch_all(&self.pool)
             .await
             .context("Failed to find and lock series for check with sqlx")?;
 

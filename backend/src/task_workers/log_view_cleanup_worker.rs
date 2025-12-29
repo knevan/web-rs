@@ -1,30 +1,50 @@
-use std::time::Duration;
+use tokio_cron_scheduler::{Job, JobScheduler};
 
 use crate::database::DatabaseService;
 
 pub async fn run_log_view_cleanup_worker(db_service: DatabaseService) {
-    println!("[WORKER] Log view cleanup worker started");
+    let log_cleanup = async {
+        let scheduler = JobScheduler::new().await?;
+        let db_clone = db_service.clone();
+        let cron_exp = "0 0 2 * * * *";
 
-    let mut interval = tokio::time::interval(Duration::from_hours(24));
+        let cleanup_job = Job::new_async(cron_exp, move |_uuid, _locked| {
+            let db = db_clone.clone();
+            Box::pin(async move {
+                println!("[CRON] Starting daily view log cleanup (Pruning > 35 days)...");
 
-    // The first tick from `interval` fires immediately
-    // Skip it to ensure the first cleanup run after 24 hours
-    interval.tick().await;
-
-    loop {
-        interval.tick().await;
-
-        match db_service.cleanup_old_view_logs().await {
-            Ok(deleted_rows) => {
-                if deleted_rows > 0 {
-                    println!("[WORKER] Cleaned up {} old log view entries", deleted_rows);
-                } else {
-                    println!("[WORKER] No old log view entries to clean up");
+                match db.cleanup_old_view_logs().await {
+                    Ok(deleted) => {
+                        if deleted > 0 {
+                            println!("[CRON] Cleanup success. Pruned {} old rows.", deleted);
+                        } else {
+                            println!("[CRON] Cleanup ran. Database is clean (no rows > 40 days).");
+                        }
+                    }
+                    Err(e) => eprintln!("[CRON] Cleanup failed: {}", e),
                 }
-            }
-            Err(e) => {
-                eprintln!("[WORKER] Error cleaning up log view entries: {}", e);
-            }
+            })
+        })?;
+
+        scheduler.add(cleanup_job).await?;
+        scheduler.start().await?;
+
+        Ok::<JobScheduler, anyhow::Error>(scheduler)
+    }
+    .await;
+
+    match log_cleanup {
+        Ok(_scheduler) => {
+            // CRITICAL: Hold this task so that the scheduler doesn't get dropped.
+            // The variable '_scheduler' is owned by this scope. While pending() waits,
+            // the scheduler remains alive and cron jobs continue to run in the background.
+            std::future::pending::<()>().await;
+        }
+        Err(e) => {
+            eprintln!(
+                "[FATAL LOG VIEW CLEANUP WORKER ERROR] Log View Cleanup Scheduler died: {}",
+                e
+            );
         }
     }
 }

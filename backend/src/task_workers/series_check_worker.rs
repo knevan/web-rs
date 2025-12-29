@@ -22,31 +22,35 @@ pub async fn run_series_check_scheduler(
     println!("[SERIES-SCHEDULER] Starting...");
 
     // Interval to check db for job
-    let mut interval = tokio::time::interval(Duration::from_secs(60));
+    let mut interval = tokio::time::interval(Duration::from_secs(30));
     // Skip first tick
-    interval.tick().await;
+    interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
     loop {
         interval.tick().await;
 
         loop {
-            match db_service.find_and_lock_series_for_check().await {
-                Ok(Some(series)) => {
-                    println!(
-                        "[SERIES-SCHEDULER] Found series for check {}, id {}",
-                        series.title, series.id
-                    );
-                    let job = SeriesCheckJob { series };
-                    if job_sender.send(job).await.is_err() {
-                        eprintln!(
-                            "[SERIES-SCHEDULER] CRITICAL: Receiver channel closed. Shutting down."
-                        );
-                        return;
+            match db_service.find_and_lock_series_for_check(20).await {
+                Ok(series_list) => {
+                    if series_list.is_empty() {
+                        // If no job, waiting fot the next interval tick
+                        break;
                     }
-                }
-                Ok(None) => {
-                    // No job found, wait for next tick
-                    break;
+
+                    println!(
+                        "[SERIES-SCHEDULER] Found batch of {} series to check",
+                        series_list.len()
+                    );
+
+                    for series in series_list {
+                        let job = SeriesCheckJob { series };
+                        // Send worker queue
+                        // If queue full, will wait (backpressure) until worker empty
+                        if job_sender.send(job).await.is_err() {
+                            eprintln!("[SERIES-SCHEDULER] CRITICAL: Channel closed.");
+                            return;
+                        }
+                    }
                 }
                 Err(e) => {
                     eprintln!("[SERIES-SCHEDULER] Error finding {}. Retrying later", e);
