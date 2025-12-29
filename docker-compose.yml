@@ -1,0 +1,71 @@
+version: '3.8'
+
+name: manga_app
+services:
+  backend:
+    container_name: backend_rust
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@database:5432/${POSTGRES_DB}
+    depends_on:
+      database:
+        condition: service_healthy
+    command: sh -c "sqlx migrate run && ./manga_app"
+
+  frontend:
+    container_name: frontend_svelte
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  database:
+    image: postgres:17.7-alpine
+    restart: always
+    container_name: postgres_db
+    expose:
+      - 5432
+    env_file:
+      - .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rust_migrator
+    depends_on:
+      db:
+        condition: service_healthy
+    # Run the migration command and exit
+    command: sqlx migrate run
+    environment:
+      DATABASE_URL: "postgres://user:password@db:5432/your_database"
+
+  migrator:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: "postgres://user:password@db:5432/your_database"
+    depends_on:
+      - db
+    volumes:
+      - ./migrations:/processing/migrations
+    # Override the command to run the migration binary or script
+    command: [ "./your_app_name", "migrate" ] # Example command

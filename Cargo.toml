@@ -4,10 +4,18 @@ members = [
 ]
 resolver = "3"
 
+[workspace.lints.clippy]
+redundant_clone = "deny"
+panic = "deny"
+unwrap_used = "deny"
+panicking_unwrap = "deny"
+implicit_clone = "deny"
+perf = "deny"
+
 [profile.dev.package.sqlx-macros]
 opt-level = 3
 
-[profile.deploy]
+[profile.deployment]
 inherits = "release"
 debug = false
 opt-level = 3

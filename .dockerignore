@@ -1,0 +1,14 @@
+.github
+.git
+.gitignore
+frontend/node_modules
+.env
+.idea
+README.md
+LICENSE
+.dockerignore
+docker-compose.yml
+target
+backend/Dockerfile
+frontend/Dockerfile
+.qodo

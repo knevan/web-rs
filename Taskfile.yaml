@@ -11,7 +11,7 @@ tasks:
 
   optimize:
     cmds:
-      - cargo run --profile deploy
+      - cargo run --profile deployment
 
   frontend:
     cmds:
