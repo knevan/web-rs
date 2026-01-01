@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE series\n                SET last_chapter_found_in_storage = GREATEST(COALESCE(last_chapter_found_in_storage, 0), $1),\n                    updated_at = NOW()\n                WHERE id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Float4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "07eba14e32d72782dde094c1597bde9607276fd32ad7392be4e77eacbdfabd69"
+}

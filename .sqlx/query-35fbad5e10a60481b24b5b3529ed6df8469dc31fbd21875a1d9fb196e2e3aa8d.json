@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            WITH candidate AS (\n                SELECT id FROM series\n                WHERE\n                    processing_status = $1\n                    AND next_checked_at <= NOW()\n                ORDER BY next_checked_at ASC\n                LIMIT $2\n                FOR UPDATE SKIP LOCKED\n            )\n            UPDATE series\n            SET processing_status = $3\n            WHERE id IN (SELECT id FROM candidate)\n            RETURNING\n                id, title, original_title, description, cover_image_url, current_source_url, source_website_host,\n                views_count, bookmarks_count, total_rating_score, total_ratings_count, last_chapter_found_in_storage,\n                processing_status as \"processing_status: SeriesStatus\", check_interval_minutes, last_checked_at,\n                next_checked_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT id, title, original_title, description, cover_image_url, current_source_url,\n            source_website_host, views_count, bookmarks_count, total_rating_score, total_ratings_count,\n            last_chapter_found_in_storage, processing_status as \"processing_status: SeriesStatus\",\n            check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at\n            FROM series \n            WHERE id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -115,47 +115,7 @@
     ],
     "parameters": {
       "Left": [
-        {
-          "Custom": {
-            "name": "series_status",
-            "kind": {
-              "Enum": [
-                "Pending",
-                "Processing",
-                "Available",
-                "Ongoing",
-                "Completed",
-                "Hiatus",
-                "Discontinued",
-                "Error",
-                "Pending Deletion",
-                "Deleting",
-                "Deletion Failed"
-              ]
-            }
-          }
-        },
-        "Int8",
-        {
-          "Custom": {
-            "name": "series_status",
-            "kind": {
-              "Enum": [
-                "Pending",
-                "Processing",
-                "Available",
-                "Ongoing",
-                "Completed",
-                "Hiatus",
-                "Discontinued",
-                "Error",
-                "Pending Deletion",
-                "Deleting",
-                "Deletion Failed"
-              ]
-            }
-          }
-        }
+        "Int4"
       ]
     },
     "nullable": [
@@ -179,5 +139,5 @@
       false
     ]
   },
-  "hash": "7f2b7f1c13026a7a722033ac7b3fc8a79ed988e9af58ea688f073204f5f2d3ad"
+  "hash": "35fbad5e10a60481b24b5b3529ed6df8469dc31fbd21875a1d9fb196e2e3aa8d"
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE series SET processing_status = $1,\n                  updated_at = NOW() WHERE id = $2 AND processing_status NOT IN ($3, $4)",
+  "query": "UPDATE series\n            SET processing_status = $1, updated_at = NOW()\n            WHERE id = $2\n            AND processing_status NOT IN ($3, $4)",
   "describe": {
     "columns": [],
     "parameters": {
@@ -70,5 +70,5 @@
     },
     "nullable": []
   },
-  "hash": "21643eac78fdc89735010102e25e48311a4bb482726b2425efbd7fac55271f34"
+  "hash": "8a3fa527c2b92f4b1e6421cafb12670397d643659533a6ddcc90cb84fcd3c4bc"
 }

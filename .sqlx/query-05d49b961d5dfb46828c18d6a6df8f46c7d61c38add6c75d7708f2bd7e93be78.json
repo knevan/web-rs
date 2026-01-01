@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT a.name FROM authors a\n            JOIN series_authors sa ON a.id = sa.author_id\n            WHERE sa.series_id = $1",
+  "query": "\n            SELECT a.name FROM authors a\n            JOIN series_authors sa ON a.id = sa.author_id\n            WHERE sa.series_id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       false
     ]
   },
-  "hash": "dd47d4bddabc76774508545fc208c4c6d489d419158fefa65a0e13644e81b7bd"
+  "hash": "05d49b961d5dfb46828c18d6a6df8f46c7d61c38add6c75d7708f2bd7e93be78"
 }

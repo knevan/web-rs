@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, title, original_title, description, cover_image_url, current_source_url,\n            source_website_host, views_count, bookmarks_count, total_rating_score, total_ratings_count,\n            last_chapter_found_in_storage, processing_status as \"processing_status: SeriesStatus\",\n            check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at\n            FROM series WHERE id = $1\n            ",
+  "query": "\n            SELECT id, title, original_title, description, cover_image_url, current_source_url,\n            source_website_host, views_count, bookmarks_count, total_rating_score, total_ratings_count,\n            last_chapter_found_in_storage, processing_status as \"processing_status: SeriesStatus\",\n            check_interval_minutes, last_checked_at, next_checked_at, created_at, updated_at\n            FROM series \n            WHERE title = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -115,7 +115,7 @@
     ],
     "parameters": {
       "Left": [
-        "Int4"
+        "Text"
       ]
     },
     "nullable": [
@@ -139,5 +139,5 @@
       false
     ]
   },
-  "hash": "2773c175638db7d0023837276503a6e2a44b0c3ddaceaed65fb2e030d9ff3318"
+  "hash": "49005252d64c1f75617187b2c904218bfdde0826bc8810c260fdc1d82c72575f"
 }
