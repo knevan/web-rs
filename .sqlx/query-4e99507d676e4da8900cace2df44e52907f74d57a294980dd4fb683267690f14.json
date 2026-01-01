@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH locked_rows AS ( \n                SELECT id\n                FROM series_chapters\n                WHERE status = 'Processing'\n                ORDER BY created_at ASC \n                LIMIT $1\n                FOR UPDATE SKIP LOCKED\n             )\n            UPDATE series_chapters sc\n            SET \n                status = 'Processing', \n                updated_at = NOW()\n            FROM locked_rows lr, series s\n            WHERE sc.id = lr.id AND sc.series_id = s.id\n            RETURNING\n                sc.id as chapter_id,\n                sc.chapter_number,\n                sc.source_url as chapter_url,\n                s.id as series_id,\n                s.title as series_title,\n                s.source_website_host as source_host,\n                s.current_source_url as series_url\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "chapter_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "chapter_number",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 2,
+        "name": "chapter_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "series_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "series_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "source_host",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "series_url",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4e99507d676e4da8900cace2df44e52907f74d57a294980dd4fb683267690f14"
+}

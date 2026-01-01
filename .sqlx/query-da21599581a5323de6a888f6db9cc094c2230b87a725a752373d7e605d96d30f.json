@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE comments\n            SET\n                content_user_markdown = $1,\n                content_html = $2,\n                deleted_at = NOW(),\n                updated_at = NOW()\n            WHERE id = $3 AND user_id = $4\n            RETURNING id, content_user_markdown, content_html, updated_at, (deleted_at IS NOT NULL) as \"is_deleted!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "content_user_markdown",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "content_html",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_deleted!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "da21599581a5323de6a888f6db9cc094c2230b87a725a752373d7e605d96d30f"
+}

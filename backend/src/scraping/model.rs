@@ -1,8 +1,9 @@
-use anyhow::{Context, Result};
-use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+
+use anyhow::{Context, Result};
+use serde::Deserialize;
 
 /// Configuration for scraping a specific website.
 #[derive(Deserialize, Clone, Debug)]
@@ -39,22 +40,16 @@ impl SitesConfig {
             ));
         }
 
-        let config_content =
-            fs::read_to_string(config_path).with_context(|| {
-                format!(
-                    "[CONFIG] Failed to read file: {}",
-                    config_path.display()
-                )
-            })?;
+        let config_content = fs::read_to_string(config_path)
+            .with_context(|| format!("[CONFIG] Failed to read file: {}", config_path.display()))?;
 
         // Serde will automatically handle the TOML structure.
-        let app_config: SitesConfig = toml::from_str(&config_content)
-            .with_context(|| {
-                format!(
-                    "[CONFIG] Failed to parse TOML configuration: {}",
-                    config_path.display()
-                )
-            })?;
+        let app_config: SitesConfig = toml::from_str(&config_content).with_context(|| {
+            format!(
+                "[CONFIG] Failed to parse TOML configuration: {}",
+                config_path.display()
+            )
+        })?;
 
         println!(
             "[CONFIG] Configuration loaded successfully {} site(s) from {}",
@@ -65,10 +60,7 @@ impl SitesConfig {
     }
 
     /// Retrieves site-specific scraping configuration based on hostname.
-    pub fn get_site_config(
-        &self,
-        host_name: &str,
-    ) -> Option<&SiteScrapingConfig> {
+    pub fn get_site_config(&self, host_name: &str) -> Option<&SiteScrapingConfig> {
         self.sites.get(host_name)
     }
 }

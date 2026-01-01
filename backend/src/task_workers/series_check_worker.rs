@@ -1,11 +1,13 @@
-use crate::app::orchestrator;
-use crate::database::storage::StorageClient;
-use crate::database::{DatabaseService, Series, SeriesStatus};
-use crate::scraping::model::SitesConfig;
-use arc_swap::ArcSwap;
-use reqwest::Client;
 use std::sync::Arc;
 use std::time::Duration;
+
+use arc_swap::ArcSwap;
+use reqwest::Client;
+
+use crate::database::storage::StorageClient;
+use crate::database::{DatabaseService, Series, SeriesStatus};
+use crate::processing::orchestrator;
+use crate::scraping::model::SitesConfig;
 
 #[derive(Debug)]
 pub struct SeriesCheckJob {
@@ -20,37 +22,38 @@ pub async fn run_series_check_scheduler(
     println!("[SERIES-SCHEDULER] Starting...");
 
     // Interval to check db for job
-    let mut interval = tokio::time::interval(Duration::from_secs(60));
+    let mut interval = tokio::time::interval(Duration::from_secs(30));
     // Skip first tick
-    interval.tick().await;
+    interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
     loop {
         interval.tick().await;
 
         loop {
-            match db_service.find_and_lock_series_for_check().await {
-                Ok(Some(series)) => {
+            match db_service.find_and_lock_series_for_check(20).await {
+                Ok(series_list) => {
+                    if series_list.is_empty() {
+                        // If no job, waiting fot the next interval tick
+                        break;
+                    }
+
                     println!(
-                        "[SERIES-SCHEDULER] Found series for check {}, id {}",
-                        series.title, series.id
+                        "[SERIES-SCHEDULER] Found batch of {} series to check",
+                        series_list.len()
                     );
-                    let job = SeriesCheckJob { series };
-                    if job_sender.send(job).await.is_err() {
-                        eprintln!(
-                            "[SERIES-SCHEDULER] CRITICAL: Receiver channel closed. Shutting down."
-                        );
-                        return;
+
+                    for series in series_list {
+                        let job = SeriesCheckJob { series };
+                        // Send worker queue
+                        // If queue full, will wait (backpressure) until worker empty
+                        if job_sender.send(job).await.is_err() {
+                            eprintln!("[SERIES-SCHEDULER] CRITICAL: Channel closed.");
+                            return;
+                        }
                     }
                 }
-                Ok(None) => {
-                    // No job found, wait for next tick
-                    break;
-                }
                 Err(e) => {
-                    eprintln!(
-                        "[SERIES-SCHEDULER] Error finding {}. Retrying later",
-                        e
-                    );
+                    eprintln!("[SERIES-SCHEDULER] Error finding {}. Retrying later", e);
                     break;
                 }
             }
@@ -101,11 +104,7 @@ pub async fn run_series_check_worker(
         };
 
         if let Err(e) = db_service
-            .update_series_check_schedule(
-                series.id,
-                Some(final_status),
-                next_check_time,
-            )
+            .update_series_check_schedule(series.id, Some(final_status), next_check_time)
             .await
         {
             eprintln!(

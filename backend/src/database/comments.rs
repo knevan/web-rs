@@ -1,37 +1,87 @@
-use super::*;
+use std::collections::{HashMap, HashSet};
+
 use ammonia::Builder;
 use anyhow::anyhow;
 use once_cell::sync::Lazy;
-use pulldown_cmark::{Options, Parser, html};
+use pulldown_cmark::{html, Options, Parser};
 use regex::Regex;
-use std::collections::{HashMap, HashSet};
+
+use super::*;
 
 static SPOILER_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\|\|(.*?)\|\|").unwrap());
+    Lazy::new(|| Regex::new(r"\|\|(.*?)\|\|").expect("Regex pattern failed to compile (invalid)"));
 
 impl DatabaseService {
+    fn map_flat_row(row: CommentFlatRow) -> Comment {
+        Comment {
+            id: row.id,
+            parent_id: row.parent_id,
+            content_html: row.content_html,
+            content_markdown: row.content_markdown,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            user: CommentUser {
+                id: row.user_id,
+                username: row.user_username,
+                avatar_url: row.user_avatar_url,
+            },
+            upvotes: row.upvotes,
+            downvotes: row.downvotes,
+            is_deleted: row.is_deleted,
+            current_user_vote: row.current_user_vote,
+            replies: Vec::new(),
+            attachment_urls: row.attachment_urls,
+        }
+    }
+
     // Helper function to transform a flat list of comments into a nested tree structure.
-    fn nested_comment_tree(&self, rows: Vec<CommentFlatRow>) -> Vec<Comment> {
+    fn nested_comment_tree(
+        &self,
+        rows: Vec<CommentFlatRow>,
+        sort_by: CommentSort,
+        thread_root_id: Option<i64>,
+    ) -> Vec<Comment> {
         if rows.is_empty() {
             return Vec::new();
         }
 
         // A map to hold all child comments, grouped by their parent's ID for efficient lookup.
-        let mut children_map: HashMap<i64, Vec<Comment>> =
-            HashMap::with_capacity(rows.len());
+        let mut children_map: HashMap<i64, Vec<Comment>> = HashMap::with_capacity(rows.len());
 
         // A vector to store the root-level comments.
         let mut root_comments: Vec<Comment> = Vec::new();
 
         for row in rows {
-            let comment: Comment = row.into();
+            let comment = Self::map_flat_row(row);
 
-            if let Some(parent_id) = comment.parent_id {
+            let is_parent_root = comment.parent_id.is_none();
+            let is_thread_root = thread_root_id == Some(comment.id);
+
+            if is_thread_root || is_parent_root {
                 // If it's a reply, add it to the children_map, keyed by its parent's ID.
-                children_map.entry(parent_id).or_default().push(comment);
-            } else {
                 root_comments.push(comment);
+            } else if let Some(parent_id) = comment.parent_id {
+                children_map.entry(parent_id).or_default().push(comment);
             }
+        }
+
+        // Sort root comments
+        match sort_by {
+            CommentSort::Newest => {
+                root_comments
+                    .sort_unstable_by(|a, b| b.created_at.cmp(&a.created_at).then(b.id.cmp(&a.id)));
+            }
+            CommentSort::Oldest => {
+                root_comments
+                    .sort_unstable_by(|a, b| a.created_at.cmp(&b.created_at).then(a.id.cmp(&b.id)));
+            }
+            CommentSort::TopVote => root_comments.sort_unstable_by(|a, b| {
+                let a_score = a.upvotes - a.downvotes;
+                let b_score = b.upvotes - b.downvotes;
+                b_score
+                    .cmp(&a_score)
+                    .then_with(|| b.created_at.cmp(&a.created_at))
+            }),
         }
 
         let mut stack: Vec<&mut Comment> = root_comments.iter_mut().collect();
@@ -39,95 +89,25 @@ impl DatabaseService {
         while let Some(parent) = stack.pop() {
             if let Some(mut children) = children_map.remove(&parent.id) {
                 // Sort by creation date
-                children.sort_by_key(|c| c.created_at);
+                children
+                    .sort_unstable_by(|a, b| a.created_at.cmp(&b.created_at).then(a.id.cmp(&b.id)));
 
                 parent.replies = children;
 
+                // Push children to stack
                 for child in &mut parent.replies {
                     stack.push(child);
                 }
             }
         }
 
-        root_comments.sort_by_key(|c| c.created_at);
         root_comments
-    }
-
-    pub async fn get_comments(
-        &self,
-        entity_type: CommentEntityType,
-        entity_id: i32,
-        current_user_id: Option<i32>,
-    ) -> AnyhowResult<Vec<Comment>> {
-        let flat_comments: Vec<CommentFlatRow> = sqlx::query_as!(
-            CommentFlatRow,
-            r#"
-            WITH RECURSIVE comment_thread AS (
-                -- Anchor member: top-level comments
-                SELECT * FROM comments
-                WHERE comments_type = $1 AND comments_id = $2 AND parent_id IS NULL AND deleted_at IS NULL
-                UNION ALL
-                -- Recursive member: replies to comments already in the thread
-                SELECT c.*
-                FROM comments c
-                JOIN comment_thread ct ON c.parent_id = ct.id
-                WHERE c.deleted_at IS NULL
-            ),
-            vote_summary AS (
-                SELECT
-                    cv.comment_vote_id,
-                    COUNT(*) FILTER (WHERE cv.vote_type = 1) AS upvotes,
-                    COUNT(*) FILTER (WHERE cv.vote_type = -1) AS downvotes
-                FROM comment_votes cv
-                WHERE cv.comment_vote_id IN (SELECT id FROM comment_thread)
-                GROUP BY cv.comment_vote_id
-            ),
-            attachments_summary AS (
-            -- Aggregate all attachment URLs for each comment into a JSON array
-            SELECT
-                comment_id,
-                json_agg(file_url) as attachment_urls
-            FROM comment_attachments
-            WHERE comment_id IN (SELECT id FROM comment_thread)
-            GROUP BY comment_id
-        )
-            SELECT
-                ct.id as "id!",
-                ct.parent_id,
-                ct.content_html as "content_html!",
-                ct.content_user_markdown as "content_markdown!",
-                ct.created_at as "created_at!",
-                ct.updated_at as "updated_at!",
-                ct.user_id as "user_id!",
-                COALESCE(up.display_name, u.username) as "user_username!",
-                up.avatar_url as "user_avatar_url",
-                COALESCE(vs.upvotes, 0) as "upvotes!",
-                COALESCE(vs.downvotes, 0) as "downvotes!",
-                cv.vote_type as "current_user_vote: _",
-                ats.attachment_urls as "attachment_urls: _"
-            FROM comment_thread ct
-            JOIN users u ON ct.user_id = u.id
-            LEFT JOIN user_profiles up ON u.id = up.user_id
-            LEFT JOIN vote_summary vs ON ct.id = vs.comment_vote_id
-            LEFT JOIN comment_votes cv ON ct.id = cv.comment_vote_id AND cv.user_id = $3
-            LEFT JOIN attachments_summary ats ON ct.id = ats.comment_id
-            ORDER BY ct.created_at ASC
-            "#,
-            entity_type as _,
-            entity_id,
-            current_user_id
-        )
-            .fetch_all(&self.pool)
-            .await
-            .context("Failed to fetch comment thread")?;
-
-        Ok(self.nested_comment_tree(flat_comments))
     }
 
     fn process_comment_markdown(&self, markdown: &str) -> AnyhowResult<String> {
         // Process spoiler markdown ||spoiler|| to <span>
-        let processed_spoiler_markdown = SPOILER_REGEX
-            .replace_all(markdown, r#"<span class="spoiler-hook">$1</span>"#);
+        let processed_spoiler_markdown =
+            SPOILER_REGEX.replace_all(markdown, r#"<span class="spoiler-hook">$1</span>"#);
 
         let mut options = Options::empty();
         options.insert(Options::ENABLE_STRIKETHROUGH);
@@ -175,13 +155,96 @@ impl DatabaseService {
         Ok(sanitized_html)
     }
 
+    pub async fn get_comments(
+        &self,
+        entity_type: CommentEntityType,
+        entity_id: i32,
+        current_user_id: Option<i32>,
+        sort_by: CommentSort,
+        thread_root_id: Option<i64>,
+    ) -> AnyhowResult<Vec<Comment>> {
+        println!("\n--- DEBUG COMMENT FETCH ---");
+        println!("Entity Type: {:?}", entity_type);
+        println!("Entity ID: {}", entity_id);
+        println!("Thread Root ID (Target): {:?}", thread_root_id);
+
+        let comments: Vec<CommentFlatRow> = sqlx::query_as!(
+            CommentFlatRow,
+            r#"
+            WITH RECURSIVE comment_thread AS (
+                -- Anchor member: top-level comments
+                SELECT * FROM comments
+                WHERE
+                    CASE
+                        WHEN $4::bigint IS NOT NULL THEN id = $4
+                        ELSE comments_type = $1 AND comments_id = $2 AND parent_id IS NULL
+                    END
+                UNION ALL
+                -- Recursive member: replies to comments already in the thread
+                SELECT c.*
+                FROM comments c
+                JOIN comment_thread ct ON c.parent_id = ct.id
+            ),
+            vote_summary AS (
+                SELECT
+                    cv.comment_vote_id,
+                    COUNT(*) FILTER (WHERE cv.vote_type = 1) AS upvotes,
+                    COUNT(*) FILTER (WHERE cv.vote_type = -1) AS downvotes
+                FROM comment_votes cv
+                WHERE cv.comment_vote_id IN (SELECT id FROM comment_thread)
+                GROUP BY cv.comment_vote_id
+            ),
+            attachments_summary AS (
+            -- Aggregate all attachment URLs for each comment into a JSON array
+            SELECT
+                comment_id,
+                array_agg(file_url) as attachment_urls
+            FROM comment_attachments
+            WHERE comment_id IN (SELECT id FROM comment_thread)
+            GROUP BY comment_id
+        )
+            SELECT
+                ct.id as "id!",
+                ct.parent_id,
+                ct.content_html as "content_html!",
+                ct.content_user_markdown as "content_markdown!",
+                ct.created_at as "created_at!",
+                ct.updated_at as "updated_at!",
+                ct.user_id as "user_id!",
+                COALESCE(up.display_name, u.username) as "user_username!",
+                up.avatar_url as "user_avatar_url",
+                COALESCE(vs.upvotes, 0) as "upvotes!",
+                COALESCE(vs.downvotes, 0) as "downvotes!",
+                (ct.deleted_at IS NOT NULL ) as "is_deleted!",
+                cv.vote_type as "current_user_vote",
+                ats.attachment_urls as "attachment_urls"
+            FROM comment_thread ct
+            JOIN users u ON ct.user_id = u.id
+            LEFT JOIN user_profiles up ON u.id = up.user_id
+            LEFT JOIN vote_summary vs ON ct.id = vs.comment_vote_id
+            LEFT JOIN comment_votes cv ON ct.id = cv.comment_vote_id AND cv.user_id = $3
+            LEFT JOIN attachments_summary ats ON ct.id = ats.comment_id
+            -- ORDER BY ct.created_at ASC
+            "#,
+            entity_type as _,
+            entity_id,
+            current_user_id,
+            thread_root_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to fetch comment thread")?;
+
+        Ok(self.nested_comment_tree(comments, sort_by, thread_root_id))
+    }
+
     // Function to add new comment on existing comment tree list
     pub async fn get_comment_by_id(
         &self,
         comment_id: i64,
         current_user_id: Option<i32>,
     ) -> AnyhowResult<Option<Comment>> {
-        let comment_row:Option<CommentFlatRow> = sqlx::query_as!(
+        let comment_row: Option<CommentFlatRow> = sqlx::query_as!(
             CommentFlatRow,
             r#"
             WITH vote_summary AS (
@@ -196,7 +259,7 @@ impl DatabaseService {
             attachments_summary AS (
             SELECT
                 comment_id,
-                json_agg(file_url) as attachment_urls
+                array_agg(file_url) as attachment_urls
             FROM comment_attachments
             WHERE comment_id = $1
             GROUP BY comment_id
@@ -213,8 +276,9 @@ impl DatabaseService {
                 up.avatar_url as "user_avatar_url",
                 COALESCE(vs.upvotes, 0) as "upvotes!",
                 COALESCE(vs.downvotes, 0) as "downvotes!",
-                cv.vote_type as "current_user_vote: _",
-                ats.attachment_urls as "attachment_urls: _"
+                (c.deleted_at IS NOT NULL ) as "is_deleted!",
+                cv.vote_type as "current_user_vote?",
+                ats.attachment_urls as "attachment_urls?"
             FROM comments c
             JOIN users u ON c.user_id = u.id
             LEFT JOIN user_profiles up ON u.id = up.user_id
@@ -226,11 +290,11 @@ impl DatabaseService {
             comment_id,
             current_user_id
         )
-            .fetch_optional(&self.pool)
-            .await
-            .context("Failed to fetch comment by its id")?;
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to fetch comment by its id")?;
 
-        Ok(comment_row.map(Comment::from))
+        Ok(comment_row.map(Self::map_flat_row))
     }
 
     pub async fn create_new_comment(
@@ -270,13 +334,13 @@ impl DatabaseService {
         if !attachment_keys.is_empty() {
             for key in attachment_keys {
                 sqlx::query!(
-                "INSERT INTO comment_attachments (comment_id, file_url) VALUES ($1, $2)",
-                new_comment_id,
-                key
-            )
-                    .execute(&mut *tx)
-                    .await
-                    .context("Failed to insert comment attachment")?;
+                    "INSERT INTO comment_attachments (comment_id, file_url) VALUES ($1, $2)",
+                    new_comment_id,
+                    key
+                )
+                .execute(&mut *tx)
+                .await
+                .context("Failed to insert comment attachment")?;
             }
         }
 
@@ -290,19 +354,20 @@ impl DatabaseService {
         comment_id: i64,
         user_id: i32,
         new_content_markdown: &str,
-    ) -> AnyhowResult<Option<String>> {
-        let new_content_html =
-            self.process_comment_markdown(new_content_markdown)?;
+    ) -> AnyhowResult<Option<UpdateCommentResponse>> {
+        let new_content_html = self.process_comment_markdown(new_content_markdown)?;
 
-        let updated_html = sqlx::query_scalar!(
+        let updated_html = sqlx::query_as!(
+            UpdateCommentResponse,
             r#"
             UPDATE comments
             SET
                 content_user_markdown = $1,
                 content_html = $2,
+                deleted_at = NOW(),
                 updated_at = NOW()
             WHERE id = $3 AND user_id = $4
-            RETURNING content_html
+            RETURNING id, content_user_markdown, content_html, updated_at, (deleted_at IS NOT NULL) as "is_deleted!"
             "#,
             new_content_markdown,
             new_content_html,
@@ -316,6 +381,113 @@ impl DatabaseService {
         Ok(updated_html)
     }
 
+    pub async fn delete_comment(
+        &self,
+        comment_id: i64,
+        user_id: i32,
+    ) -> AnyhowResult<DeleteCommentResult> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to start transaction")?;
+
+        // Fetch all attachment keys associated with this comment *before* deletion.
+        let attachment_object_key: Vec<String> = sqlx::query_scalar!(
+            "SELECT file_url FROM comment_attachments WHERE comment_id = $1",
+            comment_id
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .context("Failed to fetch attachment keys")?;
+
+        // Check if comment has replies
+        let has_replies: bool = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS(
+                SELECT 1 FROM comments WHERE parent_id = $1 AND deleted_at IS NULL
+            )
+            "#,
+            comment_id
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .context("Failed to check for replies")?
+        .context("EXISTS query returned NULL, which should not happen")?;
+
+        let rows_affected: u64;
+
+        if has_replies {
+            let soft_delete_result = sqlx::query_as!(
+                UpdateCommentResponse,
+                r#"
+                UPDATE comments
+                SET
+                    content_user_markdown = '',
+                    content_html = '<p>[Deleted]</p>', -- Or any placeholder
+                    deleted_at = NOW(),
+                    updated_at = NOW()
+                WHERE id = $1 AND user_id = $2
+                RETURNING id, content_user_markdown, content_html, updated_at, (deleted_at IS NOT NULL) as "is_deleted!"
+                "#,
+                comment_id,
+                user_id
+            )
+            .fetch_optional(&mut *tx)
+            .await
+            .context("Failed to soft delete comment")?;
+
+            if let Some(updated_comment) = soft_delete_result {
+                // Since this is an UPDATE, ON DELETE CASCADE won't trigger
+                // Manually delete the attachments
+                if let Err(e) = sqlx::query!(
+                    "DELETE FROM comment_attachments WHERE comment_id = $1",
+                    comment_id
+                )
+                .execute(&mut *tx)
+                .await
+                {
+                    tx.rollback().await.context("Failed to delete comment")?;
+                    return Err(anyhow!(e).context("Failed to delete comment attachments"));
+                }
+                tx.commit().await.context("Failed to commit transaction")?;
+                Ok(DeleteCommentResult::SoftDeleted(
+                    updated_comment,
+                    attachment_object_key,
+                ))
+            } else {
+                tx.rollback().await.context("Failed to delete comment")?;
+                Ok(DeleteCommentResult::NotFound)
+            }
+        } else {
+            // No replies. We can safely delete the comment row.
+            // Attachment will automatically deleted by `ON DELETE CASCADE`
+            let hard_delete_result = sqlx::query!(
+                r#"
+                DELETE FROM comments
+                WHERE id = $1 AND user_id = $2
+                "#,
+                comment_id,
+                user_id
+            )
+            .execute(&mut *tx)
+            .await
+            .context("Failed to delete comment")?;
+
+            rows_affected = hard_delete_result.rows_affected();
+
+            if rows_affected == 0 {
+                tx.rollback().await.context("Failed to delete comment")?;
+                return Ok(DeleteCommentResult::NotFound);
+            }
+
+            tx.commit().await.context("Failed to commit transaction")?;
+
+            Ok(DeleteCommentResult::HardDeleted(attachment_object_key))
+        }
+    }
+
+    // Vote on comment
     pub async fn vote_on_comment(
         &self,
         comment_id: i64,
@@ -334,9 +506,9 @@ impl DatabaseService {
             comment_id,
             user_id
         )
-            .fetch_optional(&mut *tx)
-            .await
-            .context("Failed to fetch comment vote")?;
+        .fetch_optional(&mut *tx)
+        .await
+        .context("Failed to fetch comment vote")?;
 
         let mut final_user_vote: Option<i16> = Some(vote_type);
 
@@ -348,9 +520,9 @@ impl DatabaseService {
                 comment_id,
                 user_id
             )
-                .execute(&mut *tx)
-                .await
-                .context("Failed to delete comment")?;
+            .execute(&mut *tx)
+            .await
+            .context("Failed to delete comment")?;
             final_user_vote = None;
         } else {
             // New vote or changing vote
@@ -364,9 +536,9 @@ impl DatabaseService {
                 user_id,
                 vote_type
             )
-                .execute(&mut *tx)
-                .await
-                .context("Failed to insert comment")?;
+            .execute(&mut *tx)
+            .await
+            .context("Failed to insert comment")?;
         }
 
         // Recalculate new total votes for comment
@@ -391,5 +563,128 @@ impl DatabaseService {
             new_downvotes: vote_counts.downvotes,
             current_user_vote: final_user_vote,
         })
+    }
+
+    // Delete comment as admin
+    pub async fn admin_delete_comment(
+        &self,
+        comment_id: i64,
+        requestor_role_id: i32,
+    ) -> AnyhowResult<DeleteCommentResult> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to begin transaction")?;
+
+        let target_info = sqlx::query!(
+            r#"
+            SELECT
+                u.role_id,
+                c.user_id
+            FROM comments c
+            JOIN users u ON c.user_id = u.id
+            WHERE c.id = $1
+            "#,
+            comment_id
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .context("Failed to fetch comment info")?;
+
+        let target_user_role_id = match target_info {
+            Some(record) => record.role_id,
+            None => {
+                return Ok(DeleteCommentResult::NotFound);
+            }
+        };
+
+        // Validation Tiered logic
+        // Role: User=0, Mod=1, Admin=2, SuperAdmin=3
+        let is_super_admin = requestor_role_id == 3;
+
+        if !is_super_admin && requestor_role_id <= target_user_role_id {
+            tx.rollback().await?;
+            return Ok(DeleteCommentResult::InsufficientPermissions);
+        }
+
+        let attachment_object_key: Vec<String> = sqlx::query_scalar!(
+            "SELECT file_url FROM comment_attachments WHERE comment_id = $1",
+            comment_id
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .context("Failed to fetch attachment keys")?;
+
+        let has_replies: bool = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS(
+                SELECT 1 FROM comments WHERE parent_id = $1 AND deleted_at IS NULL
+            )
+            "#,
+            comment_id
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .context("Failed to check for replies")?
+        .context("EXISTS query returned NULL, which should not happen")?;
+
+        let row_affected: u64;
+
+        if has_replies {
+            let soft_delete_result = sqlx::query_as!(
+                UpdateCommentResponse,
+                r#"
+                UPDATE comments
+                SET
+                    content_user_markdown = '',
+                    content_html = '<p>[Removed by Mod]</p>',
+                    deleted_at = NOW(),
+                    updated_at = NOW()
+                WHERE id = $1
+                RETURNING id, content_user_markdown, content_html, updated_at, (deleted_at IS NOT NULL) as "is_deleted!"
+                "#,
+                comment_id
+            )
+            .fetch_optional(&mut *tx)
+            .await
+            .context("Failed to soft delete comment")?;
+
+            if let Some(updated_comment) = soft_delete_result {
+                sqlx::query!(
+                    "DELETE FROM comment_attachments WHERE comment_id = $1",
+                    comment_id
+                )
+                .execute(&mut *tx)
+                .await
+                .context("Failed to delete comment attachments")?;
+
+                tx.commit().await.context("Failed to comment deletion")?;
+
+                Ok(DeleteCommentResult::SoftDeleted(
+                    updated_comment,
+                    attachment_object_key,
+                ))
+            } else {
+                tx.rollback().await.context("Failed to comment deletion")?;
+                Ok(DeleteCommentResult::NotFound)
+            }
+        } else {
+            let hard_delete_result = sqlx::query!("DELETE FROM comments WHERE id = $1", comment_id)
+                .execute(&mut *tx)
+                .await
+                .context("Failed to delete comment")?;
+
+            row_affected = hard_delete_result.rows_affected();
+
+            if row_affected == 0 {
+                tx.rollback().await.context("Failed to delete comment")?;
+                return Ok(DeleteCommentResult::NotFound);
+            }
+
+            tx.commit().await.context("Failed to commit transaction")?;
+
+            Ok(DeleteCommentResult::HardDeleted(attachment_object_key))
+        }
     }
 }

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT a.name FROM authors a\n            JOIN series_authors sa ON a.id = sa.author_id\n            WHERE sa.series_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "05d49b961d5dfb46828c18d6a6df8f46c7d61c38add6c75d7708f2bd7e93be78"
+}

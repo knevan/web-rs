@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT\n                        u.id,\n                        u.username,\n                        u.email,\n                        u.role_id,\n                        r.role_name,\n                        u.is_active,\n                        COUNT(*) OVER() as \"total_items\"\n                    FROM users u\n                    JOIN roles r ON u.role_id = r.id\n                    ORDER BY u.id ASC\n                    LIMIT $1 OFFSET $2\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "role_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "role_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "total_items",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "7802e84b32168e8ea3d4f75f65d491327ddc6d01f7c959aad77326b251bed291"
+}
