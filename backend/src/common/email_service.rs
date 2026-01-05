@@ -1,8 +1,10 @@
-use crate::builder::startup::Mailer;
+use std::env;
+
 use anyhow::Context;
 use lettre::message::Mailbox;
 use lettre::{AsyncTransport, Message};
-use std::env;
+
+use crate::builder::startup::Mailer;
 
 // Function to send the password reset email
 pub async fn send_password_reset_email(
@@ -11,8 +13,7 @@ pub async fn send_password_reset_email(
     recipient_username: &str,
     token: &str,
 ) -> anyhow::Result<()> {
-    let frontend_url =
-        env::var("FRONTEND_URL").expect("FRONTEND_URL must be set");
+    let frontend_url = env::var("FRONTEND_URL").expect("FRONTEND_URL must be set");
     let app_email = env::var("SMTP_USERNAME").expect("APP_EMAIL must be set");
 
     // Construct the password reset link

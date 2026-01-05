@@ -1,14 +1,12 @@
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use rand::Rng;
-use std::time::Duration;
 use tokio::time::sleep;
 use url::Url;
 
 // Converts a relative URL string to an absolute URL string, given a base URL.
-pub fn to_absolute_url(
-    base_url_str: &str,
-    relative_url_str: &str,
-) -> Result<String> {
+pub fn to_absolute_url(base_url_str: &str, relative_url_str: &str) -> Result<String> {
     let base_url = Url::parse(base_url_str)
         .with_context(|| format!("Base URL not valid: {}", base_url_str))?;
 
@@ -19,11 +17,10 @@ pub fn to_absolute_url(
         )
     })?;
 
-    Ok(absolute_url.into()) // .into() is equivalent to .to_string() for Url
+    Ok(absolute_url.into())
 }
 
-/// Pauses execution asynchronously for a random duration between `min_secs` and `max_secs`.
-/// If `min_secs` is greater than or equal to `max_secs`, it sleeps for `min_secs`.
+/// If `min_secs` is greater than or equal to `max_secs`, it sleeps for `min_secs`
 pub async fn random_sleep_time(min_secs: u64, max_secs: u64) {
     let sleep_duration_seconds = if min_secs >= max_secs {
         min_secs

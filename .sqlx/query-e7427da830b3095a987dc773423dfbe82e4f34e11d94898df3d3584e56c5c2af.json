@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO reports (reporter_id, chapter_id, comment_id, reason)\n            VALUES ($1, $2, $3, $4)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Int8",
+        {
+          "Custom": {
+            "name": "report_reason",
+            "kind": {
+              "Enum": [
+                "broken_image",
+                "wrong_chapter",
+                "duplicate_chapter",
+                "missing_image",
+                "missing_chapter",
+                "slow_loading",
+                "broken_text",
+                "toxic",
+                "racist",
+                "spam",
+                "other"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e7427da830b3095a987dc773423dfbe82e4f34e11d94898df3d3584e56c5c2af"
+}

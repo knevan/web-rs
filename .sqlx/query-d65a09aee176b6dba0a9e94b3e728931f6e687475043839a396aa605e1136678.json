@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT MAX(chapter_number)\n            FROM series_chapters\n            WHERE series_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "max",
+        "type_info": "Float4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d65a09aee176b6dba0a9e94b3e728931f6e687475043839a396aa605e1136678"
+}

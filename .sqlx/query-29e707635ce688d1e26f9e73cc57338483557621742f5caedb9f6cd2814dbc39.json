@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS(\n                SELECT 1 FROM comments WHERE parent_id = $1 AND deleted_at IS NULL\n            )\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "29e707635ce688d1e26f9e73cc57338483557621742f5caedb9f6cd2814dbc39"
+}

@@ -1,4 +1,4 @@
-.qodo
 .idea
 .env
+prod.env
 /target

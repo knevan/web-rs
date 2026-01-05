@@ -12,36 +12,27 @@ use super::*;
 /// For queries returning a single value (one row, one column).
 /// Highly efficient for this purpose.
 impl DatabaseService {
-    pub async fn get_role_id_by_name(
-        &self,
-        role_name: &str,
-    ) -> AnyhowResult<Option<i32>> {
-        let role_id = sqlx::query_scalar!(
-            "SELECT id FROM roles WHERE role_name = $1",
-            role_name,
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .context("Failed to get role ID by name")?;
+    /// Fetch user role id by name
+    pub async fn get_role_id_by_name(&self, role_name: &str) -> AnyhowResult<Option<i32>> {
+        let role_id = sqlx::query_scalar!("SELECT id FROM roles WHERE role_name = $1", role_name,)
+            .fetch_optional(&self.pool)
+            .await
+            .context("Failed to get role ID by name")?;
 
         Ok(role_id)
     }
 
-    pub async fn get_role_name_by_id(
-        &self,
-        role_id: i32,
-    ) -> AnyhowResult<Option<String>> {
-        let role_name = sqlx::query_scalar!(
-            "SELECT role_name FROM roles WHERE id = $1",
-            role_id,
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .context("Failed to get role name by ID")?;
+    /// Fetch user role name by id
+    pub async fn get_role_name_by_id(&self, role_id: i32) -> AnyhowResult<Option<String>> {
+        let role_name = sqlx::query_scalar!("SELECT role_name FROM roles WHERE id = $1", role_id,)
+            .fetch_optional(&self.pool)
+            .await
+            .context("Failed to get role name by ID")?;
 
         Ok(role_name)
     }
 
+    /// Create user password reset token
     pub async fn create_password_reset_token(
         &self,
         user_id: i32,
@@ -54,25 +45,30 @@ impl DatabaseService {
             token,
             expires_at
         )
-            .execute(&self.pool)
-            .await
-            .context("Failed to create password reset token")?;
+        .execute(&self.pool)
+        .await
+        .context("Failed to create password reset token")?;
 
         Ok(())
     }
 
-    pub async fn delete_password_reset_token(
-        &self,
-        token: &str,
-    ) -> AnyhowResult<()> {
-        sqlx::query!(
-            "DELETE FROM password_reset_tokens WHERE token = $1",
-            token
-        )
-        .execute(&self.pool)
-        .await
-        .context("Failed to delete password reset token")?;
+    /// Delete user password reset token
+    pub async fn delete_password_reset_token(&self, token: &str) -> AnyhowResult<()> {
+        sqlx::query!("DELETE FROM password_reset_tokens WHERE token = $1", token)
+            .execute(&self.pool)
+            .await
+            .context("Failed to delete password reset token")?;
 
         Ok(())
+    }
+
+    /// Cleanup expired password reset token
+    pub async fn cleanup_password_reset_token(&self) -> AnyhowResult<u64> {
+        let result = sqlx::query!("DELETE FROM password_reset_tokens WHERE expires_at < NOW()")
+            .execute(&self.pool)
+            .await
+            .context("Failed to cleanup password reset token")?;
+
+        Ok(result.rows_affected())
     }
 }

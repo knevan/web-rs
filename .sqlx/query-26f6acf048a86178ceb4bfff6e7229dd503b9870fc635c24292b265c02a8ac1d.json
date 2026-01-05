@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO series_chapters (series_id, chapter_number, title, source_url, status)\n            VALUES ($1, $2, $3, $4, $5)\n            ON CONFLICT (series_id, chapter_number)\n            DO UPDATE SET\n                updated_at = NOW(),\n                source_url = EXCLUDED.source_url,\n                status = EXCLUDED.status\n            RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Float4",
+        "Text",
+        "Text",
+        {
+          "Custom": {
+            "name": "chapter_status",
+            "kind": {
+              "Enum": [
+                "Processing",
+                "Available",
+                "NoImagesFound",
+                "Error"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "26f6acf048a86178ceb4bfff6e7229dd503b9870fc635c24292b265c02a8ac1d"
+}

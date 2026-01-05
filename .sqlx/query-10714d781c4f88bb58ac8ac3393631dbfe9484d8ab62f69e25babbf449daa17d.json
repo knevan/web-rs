@@ -1,0 +1,96 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT\n                        s.id, s.title, s.original_title, s.description, s.cover_image_url,\n                        s.current_source_url, s.updated_at,\n                        s.processing_status as \"processing_status: SeriesStatus\",\n                        COALESCE(\n                            json_agg(a.name) FILTER (WHERE a.id IS NOT NULL),\n                            '[]'::json\n                        ) as \"authors!\",\n                        COUNT(*) OVER () as total_items\n                    FROM\n                        series s\n                    LEFT JOIN series_authors sa ON s.id = sa.series_id\n                    LEFT JOIN authors a ON sa.author_id = a.id\n                    GROUP BY s.id\n                    ORDER BY s.updated_at DESC\n                    LIMIT $1 OFFSET $2\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "original_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "cover_image_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "current_source_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "processing_status: SeriesStatus",
+        "type_info": {
+          "Custom": {
+            "name": "series_status",
+            "kind": {
+              "Enum": [
+                "Pending",
+                "Processing",
+                "Available",
+                "Ongoing",
+                "Completed",
+                "Hiatus",
+                "Discontinued",
+                "Error",
+                "Pending Deletion",
+                "Deleting",
+                "Deletion Failed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "authors!",
+        "type_info": "Json"
+      },
+      {
+        "ordinal": 9,
+        "name": "total_items",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "10714d781c4f88bb58ac8ac3393631dbfe9484d8ab62f69e25babbf449daa17d"
+}

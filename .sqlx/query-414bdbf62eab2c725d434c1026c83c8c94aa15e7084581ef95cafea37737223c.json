@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                u.role_id,\n                c.user_id\n            FROM comments c\n            JOIN users u ON c.user_id = u.id\n            WHERE c.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "414bdbf62eab2c725d434c1026c83c8c94aa15e7084581ef95cafea37737223c"
+}

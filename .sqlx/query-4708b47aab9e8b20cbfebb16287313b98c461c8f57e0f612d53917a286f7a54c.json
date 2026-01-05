@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                u.id,\n                u.username,\n                u.email,\n                u.role_id,\n                COALESCE(u.is_active, false) as \"is_active!\",\n                r.role_name\n            FROM users u\n            JOIN roles r ON u.role_id = r.id\n            WHERE u.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "role_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_active!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "role_name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      false
+    ]
+  },
+  "hash": "4708b47aab9e8b20cbfebb16287313b98c461c8f57e0f612d53917a286f7a54c"
+}
