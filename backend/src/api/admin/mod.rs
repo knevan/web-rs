@@ -1,12 +1,14 @@
 use axum::Json;
 use axum_core::__private::tracing::log::error;
 use axum_core::response::{IntoResponse, Response};
+use chrono::{DateTime, Utc};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::common::error::AuthError;
+use crate::database::ReportReason;
 
-pub mod admin_comment_handler;
+pub mod admin_actions_handler;
 pub mod admin_routes;
 pub mod admin_series_handlers;
 pub mod admin_user_handler;
@@ -153,4 +155,30 @@ pub struct AdminUpdateUserPayload {
     email: Option<String>,
     role_id: Option<i32>,
     is_active: Option<bool>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportPaginationParams {
+    #[serde(default = "default_page")]
+    page: u32,
+    #[serde(default = "default_page_size")]
+    page_size: u32,
+    #[serde(default)]
+    search: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportView {
+    pub id: i32,
+    pub reporter_username: String,
+    pub reporter_id: i32,
+    pub created_at: DateTime<Utc>,
+    pub reason: ReportReason,
+    pub chapter_id: Option<i32>,
+    pub chapter_number: Option<f32>,
+    pub chapter_series_title: Option<String>,
+    pub comment_id: Option<i64>,
+    pub comment_preview: Option<String>,
 }

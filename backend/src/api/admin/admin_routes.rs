@@ -1,7 +1,9 @@
-use axum::routing::{delete, get, patch, post};
 use axum::Router;
+use axum::routing::{delete, get, patch, post};
 
-use crate::api::admin::admin_comment_handler::admin_delete_comment_handler;
+use crate::api::admin::admin_actions_handler::{
+    admin_delete_comment_handler, list_reports_handler, resolve_report_handler,
+};
 use crate::api::admin::admin_series_handlers::{
     create_category_tag_handler, create_new_series_handler, delete_category_tag_handler,
     delete_chapter_handler, delete_series_handler, get_all_paginated_series_handler,
@@ -26,6 +28,8 @@ fn admin_user_routes() -> Router<AppState> {
             "/comments/delete/{id}",
             delete(admin_delete_comment_handler),
         )
+        .route("/reports/list", get(list_reports_handler))
+        .route("/reports/resolve/{id}", delete(resolve_report_handler))
 }
 
 /// Admin Series management routes

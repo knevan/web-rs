@@ -1,15 +1,16 @@
-use axum::routing::{delete, get, patch, post};
 use axum::Router;
+use axum::routing::{delete, get, patch, post};
 
 use crate::api::public::auth_handlers::{
     forgot_password_handler, login_handler, logout_handler, protected_handler,
     realtime_check_username_handler, refresh_access_token_handler, register_new_user_handler,
     reset_password_handler,
 };
-use crate::api::public::comments_handlers::{
+use crate::api::public::chapter_handlers::report_chapter_handler;
+use crate::api::public::comment_handlers::{
     create_chapter_comment_handler, create_series_comment_handler, delete_comment_handler,
-    get_chapter_comment_handler, get_series_comment_handler, update_existing_comment_handler,
-    upload_comment_attachments_handler, vote_on_comment_handler,
+    get_chapter_comment_handler, get_series_comment_handler, report_comment_handler,
+    update_existing_comment_handler, upload_comment_attachments_handler, vote_on_comment_handler,
 };
 use crate::api::public::series_handlers::{
     browse_series_handler, fetch_chapter_details_handler, fetch_most_viewed_series_handler,
@@ -59,6 +60,8 @@ fn user_logged_in_api_routes() -> Router<AppState> {
             "/series/{id}/bookmark/status",
             get(get_bookmark_status_current_user_handler),
         )
+        .route("/series/chapter/{id}/report", post(report_chapter_handler))
+        .route("/comments/{id}/report", post(report_comment_handler))
 }
 
 /// General public api routes (no authentication required)
