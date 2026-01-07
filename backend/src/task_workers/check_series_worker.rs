@@ -3,15 +3,15 @@ use std::time::Duration;
 
 use arc_swap::ArcSwap;
 use reqwest::Client;
+use tokio::time::MissedTickBehavior;
 
-use crate::database::storage::StorageClient;
-use crate::database::{DatabaseService, Series, SeriesStatus};
+use crate::database::{DatabaseService, SeriesCheckTaskInfo, SeriesStatus};
 use crate::processing::orchestrator;
 use crate::scraping::model::SitesConfig;
 
 #[derive(Debug)]
 pub struct SeriesCheckJob {
-    pub series: Series,
+    pub series_task: SeriesCheckTaskInfo,
 }
 
 // Scheduler for pooling DB
@@ -19,10 +19,11 @@ pub async fn run_series_check_scheduler(
     db_service: DatabaseService,
     job_sender: async_channel::Sender<SeriesCheckJob>,
 ) {
-    println!("[SERIES-SCHEDULER] Starting...");
+    println!("[SERIES-SCHEDULER] Scanning database for series updates...");
 
-    // Interval to check db for job
-    let mut interval = tokio::time::interval(Duration::from_secs(30));
+    // Run check every 60 seconds
+    let mut interval = tokio::time::interval(Duration::from_secs(60));
+
     // Skip first tick
     interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
@@ -33,21 +34,23 @@ pub async fn run_series_check_scheduler(
             match db_service.find_and_lock_series_for_check(20).await {
                 Ok(series_list) => {
                     if series_list.is_empty() {
-                        // If no job, waiting fot the next interval tick
+                        // No series found, wait for next tick
                         break;
                     }
 
-                    println!(
-                        "[SERIES-SCHEDULER] Found batch of {} series to check",
-                        series_list.len()
-                    );
+                    for series_task in series_list {
+                        println!(
+                            "[SERIES-SCHEDULER] Found series for check {}, id {}",
+                            series_task.title, series_task.id
+                        );
 
-                    for series in series_list {
-                        let job = SeriesCheckJob { series };
+                        let job = SeriesCheckJob { series_task };
                         // Send worker queue
                         // If queue full, will wait (backpressure) until worker empty
                         if job_sender.send(job).await.is_err() {
-                            eprintln!("[SERIES-SCHEDULER] CRITICAL: Channel closed.");
+                            eprintln!(
+                                "[SERIES-SCHEDULER] CRITICAL: Job channel closed. Worker may have panicked."
+                            );
                             return;
                         }
                     }
@@ -64,7 +67,6 @@ pub async fn run_series_check_scheduler(
 pub async fn run_series_check_worker(
     worker_id: usize,
     db_service: DatabaseService,
-    storage_client: Arc<StorageClient>,
     http_client: Client,
     sites_config: Arc<ArcSwap<SitesConfig>>,
     job_receiver: async_channel::Receiver<SeriesCheckJob>,
@@ -72,18 +74,17 @@ pub async fn run_series_check_worker(
     println!("[SERIES-WORKER {}] Starting...", worker_id);
 
     while let Ok(job) = job_receiver.recv().await {
-        let series = job.series;
+        let series_task = job.series_task;
         println!(
             "[SERIES-WORKER] Checking series {}, id {}",
-            series.title, series.id
+            series_task.title, series_task.id
         );
 
         let result = orchestrator::run_series_check(
-            series.clone(),
+            series_task.clone(),
             http_client.clone(),
             &db_service,
             sites_config.load().clone(),
-            storage_client.clone(),
         )
         .await;
 
@@ -91,7 +92,7 @@ pub async fn run_series_check_worker(
         let (final_status, next_check_time) = if let Err(e) = result {
             eprintln!(
                 "[SERIES-WORKER] Error checking series {}:{}. Retrying later: {}",
-                series.title, series.id, e
+                series_task.title, series_task.id, e
             );
             // If failed, retry again after 1 hour
             (
@@ -104,12 +105,17 @@ pub async fn run_series_check_worker(
         };
 
         if let Err(e) = db_service
-            .update_series_check_schedule(series.id, Some(final_status), next_check_time)
+            .update_series_check_schedule(
+                series_task.id,
+                series_task.check_interval_minutes,
+                final_status,
+                next_check_time,
+            )
             .await
         {
             eprintln!(
                 "[SERIES-WORKER] CRITICAL: Failed to update schedule for series {}: {}",
-                series.id, e
+                series_task.id, e
             );
         }
     }

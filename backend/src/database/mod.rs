@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool, Type};
 use url::Url;
 
+pub mod admin_action;
 pub mod auth;
 pub mod chapters;
 pub mod comments;
@@ -93,6 +94,7 @@ pub struct Series {
 #[derive(Debug, Clone, PartialEq, Eq, sqlx::Type, Serialize, Deserialize)]
 #[sqlx(type_name = "chapter_status", rename_all = "PascalCase")]
 pub enum ChapterStatus {
+    Pending,
     Processing,
     Available,
     NoImagesFound,
@@ -173,6 +175,27 @@ pub enum SeriesOrderBy {
     UpdatedAt,
     ViewsCount,
     Rating,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct SeriesCheckTaskInfo {
+    pub id: i32,
+    pub title: String,
+    pub current_source_url: String,
+    pub source_website_host: String,
+    pub check_interval_minutes: i32,
+}
+
+#[derive(Debug, FromRow)]
+pub struct DownloadJobData {
+    pub series_id: i32,
+    pub series_title: String,
+    pub series_url: String,
+    pub source_host: String,
+
+    pub chapter_id: i32,
+    pub chapter_number: f32,
+    pub chapter_url: String,
 }
 
 #[derive(Debug, FromRow, Serialize, Deserialize)]
@@ -312,6 +335,7 @@ pub struct CommentFlatRow {
     user_id: i32,
     user_username: String,
     user_avatar_url: Option<String>,
+    user_role_id: i32,
     upvotes: i64,
     downvotes: i64,
     is_deleted: bool,
@@ -324,6 +348,7 @@ pub struct CommentUser {
     pub id: i32,
     pub username: String,
     pub avatar_url: Option<String>,
+    pub role_id: i32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]

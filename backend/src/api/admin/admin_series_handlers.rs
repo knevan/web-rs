@@ -1,6 +1,6 @@
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::Json;
 use axum_core::__private::tracing::warn;
 use axum_core::response::{IntoResponse, Response};
 use axum_extra::extract::Multipart;
@@ -14,9 +14,9 @@ use crate::api::admin::{
 };
 use crate::api::extractor::{AdminOrHigherUser, SuperAdminUser};
 use crate::builder::startup::AppState;
-use crate::database::{NewSeriesData, Series, UpdateSeriesData};
+use crate::database::{NewSeriesData, Series, SeriesCheckTaskInfo, UpdateSeriesData};
+use crate::task_workers::check_series_worker::SeriesCheckJob;
 use crate::task_workers::repair_chapter_worker;
-use crate::task_workers::series_check_worker::SeriesCheckJob;
 
 // Create new series
 pub async fn create_new_series_handler(
@@ -69,10 +69,17 @@ pub async fn create_new_series_handler(
         }
     };
 
-    // Crate and send job to worker via priority queue
-    let job = SeriesCheckJob {
-        series: fetch_new_series,
+    let series_task = SeriesCheckTaskInfo {
+        id: fetch_new_series.id,
+        title: fetch_new_series.title,
+        current_source_url: fetch_new_series.current_source_url,
+        source_website_host: fetch_new_series.source_website_host,
+        check_interval_minutes: fetch_new_series.check_interval_minutes,
     };
+
+    // Crate and send job to worker via priority queue
+    let job = SeriesCheckJob { series_task };
+
     if let Err(e) = state.worker_channels.series_check_tx.send(job).await {
         eprintln!(
             "Failed to send job to worker for series: {} {}",

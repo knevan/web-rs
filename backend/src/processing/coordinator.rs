@@ -8,62 +8,15 @@ use tokio::task;
 
 use crate::common::utils::random_sleep_time;
 use crate::database::storage::StorageClient;
-use crate::database::{ChapterStatus, DatabaseService, Series};
+use crate::database::{ChapterStatus, DatabaseService};
 use crate::processing::image_encoding;
 use crate::scraping::model::SiteScrapingConfig;
 use crate::scraping::{fetcher, parser};
-
-// Manage loop through a list of chapters and processes them one by one.
-pub async fn process_series_chapters_from_list(
-    series_data: &Series,
-    chapters_to_process: &[parser::ChapterInfo],
-    http_client: &Client,
-    storage_client: Arc<StorageClient>,
-    config: &SiteScrapingConfig,
-    db_service: &DatabaseService,
-) -> Result<Option<f32>> {
-    println!(
-        "[COORDINATOR] Starting batch processing for '{}'.",
-        series_data.title
-    );
-
-    let mut last_successfully_downloaded_chapter: Option<f32> = None;
-
-    for chapter_info in chapters_to_process {
-        match process_single_chapter(
-            series_data,
-            chapter_info,
-            http_client,
-            storage_client.clone(),
-            config,
-            db_service,
-        )
-        .await
-        {
-            Ok(Some(chapter_num)) => {
-                last_successfully_downloaded_chapter = Some(chapter_num);
-            }
-            Ok(None) => {
-                /* Chapter was processed but had no images, which is fine don't stop process */
-            }
-            Err(e) => {
-                eprintln!(
-                    "[COORDINATOR] Error processing chapter {}, stopping series: {}",
-                    chapter_info.number, e
-                );
-                // Decide if you want to stop the whole process on a single chapter failure
-                // break;
-            }
-        }
-        // Pause between scraping chapters
-        random_sleep_time(3, 6).await;
-    }
-    Ok(last_successfully_downloaded_chapter)
-}
+use crate::task_workers::chapter_download_worker::SeriesProcessingContext;
 
 // Process scraping and downloading single chapters
 pub async fn process_single_chapter(
-    series: &Series,
+    series_ctx: &SeriesProcessingContext,
     chapter_info: &parser::ChapterInfo,
     http_client: &Client,
     storage_client: Arc<StorageClient>,
@@ -76,15 +29,16 @@ pub async fn process_single_chapter(
 
     println!(
         "[COORDINATOR] Processing Chapter {} for '{}'...",
-        chapter_info.number, series.title
+        chapter_info.number, series_ctx.series_title
     );
 
     let chapter_id = db_service
         .add_new_chapter(
-            series.id,
+            series_ctx.series_id,
             chapter_info.number,
             Some(&consistent_title),
             &chapter_info.url,
+            ChapterStatus::Processing,
         )
         .await?;
     println!(
@@ -111,7 +65,7 @@ pub async fn process_single_chapter(
     }
 
     let semaphore = Arc::new(Semaphore::new(2));
-    let series_slug = slugify(&series.title);
+    let series_slug = slugify(&series_ctx.series_title);
     let mut processing_tasks = Vec::new();
 
     // Process image
@@ -238,12 +192,14 @@ pub async fn process_single_chapter(
     ) {
         // Complete chapter images
         (true, true) => {
+            // Update series status metadata
             db_service
                 .update_chapter_status(chapter_id, ChapterStatus::Available)
                 .await?;
 
+            // Update series content timestamp metadata
             if let Err(e) = db_service
-                .update_series_new_content_timestamp(series.id)
+                .update_series_new_content_timestamp(series_ctx.series_id)
                 .await
             {
                 eprintln!(
@@ -251,6 +207,20 @@ pub async fn process_single_chapter(
                     e
                 );
             }
+
+            // Update series last chapter in storage metadata
+            db_service
+                .update_series_last_chapter_found_in_storage(
+                    series_ctx.series_id,
+                    chapter_info.number,
+                )
+                .await?;
+
+            println!(
+                "[COORDINATOR] Series '{}' metadata updated to chapter {}.",
+                series_ctx.series_title, chapter_info.number
+            );
+
             Ok(Some(chapter_info.number))
         }
         // Partial/Incomplete chapter images

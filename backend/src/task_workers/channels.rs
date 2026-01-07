@@ -4,16 +4,17 @@ use arc_swap::ArcSwap;
 use reqwest::Client;
 use tokio::sync::mpsc;
 
-use crate::database::storage::StorageClient;
 use crate::database::DatabaseService;
+use crate::database::storage::StorageClient;
 use crate::scraping::model::SitesConfig;
+use crate::task_workers::chapter_download_worker::run_chapter_download_worker;
+use crate::task_workers::check_series_worker::{
+    SeriesCheckJob, run_series_check_scheduler, run_series_check_worker,
+};
 use crate::task_workers::delete_password_reset_token_worker::run_cleanup_password_reset_token_worker;
 use crate::task_workers::delete_series_worker::{run_deletion_scheduler, run_deletion_worker};
 use crate::task_workers::log_view_cleanup_worker::run_log_view_cleanup_worker;
-use crate::task_workers::repair_chapter_worker::{run_repair_chapter_worker, RepairChapterMsg};
-use crate::task_workers::series_check_worker::{
-    run_series_check_scheduler, run_series_check_worker, SeriesCheckJob,
-};
+use crate::task_workers::repair_chapter_worker::{RepairChapterMsg, run_repair_chapter_worker};
 
 #[derive(Clone)]
 pub struct OnDemandChannels {
@@ -41,14 +42,25 @@ pub fn setup_worker_channels(
         tokio::spawn(run_series_check_worker(
             i,
             db_service.clone(),
-            storage_client.clone(),
             http_client.clone(),
             sites_config.clone(),
             rx_clone,
         ));
     }
 
-    // Delete series worker channels
+    // Download chapter worker channels
+    const DOWNLOAD_WORKER_COUNT: usize = 1;
+    for i in 0..DOWNLOAD_WORKER_COUNT {
+        tokio::spawn(run_chapter_download_worker(
+            i,
+            db_service.clone(),
+            storage_client.clone(),
+            http_client.clone(),
+            sites_config.clone(),
+        ));
+    }
+
+    // Deletion worker channels
     let (deletion_tx, deletion_rx) = mpsc::channel(16);
 
     tokio::spawn(run_deletion_scheduler(db_service.clone(), deletion_tx));
