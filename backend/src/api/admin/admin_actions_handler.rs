@@ -8,7 +8,7 @@ use serde_json::json;
 use crate::api::admin::ReportPaginationParams;
 use crate::api::extractor::{AdminOrHigherUser, ModeratorOrHigherUser};
 use crate::builder::startup::AppState;
-use crate::database::{DatabaseService, DeleteCommentResult, UpdateCommentResponse};
+use crate::database::{DeleteCommentResult, UpdateCommentResponse};
 
 pub async fn admin_delete_comment_handler(
     auth: ModeratorOrHigherUser,

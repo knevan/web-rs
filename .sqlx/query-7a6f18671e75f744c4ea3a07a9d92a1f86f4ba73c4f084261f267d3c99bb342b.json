@@ -1,0 +1,104 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    WITH search_candidates AS (\n                        SELECT\n                            r.id,\n                            u.username as reporter_username,\n                            r.reporter_id,\n                            r.created_at,\n                            r.reason,\n                            sc.id as chapter_id,\n                            sc.chapter_number,\n                            s.title as chapter_series_title,\n                            c.id as comment_id,\n                            c.content_user_markdown,\n                            c.content_html,\n                            GREATEST(\n                                similarity(u.username, $3),\n                                similarity(COALESCE(s.title, ''), $3),\n                                similarity(COALESCE(c.content_user_markdown, ''), $3)\n                            ) as sim_score\n                        FROM reports r\n                        INNER JOIN users u ON r.reporter_id = u.id\n                        LEFT JOIN series_chapters sc ON r.chapter_id = sc.id\n                        LEFT JOIN series s ON sc.series_id = s.id\n                        LEFT JOIN comments c ON r.comment_id = c.id\n                        WHERE\n                            -- Reporter Username\n                            (u.username ILIKE '%' || $3 || '%' OR (u.username % $3 AND similarity(u.username, $3) >= $4))\n                            OR\n                            -- Series Title (only if related to series)\n                            (s.title IS NOT NULL AND (s.title ILIKE '%' || $3 || '%' OR (s.title % $3 AND similarity(s.title, $3) >= $4)))\n                            OR\n                            -- Comment Content (only if related to comment)\n                            (c.content_user_markdown IS NOT NULL AND c.content_user_markdown ILIKE '%' || $3 || '%')\n                    ),\n                    ranked_results AS (\n                        SELECT *,\n                            CASE\n                                -- Reporter Username\n                                WHEN reporter_username ILIKE $3 THEN 10\n                                WHEN reporter_username ILIKE $3 || '%' THEN 9\n                                -- Series Title\n                                WHEN chapter_series_title ILIKE '%' || $3 || '%' THEN 8\n                                -- Comment Content\n                                ELSE 5\n                            END as search_rank\n                        FROM search_candidates\n                    ),\n                    total_count AS (\n                        SELECT COUNT(*) as total FROM ranked_results\n                    )\n                    SELECT\n                        rr.id,\n                        rr.reporter_username,\n                        rr.reporter_id,\n                        rr.created_at,\n                        rr.reason as \"reason: ReportReason\",\n                        rr.chapter_id,\n                        rr.chapter_number,\n                        rr.chapter_series_title,\n                        rr.comment_id,\n                        SUBSTRING(rr.content_html, 1, 50) as comment_preview,\n                        tc.total as total_items\n                    FROM ranked_results rr\n                    CROSS JOIN total_count tc\n                    ORDER BY rr.search_rank DESC, rr.sim_score DESC, rr.created_at DESC\n                    LIMIT $1\n                    OFFSET $2\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "reporter_username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "reporter_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "reason: ReportReason",
+        "type_info": {
+          "Custom": {
+            "name": "report_reason",
+            "kind": {
+              "Enum": [
+                "broken_image",
+                "wrong_chapter",
+                "duplicate_chapter",
+                "missing_image",
+                "missing_chapter",
+                "slow_loading",
+                "broken_text",
+                "toxic",
+                "racist",
+                "spam",
+                "other"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "chapter_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "chapter_number",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 7,
+        "name": "chapter_series_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "comment_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "comment_preview",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "total_items",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Float4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "7a6f18671e75f744c4ea3a07a9d92a1f86f4ba73c4f084261f267d3c99bb342b"
+}

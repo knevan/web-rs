@@ -378,6 +378,88 @@ pub struct CommentVoteResponse {
     pub current_user_vote: Option<i16>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Type, Clone)]
+#[sqlx(type_name = "report_reason", rename_all = "snake_case")]
+pub enum ReportReason {
+    // Chapter Reports
+    BrokenImage,
+    WrongChapter,
+    DuplicateChapter,
+    MissingImage,
+    MissingChapter,
+    SlowLoading,
+    BrokenText,
+
+    // Comment Reports
+    Toxic,
+    Racist,
+    Spam,
+
+    Other,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChapterReportReason {
+    BrokenImage,
+    WrongChapter,
+    DuplicateChapter,
+    MissingImage,
+    MissingChapter,
+    SlowLoading,
+    BrokenText,
+}
+
+impl From<ChapterReportReason> for ReportReason {
+    fn from(value: ChapterReportReason) -> Self {
+        match value {
+            ChapterReportReason::BrokenImage => ReportReason::BrokenImage,
+            ChapterReportReason::WrongChapter => ReportReason::WrongChapter,
+            ChapterReportReason::DuplicateChapter => ReportReason::DuplicateChapter,
+            ChapterReportReason::MissingImage => ReportReason::MissingImage,
+            ChapterReportReason::MissingChapter => ReportReason::MissingChapter,
+            ChapterReportReason::SlowLoading => ReportReason::SlowLoading,
+            ChapterReportReason::BrokenText => ReportReason::BrokenText,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CommentReportReason {
+    Toxic,
+    Racist,
+    Spam,
+    Other,
+}
+
+impl From<CommentReportReason> for ReportReason {
+    fn from(value: CommentReportReason) -> Self {
+        match value {
+            CommentReportReason::Toxic => ReportReason::Toxic,
+            CommentReportReason::Racist => ReportReason::Racist,
+            CommentReportReason::Spam => ReportReason::Spam,
+            CommentReportReason::Other => ReportReason::Other,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub enum ReportTarget {
+    Chapter(i32),
+    Comment(i64),
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateChapterReportRequest {
+    pub reason: ChapterReportReason,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateCommentReportRequest {
+    pub reason: CommentReportReason,
+}
+
 // A helper function to extract a hostname from an optional URL string.
 // This is created to avoid code duplication, following the DRY principle.
 fn get_host_from_url(url_option: Option<&str>) -> Option<String> {
