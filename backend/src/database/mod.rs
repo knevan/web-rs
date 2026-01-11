@@ -7,13 +7,13 @@ use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool, Type};
 use url::Url;
 
-pub mod admin_action;
+pub mod admin_actions;
 pub mod auth;
 pub mod chapters;
 pub mod comments;
 pub mod series;
-pub mod series_user_actions;
 pub mod storage;
+pub mod user_actions;
 pub mod users;
 
 // Type alias for database connection pool
@@ -196,6 +196,11 @@ pub struct DownloadJobData {
     pub chapter_id: i32,
     pub chapter_number: f32,
     pub chapter_url: String,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct SeriesDeletionJob {
+    pub id: i32,
 }
 
 #[derive(Debug, FromRow, Serialize, Deserialize)]

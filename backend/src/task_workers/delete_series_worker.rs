@@ -4,13 +4,14 @@ use std::time::Duration;
 use anyhow::Context;
 use backon::{BackoffBuilder, Retryable};
 use tokio::sync::mpsc;
+use tokio::time::MissedTickBehavior;
 
 use crate::database::storage::StorageClient;
-use crate::database::{DatabaseService, Series, SeriesStatus};
+use crate::database::{DatabaseService, SeriesDeletionJob, SeriesStatus};
 
 #[derive(Debug, Clone)]
 pub struct DeletionJob {
-    series: Series,
+    series: SeriesDeletionJob,
 }
 
 // Scheduler to pool database for deletion jobs
@@ -23,7 +24,7 @@ pub async fn run_deletion_scheduler(
     // Interval pooling
     let mut interval = tokio::time::interval(Duration::from_secs(180));
     // Skip frist tick
-    interval.tick().await;
+    interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
     loop {
         interval.tick().await;
@@ -41,7 +42,7 @@ pub async fn run_deletion_scheduler(
                         eprintln!(
                             "[DELETION-WORKER] CRITICAL: Receiver channel closed. Shutting down."
                         );
-                        break;
+                        return;
                     }
                 }
                 Ok(None) => {
@@ -141,30 +142,36 @@ async fn execute_full_deletion(
     storage_client: Arc<StorageClient>,
 ) -> anyhow::Result<()> {
     // Get all image keys
-    let image_keys = db_service
+    let deletion_image_keys = db_service
         .get_image_keys_for_series_deletion(series_id)
         .await
-        .context("Failed to get image keys")
-        // If no series found, assume no images
-        .unwrap_or_default();
+        .context("Failed to get image keys from DB")?;
 
-    let keys_to_delete: Vec<String> = image_keys
-        .iter()
-        .flat_map(|keys| keys.all_urls())
-        .filter_map(|url| storage_client.extract_object_key_from_url(url))
-        .collect();
+    if let Some(deletion_keys) = deletion_image_keys {
+        let keys_to_delete: Vec<String> = deletion_keys
+            .all_urls()
+            .filter_map(|url| storage_client.extract_object_key_from_url(url))
+            .collect();
 
-    if !keys_to_delete.is_empty() {
-        storage_client
-            .delete_image_objects(&keys_to_delete)
-            .await
-            .context("Failed to delete image objects")?;
+        if !keys_to_delete.is_empty() {
+            storage_client
+                .delete_image_objects(&keys_to_delete)
+                .await
+                .context("Failed to delete image objects")?;
+        }
     }
 
-    db_service
+    let rows_deleted = db_service
         .delete_series_by_id(series_id)
         .await
         .context("Failed to delete series")?;
+
+    if rows_deleted == 0 {
+        println!(
+            "[DELETION-WORKER] Series {} was not found in DB (rows affected: 0), assuming already deleted.",
+            series_id
+        );
+    }
 
     println!(
         "[WORKER] Successfully processed and deleted series {}",
