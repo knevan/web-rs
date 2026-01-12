@@ -1,6 +1,6 @@
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::Json;
 use axum_core::__private::tracing::error;
 use axum_core::response::{IntoResponse, Response};
 use axum_extra::extract::Multipart;
@@ -10,7 +10,10 @@ use uuid::Uuid;
 use crate::api::extractor::{AuthenticatedUser, OptionalAuthenticatedUser};
 use crate::api::public::user_handlers::extract_field_data;
 use crate::builder::startup::AppState;
-use crate::database::{Comment, CommentEntityType, CommentSort, DeleteCommentResult, VotePayload};
+use crate::database::{
+    Comment, CommentEntityType, CommentSort, CreateCommentReportRequest, DeleteCommentResult,
+    ReportTarget, VotePayload,
+};
 
 /// Helper function to recursively prepend the base CDN URL to all comment attachment URLs.
 /// This modifies the comments in place using an iterative stack-based approach.
@@ -480,6 +483,42 @@ pub async fn vote_on_comment_handler(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": "Failed to vote on comment {}"})),
+            )
+                .into_response()
+        }
+    }
+}
+
+pub async fn report_comment_handler(
+    user: AuthenticatedUser,
+    State(state): State<AppState>,
+    Path(comment_id): Path<i64>,
+    Json(payload): Json<CreateCommentReportRequest>,
+) -> Response {
+    let reason = payload.reason.into();
+
+    match state
+        .db_service
+        .user_submit_report(user.id, ReportTarget::Comment(comment_id), reason)
+        .await
+    {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "status": "success",
+                "message": "Report comment submitted successfully."
+            })),
+        )
+            .into_response(),
+
+        Err(e) => {
+            error!("Failed to submit report for comment {}: {}", comment_id, e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "status": "error",
+                    "message": "Failed to submit report."
+                })),
             )
                 .into_response()
         }

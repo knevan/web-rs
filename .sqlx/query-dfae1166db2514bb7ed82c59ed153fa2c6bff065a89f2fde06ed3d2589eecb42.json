@@ -1,22 +1,12 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            WITH candidate AS (\n                SELECT id FROM series\n                WHERE processing_status = $1\n                LIMIT 1\n                FOR UPDATE SKIP LOCKED\n            )\n            UPDATE series\n            SET processing_status = $2\n            WHERE id = (SELECT id FROM candidate)\n            RETURNING\n                id,\n                title,\n                cover_image_url\n            ",
+  "query": "\n            WITH candidate AS (\n                SELECT id FROM series\n                WHERE processing_status = $1\n                LIMIT 1\n                FOR UPDATE SKIP LOCKED\n            )\n            UPDATE series\n            SET processing_status = $2\n            WHERE id = (SELECT id FROM candidate)\n            RETURNING\n                id\n            ",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
         "name": "id",
         "type_info": "Int4"
-      },
-      {
-        "ordinal": 1,
-        "name": "title",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 2,
-        "name": "cover_image_url",
-        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -64,10 +54,8 @@
       ]
     },
     "nullable": [
-      false,
-      false,
       false
     ]
   },
-  "hash": "4bc9cada744d2c91bf58c583fda5d5c9e97d9fd394391e623845d2834f95625b"
+  "hash": "dfae1166db2514bb7ed82c59ed153fa2c6bff065a89f2fde06ed3d2589eecb42"
 }

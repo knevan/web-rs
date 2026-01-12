@@ -1,11 +1,12 @@
-use axum::extract::{Path, State};
-use axum::http::StatusCode;
 use axum::Json;
+use axum::extract::{Path, Query, State};
+use axum::http::StatusCode;
 use axum_core::__private::tracing::{error, info};
 use axum_core::response::{IntoResponse, Response};
 use serde_json::json;
 
-use crate::api::extractor::ModeratorOrHigherUser;
+use crate::api::admin::ReportPaginationParams;
+use crate::api::extractor::{AdminOrHigherUser, ModeratorOrHigherUser};
 use crate::builder::startup::AppState;
 use crate::database::{DeleteCommentResult, UpdateCommentResponse};
 
@@ -100,6 +101,68 @@ pub async fn admin_delete_comment_handler(
                     "status": "error",
                     "message": "Internal server error during comment deletion"
                 })),
+            )
+                .into_response()
+        }
+    }
+}
+
+pub async fn list_reports_handler(
+    admin: AdminOrHigherUser,
+    State(state): State<AppState>,
+    Query(params): Query<ReportPaginationParams>,
+) -> Response {
+    info!(
+        "->> {:<12} - list_reports_handler - user: {}",
+        "HANDLER", admin.0.username
+    );
+
+    match state
+        .db_service
+        .get_admin_paginated_pending_reports(
+            params.page,
+            params.page_size,
+            params.search.as_deref(),
+        )
+        .await
+    {
+        Ok(paginated_result) => (
+            StatusCode::OK,
+            Json(json!({"status": "success", "data": paginated_result})),
+        )
+            .into_response(),
+        Err(e) => {
+            error!("Failed to fetch reports: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"status": "error", "message": "Failed to retrieve reports."})),
+            )
+                .into_response()
+        }
+    }
+}
+
+pub async fn resolve_report_handler(
+    admin: AdminOrHigherUser,
+    State(state): State<AppState>,
+    Path(report_id): Path<i32>,
+) -> Response {
+    info!(
+        "->> {:<12} - resolve_report_handler - user: {}, report_id: {}",
+        "HANDLER", admin.0.username, report_id
+    );
+
+    match state.db_service.admin_resolve_reports(report_id).await {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(json!({"status": "success", "message": format!("Report #{} resolved and cleared.", report_id)})),
+        )
+            .into_response(),
+        Err(e) => {
+            error!("Failed to resolve report {}: {}", report_id, e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"status": "error", "message": "Failed to resolve report."})),
             )
                 .into_response()
         }
