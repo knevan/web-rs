@@ -6,7 +6,7 @@ pub async fn run_log_view_cleanup_worker(db_service: DatabaseService) {
     let log_cleanup = async {
         let scheduler = JobScheduler::new().await?;
         let db_clone = db_service.clone();
-        let cron_exp = "0 0 2 * * * *";
+        let cron_exp = "0 0 */6 * * * *";
 
         let cleanup_job = Job::new_async(cron_exp, move |_uuid, _locked| {
             let db = db_clone.clone();
