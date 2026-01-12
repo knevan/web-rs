@@ -1,31 +1,34 @@
 use std::env;
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use reqwest::Client;
 use url::Url;
 
 use crate::common::utils::random_sleep_time;
 use crate::database::storage::StorageClient;
-use crate::database::{DatabaseService, Series};
+use crate::database::{ChapterStatus, DatabaseService, SeriesCheckTaskInfo};
 use crate::processing::coordinator;
 use crate::scraping::fetcher;
 use crate::scraping::model::SitesConfig;
 use crate::scraping::parser::{ChapterInfo, ChapterParser};
+use crate::task_workers::chapter_download_worker::SeriesProcessingContext;
 use crate::task_workers::repair_chapter_worker::RepairChapterMsg;
 
 // The main "engine" for checking series and scraping task.
 // This function can be called from anywhere, including a background task.
 pub async fn run_series_check(
-    series: Series,
+    series_check_task: SeriesCheckTaskInfo,
     http_client: Client,
     db_service: &DatabaseService,
     sites_config: Arc<SitesConfig>,
-    storage_client: Arc<StorageClient>,
 ) -> Result<()> {
-    println!("[SERIES CHECK] Starting for series: '{}'", series.title);
+    println!(
+        "[SERIES CHECK] Starting for series: '{}'",
+        series_check_task.title
+    );
 
-    let host = &series.source_website_host;
+    let host = &series_check_task.source_website_host;
     let site_config = sites_config
         .get_site_config(host)
         .ok_or_else(|| anyhow!("No scraping config for host: {}", host))?;
@@ -35,37 +38,45 @@ pub async fn run_series_check(
 
     println!(
         "[SERIES CHECK] Fetching series main page HTML from: {}",
-        series.current_source_url
+        series_check_task.current_source_url
     );
 
-    let series_page_html = fetcher::fetch_html(&http_client, &series.current_source_url).await?;
+    let series_page_html =
+        fetcher::fetch_html(&http_client, &series_check_task.current_source_url).await?;
+
+    let max_known_db_chapter = db_service
+        .get_max_known_chapter(series_check_task.id)
+        .await?;
 
     random_sleep_time(2, 5).await;
 
     // [Quick Check] Get latest chapter
     println!("[SERIES CHECK] Performing quick check, get latest chapter.");
-    let latest_site_chapter = chapter_parser
-        .quick_check_extract_latest_chapter_info(&series_page_html, &series.current_source_url)?;
+    let latest_site_chapter = chapter_parser.quick_check_extract_latest_chapter_info(
+        &series_page_html,
+        &series_check_task.current_source_url,
+    )?;
 
-    let last_db_chapter_number = series.last_chapter_found_in_storage.unwrap_or(0.0);
     let mut chapters_to_scrape: Vec<ChapterInfo> = Vec::new();
     let mut needs_full_scan = false;
 
     if let Some(latest_chapter) = latest_site_chapter {
         println!(
-            "[SERIES CHECK] Latest on site: {:.2}, latest in DB: {:.2}",
-            latest_chapter.number, last_db_chapter_number
+            "[SERIES CHECK] Latest on site: {:.2}, Max known in DB: {:.2}",
+            latest_chapter.number, max_known_db_chapter
         );
 
         // If latest chapter on site > latest in DB, we need a full scan.
-        if latest_chapter.number > last_db_chapter_number {
+        if latest_chapter.number > max_known_db_chapter {
             println!("[SERIES CHECK] New chapter detected by Quick Check. Triggering full scan.");
             needs_full_scan = true;
         } else {
             // [Count Check] If no new chapter, check for backfills or deletions
             println!("[SERIES CHECK] Quick Check passed. Performing Count Check");
             let site_chapter_count = chapter_parser.count_chapter_links(&series_page_html)?;
-            let db_chapter_count = db_service.get_series_chapters_count(series.id).await?;
+            let db_chapter_count = db_service
+                .get_series_chapters_count(series_check_task.id)
+                .await?;
 
             println!(
                 "[SERIES CHECK] Chapter on site: {}, chapters in DB: {}",
@@ -85,13 +96,15 @@ pub async fn run_series_check(
     // [Full Scan] Only run if triggered by one of the checks above.
     if needs_full_scan {
         println!("[SERIES CHECK] Run full scan");
-        let all_available_chapters = chapter_parser
-            .full_scan_extract_all_chapter_info(&series_page_html, &series.current_source_url)?;
+        let all_available_chapters = chapter_parser.full_scan_extract_all_chapter_info(
+            &series_page_html,
+            &series_check_task.current_source_url,
+        )?;
 
         if all_available_chapters.is_empty() {
             println!(
                 "[SERIES CHECK] Full scan found no chapters for '{}'.",
-                series.title
+                series_check_task.title
             );
             return Ok(());
         }
@@ -104,14 +117,14 @@ pub async fn run_series_check(
         // Filter chapters that are actually new to avoid re-scraping on a syncronization.
         chapters_to_scrape = all_available_chapters
             .into_iter()
-            .filter(|ch_info| ch_info.number > last_db_chapter_number)
+            .filter(|ch_info| ch_info.number > max_known_db_chapter)
             .collect();
     }
 
     if chapters_to_scrape.is_empty() {
         println!(
             "[SERIES CHECK] No new chapters to scrape for '{}'. All are up-to-date.",
-            series.title
+            series_check_task.title
         );
         return Ok(());
     }
@@ -122,24 +135,23 @@ pub async fn run_series_check(
     );
 
     // Start Scraping Process for Selected Chapters
-    let last_info_downloaded_chapter = coordinator::process_series_chapters_from_list(
-        &series,
-        &chapters_to_scrape,
-        &http_client,
-        storage_client,
-        site_config,
-        db_service,
-    )
-    .await?;
+    for ch_info in chapters_to_scrape {
+        let convert_chapter_number = ch_info.number.to_string().replace('.', "-");
+        let consistent_title = format!("{}-eng", convert_chapter_number);
 
-    // Update series metadata in the database
-    if let Some(last_chapter_num) = last_info_downloaded_chapter {
-        db_service
-            .update_series_last_chapter_found_in_storage(series.id, Some(last_chapter_num))
+        let chapter_id = db_service
+            .add_new_chapter(
+                series_check_task.id,
+                ch_info.number,
+                Some(&consistent_title),
+                &ch_info.url,
+                ChapterStatus::Pending,
+            )
             .await?;
+
         println!(
-            "[BULK SCRAPE] Updated last local chapter for '{}' to {}.",
-            series.title, last_chapter_num
+            "[SERIES CHECK] Queueing Chapter {} (ID: {})",
+            ch_info.number, chapter_id
         );
     }
 
@@ -205,8 +217,10 @@ pub async fn repair_specific_chapter_series(
         number: msg.chapter_number,
     };
 
+    let series_ctx: SeriesProcessingContext = (&series).into();
+
     coordinator::process_single_chapter(
-        &series,
+        &series_ctx,
         &chapter_info_to_scrape,
         &http_client,
         storage_client,
